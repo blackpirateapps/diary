@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, MoreHorizontal, Trash2, Save,
   Smile, Frown, Meh, Heart, Sun, CloudRain,
   Search, ChevronDown, Clock, Tag, CalendarPlus, 
-  Download, Upload, Settings, AlertCircle
+  Download, Upload, Settings, AlertCircle, Cloud
 } from 'lucide-react';
 
 // --- Mock Data & Constants ---
@@ -16,6 +16,7 @@ const INITIAL_ENTRIES = [
     date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
     mood: 8,
     location: 'Downtown, Seattle',
+    weather: '18°C',
     tags: ['coffee', 'relaxing'],
     images: ['https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=400']
   },
@@ -25,6 +26,7 @@ const INITIAL_ENTRIES = [
     date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(),
     mood: 5,
     location: 'Home Office',
+    weather: '12°C',
     tags: ['work', 'rain'],
     images: []
   },
@@ -34,6 +36,7 @@ const INITIAL_ENTRIES = [
     date: new Date().toISOString(),
     mood: 10,
     location: 'Central Park',
+    weather: '24°C',
     tags: ['fitness', 'health'],
     images: ['https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&q=80&w=400', 'https://images.unsplash.com/photo-1502224562085-639556652f33?auto=format&fit=crop&q=80&w=400']
   }
@@ -292,12 +295,12 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport }
   return (
     <div className="space-y-6 pb-24">
       <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F8F9FA]/90 backdrop-blur-md z-10">
-        <div className="flex justify-between items-start">
-          <div>
-             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">BlackPirate's Journal</h1>
+        <div className="flex justify-between items-start gap-2">
+          <div className="min-w-0 flex-1">
+             <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">BlackPirate's Journal</h1>
              <p className="text-gray-500 text-sm mt-1">Capture your life.</p>
           </div>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1 flex-shrink-0">
             <button 
               onClick={() => setIsSearchOpen(!isSearchOpen)}
               className={`p-2 rounded-full transition-colors ${isSearchOpen ? 'bg-blue-100 text-blue-600' : 'bg-white text-gray-500 shadow-sm'}`}
@@ -396,6 +399,12 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport }
                       <div className="flex items-center text-xs bg-gray-50 px-2 py-1 rounded-md">
                         <MapPin size={12} className="mr-1" />
                         <span className="truncate max-w-[100px]">{entry.location}</span>
+                      </div>
+                    )}
+                    {entry.weather && (
+                       <div className="flex items-center text-xs bg-gray-50 px-2 py-1 rounded-md">
+                        <Cloud size={12} className="mr-1" />
+                        <span>{entry.weather}</span>
                       </div>
                     )}
                     {entry.tags.length > 0 && (
@@ -547,11 +556,13 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [content, setContent] = useState(entry?.content || '');
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
+  const [weather, setWeather] = useState(entry?.weather || '');
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [loadingLocation, setLoadingLocation] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -580,7 +591,57 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   };
 
   const handleLocation = () => {
-    setLocation('San Francisco, CA');
+    if (!navigator.geolocation) {
+      const manual = prompt("Geolocation is not supported by your browser. Please enter location manually:");
+      if(manual) setLocation(manual);
+      return;
+    }
+
+    setLoadingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        try {
+          // 1. Get Weather (Open-Meteo)
+          const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
+          const weatherData = await weatherRes.json();
+          const temp = weatherData.current_weather?.temperature;
+          if (temp !== undefined) {
+            setWeather(`${temp}°C`);
+          }
+
+          // 2. Get Location Name (BigDataCloud - Free, No Key)
+          const locRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+          const locData = await locRes.json();
+          
+          const city = locData.city || locData.locality || locData.principalSubdivision;
+          const country = locData.countryName;
+          
+          if (city) {
+            setLocation(country ? `${city}, ${country}` : city);
+          } else {
+             setLocation("Unknown Location");
+          }
+
+        } catch (error) {
+          console.error("Error fetching data", error);
+          const manual = prompt("Could not fetch location details automatically. Please enter manually:");
+          if(manual) setLocation(manual);
+        } finally {
+          setLoadingLocation(false);
+        }
+      },
+      (error) => {
+        console.error("Geo error", error);
+        let msg = "Unable to access location.";
+        if (error.code === 1) msg = "Location permission denied.";
+        const manual = prompt(`${msg} Please enter manually:`);
+        if(manual) setLocation(manual);
+        setLoadingLocation(false);
+      }
+    );
   };
 
   const handleSave = () => {
@@ -595,6 +656,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       content,
       mood,
       location,
+      weather,
       tags,
       images,
       date: entry?.date || new Date().toISOString()
@@ -749,10 +811,17 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                   placeholder="Location"
                   className="bg-transparent border-none p-0 text-xs text-gray-600 placeholder-gray-400 focus:ring-0 w-full truncate"
                 />
-                <button onClick={handleLocation} className="p-1 text-gray-400 hover:text-blue-500">
-                  <Plus size={10} />
+                <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-gray-400 hover:text-blue-500 disabled:opacity-50">
+                   {loadingLocation ? <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"/> : <Plus size={10} />}
                 </button>
              </div>
+
+             {weather && (
+               <div className="flex items-center bg-orange-50 text-orange-600 rounded-full px-2 py-0.5 border border-orange-100 text-xs">
+                  <Cloud size={12} className="mr-1"/>
+                  {weather}
+               </div>
+             )}
 
              <TagInput tags={tags} onAdd={(t) => setTags([...tags, t])} onRemove={(t) => setTags(tags.filter(tag => tag !== t))} />
           </div>
