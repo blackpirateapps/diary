@@ -5,7 +5,8 @@ import {
   ChevronLeft, ChevronRight, MoreHorizontal, Trash2, Save,
   Smile, Frown, Meh, Heart, Sun, CloudRain,
   Search, ChevronDown, Clock, Tag, CalendarPlus, 
-  Download, Upload, Settings, AlertCircle, Cloud
+  Download, Upload, Settings, AlertCircle, Cloud,
+  WifiOff
 } from 'lucide-react';
 
 // --- Mock Data & Constants ---
@@ -57,12 +58,11 @@ const MOODS = [
 
 // --- Helper Functions ---
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24; // FIX #3: Define constant
+const MS_PER_DAY = 1000 * 60 * 60 * 24; 
 
 // Compress image to avoid localStorage quota limits
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
-    // FIX #9: Add file size validation
     if (file.size > 10 * 1024 * 1024) { // 10MB limit
       reject(new Error('Image too large. Please choose a smaller image.'));
       return;
@@ -97,7 +97,6 @@ const compressImage = (file) => {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
          
-        // FIX #4: Better compression and error handling
         try {
           const compressed = canvas.toDataURL('image/jpeg', 0.6); // Lower quality
           // Check if result is too large for localStorage
@@ -122,10 +121,9 @@ const calculateStreak = (entries) => {
   const today = new Date().setHours(0,0,0,0);
    
   const lastEntryDate = new Date(sorted[0].date).setHours(0,0,0,0);
-  const diffTime = today - lastEntryDate; // FIX #1: Remove Math.abs()
-  const diffDays = Math.floor(diffTime / MS_PER_DAY); // FIX #1: Use Math.floor()
+  const diffTime = today - lastEntryDate; 
+  const diffDays = Math.floor(diffTime / MS_PER_DAY); 
 
-  // FIX #2: Allow today's entry or yesterday's entry
   if (diffDays > 1) return 0;
 
   let streak = 1;
@@ -135,9 +133,8 @@ const calculateStreak = (entries) => {
     const entryDate = new Date(sorted[i].date).setHours(0,0,0,0);
     if (entryDate === currentDate) continue; 
     
-    // FIX #3: Use constant and check range for DST tolerance
     const dayDiff = (currentDate - entryDate) / MS_PER_DAY;
-    if (dayDiff >= 0.9 && dayDiff <= 1.1) { // Allow slight variance for DST
+    if (dayDiff >= 0.9 && dayDiff <= 1.1) { 
       streak++;
       currentDate = entryDate;
     } else {
@@ -278,7 +275,7 @@ const TagInput = ({ tags, onAdd, onRemove }) => {
 
 // --- Main Pages ---
 
-const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport }) => {
+const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, isOffline }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -298,7 +295,14 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport }
         <div className="flex justify-between items-start gap-2">
           <div className="min-w-0 flex-1">
              <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">BlackPirate's Journal</h1>
-             <p className="text-gray-500 text-sm mt-1">Capture your life.</p>
+             <p className="text-gray-500 text-sm mt-1 flex items-center gap-2">
+                Capture your life.
+                {isOffline && (
+                  <span className="flex items-center gap-1 text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full font-medium">
+                    <WifiOff size={10} /> Offline
+                  </span>
+                )}
+             </p>
           </div>
           <div className="flex items-center gap-2 mt-1 flex-shrink-0">
             <button 
@@ -591,6 +595,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   };
 
   const handleLocation = () => {
+    if (!navigator.onLine) {
+        const manual = prompt("You are offline. Please enter location manually:");
+        if(manual) setLocation(manual);
+        return;
+    }
+
     if (!navigator.geolocation) {
       const manual = prompt("Geolocation is not supported by your browser. Please enter location manually:");
       if(manual) setLocation(manual);
@@ -866,6 +876,19 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('journal');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const [entries, setEntries] = useState(() => {
     try {
       const saved = localStorage.getItem('journal_entries');
@@ -1000,6 +1023,7 @@ const App = () => {
               onAddOld={handleAddOldEntry}
               onExport={handleExport}
               onImport={handleImport}
+              isOffline={isOffline}
             />
           )}
           {activeTab === 'stats' && <StatsPage entries={entries} />}
