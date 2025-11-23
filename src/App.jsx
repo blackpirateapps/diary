@@ -275,10 +275,11 @@ const TagInput = ({ tags, onAdd, onRemove }) => {
 
 // --- Main Pages ---
 
-const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, isOffline }) => {
+const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, isOffline, isImporting }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const importInputRef = useRef(null);
 
   // FIX #5: Sort filtered entries by date (newest first)
   const filteredEntries = entries
@@ -334,10 +335,9 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
                     <button onClick={() => { onExport(); setIsMenuOpen(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded-lg w-full text-left">
                       <Download size={14} /> Export
                     </button>
-                    <button onClick={() => { document.getElementById('import-file').click(); setIsMenuOpen(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded-lg w-full text-left">
+                    <button onClick={() => { importInputRef.current.click(); setIsMenuOpen(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded-lg w-full text-left">
                       <Upload size={14} /> Import
                     </button>
-                    <input id="import-file" type="file" className="hidden" accept=".json" onChange={onImport} />
                   </div>
                 </>
               )}
@@ -351,6 +351,9 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
             </button>
           </div>
         </div>
+        
+        {/* Hidden File Input for Import */}
+        <input ref={importInputRef} type="file" className="hidden" accept=".json" onChange={onImport} />
          
         {isSearchOpen && (
           <div className="mt-4 animate-slideUp">
@@ -365,6 +368,16 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
           </div>
         )}
       </header>
+      
+      {/* Import Loading Overlay */}
+      {isImporting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-white p-5 rounded-2xl shadow-xl flex items-center gap-4 animate-slideUp">
+                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <span className="font-medium text-gray-700">Importing memories...</span>
+            </div>
+        </div>
+      )}
 
       <div className="px-4 space-y-3">
         {filteredEntries.length === 0 ? (
@@ -887,6 +900,7 @@ const App = () => {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isImporting, setIsImporting] = useState(false); // Add isImporting state to App
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -991,26 +1005,31 @@ const App = () => {
   const handleImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-     
+
+    setIsImporting(true); // Start loading
+
     const reader = new FileReader();
     reader.onload = (event) => {
-      try {
-        const imported = JSON.parse(event.target.result);
-        if (Array.isArray(imported)) {
-           if (confirm(`Import ${imported.length} entries? This will replace current data.`)) {
-             setEntries(imported);
-           }
-        } else {
-          alert('Invalid file format.');
-        }
-      } catch (err) {
-        alert('Error parsing JSON.');
-      }
+      // Small timeout to allow UI to render loading state
+      setTimeout(() => {
+          try {
+            const imported = JSON.parse(event.target.result);
+            if (Array.isArray(imported)) {
+               if (confirm(`Import ${imported.length} entries? This will replace current data.`)) {
+                 setEntries(imported);
+               }
+            } else {
+              alert('Invalid file format.');
+            }
+          } catch (err) {
+            alert('Error parsing JSON.');
+          } finally {
+            setIsImporting(false); // Stop loading
+            e.target.value = ''; // Reset file input
+          }
+      }, 100);
     };
     reader.readAsText(file);
-     
-    // Reset file input
-    e.target.value = '';
   };
 
   return (
@@ -1034,6 +1053,7 @@ const App = () => {
               onExport={handleExport}
               onImport={handleImport}
               isOffline={isOffline}
+              isImporting={isImporting} // Pass isImporting to JournalList
             />
           )}
           {activeTab === 'stats' && <StatsPage entries={entries} />}
