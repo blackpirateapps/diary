@@ -568,10 +568,19 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [uploading, setUploading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null); // Ref for the textarea
 
   useEffect(() => {
     setImgIndex(0);
   }, [entry?.id]);
+
+  // Auto-resize logic
+  useEffect(() => {
+    if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'; // Reset height to recalculate
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [content]);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
@@ -837,10 +846,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           </div>
 
           <textarea
+            ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Start writing..."
-            className="w-full min-h-[400px] resize-none text-lg text-gray-800 placeholder-gray-300 border-none p-0 focus:ring-0 leading-7 font-serif bg-transparent"
+            className="w-full min-h-[300px] resize-none text-lg text-gray-800 placeholder-gray-300 border-none p-0 focus:ring-0 outline-none focus:outline-none leading-7 font-serif bg-transparent overflow-hidden"
           />
 
           <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center text-gray-400">
@@ -876,19 +886,6 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('journal');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
-
-  useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
   const [entries, setEntries] = useState(() => {
     try {
       const saved = localStorage.getItem('journal_entries');
