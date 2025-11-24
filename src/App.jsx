@@ -588,12 +588,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   }, [entry?.id]);
 
   // Auto-resize logic
-  useEffect(() => {
-    if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto'; // Reset height to recalculate
-        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, [content]);
+  // Auto-resize logic with scroll position preservation
+useEffect(() => {
+  if (textareaRef.current) {
+    const currentScrollPos = textareaRef.current.scrollTop; // Save scroll position
+    textareaRef.current.style.height = 'auto'; // Reset height to recalculate
+    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    textareaRef.current.scrollTop = currentScrollPos; // Restore scroll position
+  }
+}, [content]);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
