@@ -866,7 +866,7 @@ useEffect(() => {
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Start writing..."
-            className="w-full min-h-[300px] resize-none text-lg text-gray-800 placeholder-gray-300 border-none p-0 focus:ring-0 outline-none focus:outline-none leading-7 font-serif bg-transparent scroll-padding-bottom scroll-pb-20 overflow-hidden"
+            className="w-full min-h-[300px] resize-none text-lg text-gray-800 placeholder-gray-300 border-none p-0 focus:ring-0 outline-none focus:outline-none leading-7 font-serif bg-transparent pb-20 scroll-pb-20 overflow-hidden"
           />
 
           <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center text-gray-400">
