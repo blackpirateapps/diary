@@ -43,6 +43,12 @@ const Styles = () => (
       scrollbar-width: none;
     }
 
+    /* Mobile keyboard handling */
+    .editor-textarea:focus {
+      scroll-margin-top: 20px;
+      scroll-margin-bottom: 20px;
+    }
+
     /* --- MARKDOWN PREVIEW TYPOGRAPHY --- */
     .prose { color: #374151; line-height: 1.6; }
     .prose h1 { font-size: 2em; font-weight: 800; margin-top: 1em; margin-bottom: 0.6em; line-height: 1.2; color: #111827; }
@@ -146,43 +152,68 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const scrollContainerRef = useRef(null);
+  const isScrollingRef = useRef(false);
 
   useEffect(() => {
     setImgIndex(0);
   }, [entry?.id]);
 
-  // Auto-resize textarea with scrollIntoView for mobile keyboard handling
+  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current && (mode === 'live' || mode === 'source')) {
       const el = textareaRef.current;
       el.style.height = 'auto';
       el.style.height = `${el.scrollHeight}px`;
+    }
+  }, [content, mode]);
+
+  // Handle textarea focus with improved mobile keyboard support
+  const handleTextareaFocus = (e) => {
+    if (isScrollingRef.current) return;
+    
+    const el = e.target;
+    isScrollingRef.current = true;
+    
+    // Wait for keyboard to appear
+    setTimeout(() => {
+      // Get the bounding rect of the textarea
+      const rect = el.getBoundingClientRect();
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
       
-      // Scroll textarea into view when content changes (typing)
-      // This keeps the caret visible on mobile when keyboard is open
-      if (document.activeElement === el) {
-        requestAnimationFrame(() => {
+      // Check if textarea is hidden by keyboard
+      if (rect.bottom > viewportHeight * 0.6) {
+        el.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center',
+          inline: 'nearest'
+        });
+      }
+      
+      isScrollingRef.current = false;
+    }, 300);
+  };
+
+  // Handle input changes with scroll adjustment
+  const handleContentChange = (e) => {
+    setContent(e.target.value);
+    
+    // Keep cursor visible while typing
+    if (document.activeElement === e.target && !isScrollingRef.current) {
+      requestAnimationFrame(() => {
+        const el = e.target;
+        const rect = el.getBoundingClientRect();
+        const viewportHeight = window.visualViewport?.height || window.innerHeight;
+        
+        // Only scroll if near bottom of visible area
+        if (rect.bottom > viewportHeight - 50) {
           el.scrollIntoView({ 
             behavior: 'smooth', 
             block: 'nearest',
             inline: 'nearest'
           });
-        });
-      }
-    }
-  }, [content, mode]);
-
-  // Handle textarea focus - ensure it's visible when keyboard appears
-  const handleTextareaFocus = (e) => {
-    const el = e.target;
-    // Small delay to let keyboard appear first
-    setTimeout(() => {
-      el.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'center',
-        inline: 'nearest'
+        }
       });
-    }, 100);
+    }
   };
 
   const handleImageUpload = async (e) => {
@@ -192,7 +223,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       try {
         const compressedBase64 = await compressImage(file);
         setImages((prev) => [...prev, compressedBase64]);
-        setImgIndex(images.length); // Set to new image index
+        setImgIndex(images.length);
       } catch (err) {
         alert(err.message || 'Failed to process image.');
       } finally {
@@ -310,7 +341,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   return (
     <>
       <Styles />
-      {/* Use 100dvh for dynamic viewport that adjusts to mobile keyboard */}
       <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" style={{ height: '100dvh' }}>
         {/* Header - Fixed at top */}
         <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md border-b border-gray-100/50 flex-shrink-0">
@@ -339,8 +369,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           </div>
         </div>
 
-        {/* Main Scroll Container - takes remaining space */}
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar px-6 py-4 pb-24">
+        {/* Main Scroll Container with extra bottom padding for keyboard */}
+        <div 
+          ref={scrollContainerRef} 
+          className="flex-1 overflow-y-auto no-scrollbar px-6 py-4"
+          style={{ paddingBottom: '40vh' }}
+        >
           {images.length > 0 && (
             <div className="w-full h-72 relative group bg-gray-100 mb-4 rounded-lg overflow-hidden shrink-0">
               <img src={images[imgIndex]} alt="Memory" className="w-full h-full object-contain bg-gray-50/50 backdrop-blur-sm" />
@@ -422,10 +456,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             <textarea
               ref={textareaRef}
               value={content}
-              onChange={e => setContent(e.target.value)}
+              onChange={handleContentChange}
               onFocus={handleTextareaFocus}
               placeholder="Start writing..."
-              className="w-full min-h-[300px] resize-none text-xl text-gray-800 placeholder-gray-300 border-none outline-none focus:ring-0 font-sans leading-relaxed"
+              className="editor-textarea w-full min-h-[300px] resize-none text-xl text-gray-800 placeholder-gray-300 border-none outline-none focus:ring-0 font-sans leading-relaxed"
               style={{ overflowY: 'hidden' }}
             />
           )}
@@ -435,11 +469,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             <textarea
               ref={textareaRef}
               value={content}
-              onChange={e => setContent(e.target.value)}
+              onChange={handleContentChange}
               onFocus={handleTextareaFocus}
               placeholder="Edit markdown source..."
               spellCheck={false}
-              className="w-full min-h-[300px] resize-none text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg p-4 font-mono leading-relaxed bg-gray-50"
+              className="editor-textarea w-full min-h-[300px] resize-none text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg p-4 font-mono leading-relaxed bg-gray-50"
               style={{ overflowY: 'hidden' }}
             />
           )}
