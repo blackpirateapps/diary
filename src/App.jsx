@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Calendar, MapPin, Image as ImageIcon, 
   BarChart2, Grid, Home, X, Hash, 
-  ChevronLeft, ChevronRight, MoreHorizontal, Trash2, Save,
+  ChevronLeft, ChevronRight, Trash2,
   Smile, Frown, Meh, Heart, Sun, CloudRain,
-  Search, ChevronDown, Clock, Tag, CalendarPlus, 
-  Download, Upload, Settings, AlertCircle, Cloud,
+  Search, Clock, 
+  Download, Upload, Settings, Cloud,
   WifiOff
 } from 'lucide-react';
 
@@ -39,7 +39,10 @@ const INITIAL_ENTRIES = [
     location: 'Central Park',
     weather: '24°C',
     tags: ['fitness', 'health'],
-    images: ['https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&q=80&w=400', 'https://images.unsplash.com/photo-1502224562085-639556652f33?auto=format&fit=crop&q=80&w=400']
+    images: [
+      'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&q=80&w=400',
+      'https://images.unsplash.com/photo-1502224562085-639556652f33?auto=format&fit=crop&q=80&w=400'
+    ]
   }
 ];
 
@@ -58,7 +61,7 @@ const MOODS = [
 
 // --- Helper Functions ---
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24; 
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 // Compress image to avoid localStorage quota limits
 const compressImage = (file) => {
@@ -96,10 +99,9 @@ const compressImage = (file) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-         
+
         try {
-          const compressed = canvas.toDataURL('image/jpeg', 0.6); // Lower quality
-          // Check if result is too large for localStorage
+          const compressed = canvas.toDataURL('image/jpeg', 0.6);
           if (compressed.length > 500000) { // ~500KB per image
             reject(new Error('Compressed image still too large. Try a smaller image.'));
           } else {
@@ -118,11 +120,11 @@ const compressImage = (file) => {
 const calculateStreak = (entries) => {
   if (!entries.length) return 0;
   const sorted = [...entries].sort((a, b) => new Date(b.date) - new Date(a.date));
-  const today = new Date().setHours(0,0,0,0);
-   
-  const lastEntryDate = new Date(sorted[0].date).setHours(0,0,0,0);
-  const diffTime = today - lastEntryDate; 
-  const diffDays = Math.floor(diffTime / MS_PER_DAY); 
+  const today = new Date().setHours(0, 0, 0, 0);
+
+  const lastEntryDate = new Date(sorted[0].date).setHours(0, 0, 0, 0);
+  const diffTime = today - lastEntryDate;
+  const diffDays = Math.floor(diffTime / MS_PER_DAY);
 
   if (diffDays > 1) return 0;
 
@@ -130,11 +132,11 @@ const calculateStreak = (entries) => {
   let currentDate = lastEntryDate;
 
   for (let i = 1; i < sorted.length; i++) {
-    const entryDate = new Date(sorted[i].date).setHours(0,0,0,0);
-    if (entryDate === currentDate) continue; 
-    
+    const entryDate = new Date(sorted[i].date).setHours(0, 0, 0, 0);
+    if (entryDate === currentDate) continue;
+
     const dayDiff = (currentDate - entryDate) / MS_PER_DAY;
-    if (dayDiff >= 0.9 && dayDiff <= 1.1) { 
+    if (dayDiff >= 0.9 && dayDiff <= 1.1) {
       streak++;
       currentDate = entryDate;
     } else {
@@ -151,16 +153,22 @@ const countWords = (str) => {
 // --- Components ---
 
 const LineGraph = ({ data, dataKey, color = "#3B82F6", height = 100 }) => {
-  if (!data || data.length < 2) return <div className="h-24 flex items-center justify-center text-gray-400 text-xs">Not enough data</div>;
+  if (!data || data.length < 2) {
+    return (
+      <div className="h-24 flex items-center justify-center text-gray-400 text-xs">
+        Not enough data
+      </div>
+    );
+  }
 
   const values = data.map(d => d[dataKey]);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
-   
+
   const points = values.map((val, i) => {
     const x = (i / (values.length - 1)) * 100;
-    const y = 100 - ((val - min) / range) * 80 - 10; 
+    const y = 100 - ((val - min) / range) * 80 - 10;
     return `${x},${y}`;
   }).join(' ');
 
@@ -177,16 +185,16 @@ const LineGraph = ({ data, dataKey, color = "#3B82F6", height = 100 }) => {
           vectorEffect="non-scaling-stroke"
         />
         {values.map((val, i) => (
-           <circle 
-             key={i}
-             cx={(i / (values.length - 1)) * 100}
-             cy={100 - ((val - min) / range) * 80 - 10}
-             r="1.5"
-             fill="white"
-             stroke={color}
-             strokeWidth="1"
-             vectorEffect="non-scaling-stroke"
-           />
+          <circle
+            key={i}
+            cx={(i / (values.length - 1)) * 100}
+            cy={100 - ((val - min) / range) * 80 - 10}
+            r="1.5"
+            fill="white"
+            stroke={color}
+            strokeWidth="1"
+            vectorEffect="non-scaling-stroke"
+          />
         ))}
       </svg>
     </div>
@@ -244,12 +252,17 @@ const TagInput = ({ tags, onAdd, onRemove }) => {
   return (
     <div className="flex flex-wrap gap-2 items-center">
       {tags.map((tag, i) => (
-        <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100">
+        <span
+          key={i}
+          className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100"
+        >
           #{tag}
-          <button onClick={() => onRemove(tag)} className="ml-1 hover:text-blue-800"><X size={12} /></button>
+          <button onClick={() => onRemove(tag)} className="ml-1 hover:text-blue-800">
+            <X size={12} />
+          </button>
         </span>
       ))}
-       
+
       {isInputVisible ? (
         <input
           ref={inputRef}
@@ -257,12 +270,12 @@ const TagInput = ({ tags, onAdd, onRemove }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          onBlur={() => { if(!input) setIsInputVisible(false); }}
+          onBlur={() => { if (!input) setIsInputVisible(false); }}
           placeholder="New tag..."
           className="w-24 px-2 py-1 bg-gray-50 border-none rounded-full text-xs focus:ring-2 focus:ring-blue-500/20 placeholder-gray-400"
         />
       ) : (
-        <button 
+        <button
           onClick={() => setIsInputVisible(true)}
           className="p-1 text-gray-400 hover:bg-gray-100 rounded-full transition-colors"
         >
@@ -275,17 +288,25 @@ const TagInput = ({ tags, onAdd, onRemove }) => {
 
 // --- Main Pages ---
 
-const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, isOffline, isImporting }) => {
+const JournalList = ({
+  entries,
+  onEdit,
+  onCreate,
+  onAddOld,
+  onImport,
+  onExport,
+  isOffline,
+  isImporting
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const importInputRef = useRef(null);
 
-  // FIX #5: Sort filtered entries by date (newest first)
   const filteredEntries = entries
-    .filter(entry => 
+    .filter(entry =>
       entry.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      entry.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (entry.location && entry.location.toLowerCase().includes(searchTerm.toLowerCase()))
     )
     .sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -295,34 +316,38 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
       <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F8F9FA]/90 backdrop-blur-md z-10">
         <div className="flex justify-between items-start gap-2">
           <div className="min-w-0 flex-1">
-             <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">BlackPirate's Journal</h1>
-             <p className="text-gray-500 text-sm mt-1 flex items-center gap-2">
-                Capture your life.
-                {isOffline && (
-                  <span className="flex items-center gap-1 text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full font-medium">
-                    <WifiOff size={10} /> Offline
-                  </span>
-                )}
-             </p>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">
+              BlackPirate&apos;s Journal
+            </h1>
+            <p className="text-gray-500 text-sm mt-1 flex items-center gap-2">
+              Capture your life.
+              {isOffline && (
+                <span className="flex items-center gap-1 text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full font-medium">
+                  <WifiOff size={10} /> Offline
+                </span>
+              )}
+            </p>
           </div>
           <div className="flex items-center gap-2 mt-1 flex-shrink-0">
-            <button 
+            <button
               onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className={`p-2 rounded-full transition-colors ${isSearchOpen ? 'bg-blue-100 text-blue-600' : 'bg-white text-gray-500 shadow-sm'}`}
+              className={`p-2 rounded-full transition-colors ${
+                isSearchOpen ? 'bg-blue-100 text-blue-600' : 'bg-white text-gray-500 shadow-sm'
+              }`}
             >
               <Search size={20} />
             </button>
-            
-            <button 
+
+            <button
               onClick={onAddOld}
               className="p-2 bg-white text-gray-500 shadow-sm rounded-full hover:text-blue-600 hover:bg-blue-50 transition-colors"
               title="Add Past Entry"
             >
-              <CalendarPlus size={20} />
+              <Calendar size={20} />
             </button>
 
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="p-2 bg-white text-gray-500 shadow-sm rounded-full hover:text-blue-600 hover:bg-blue-50 transition-colors"
               >
@@ -332,10 +357,16 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setIsMenuOpen(false)} />
                   <div className="absolute right-0 top-10 bg-white rounded-xl shadow-xl border border-gray-100 p-2 w-32 z-30 flex flex-col gap-1 animate-slideUp">
-                    <button onClick={() => { onExport(); setIsMenuOpen(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded-lg w-full text-left">
+                    <button
+                      onClick={() => { onExport(); setIsMenuOpen(false); }}
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded-lg w-full text-left"
+                    >
                       <Download size={14} /> Export
                     </button>
-                    <button onClick={() => { importInputRef.current.click(); setIsMenuOpen(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded-lg w-full text-left">
+                    <button
+                      onClick={() => { if (importInputRef.current) importInputRef.current.click(); setIsMenuOpen(false); }}
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded-lg w-full text-left"
+                    >
                       <Upload size={14} /> Import
                     </button>
                   </div>
@@ -343,7 +374,7 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
               )}
             </div>
 
-            <button 
+            <button
               onClick={onCreate}
               className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-full shadow-lg shadow-blue-500/30 active:scale-95 transition-all flex items-center gap-1 text-sm ml-1"
             >
@@ -351,15 +382,21 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
             </button>
           </div>
         </div>
-        
+
         {/* Hidden File Input for Import */}
-        <input ref={importInputRef} type="file" className="hidden" accept=".json" onChange={onImport} />
-         
+        <input
+          ref={importInputRef}
+          type="file"
+          className="hidden"
+          accept=".json"
+          onChange={onImport}
+        />
+
         {isSearchOpen && (
           <div className="mt-4 animate-slideUp">
-            <input 
-              type="text" 
-              placeholder="Search memories..." 
+            <input
+              type="text"
+              placeholder="Search memories..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-white border-none shadow-sm rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-blue-500/20"
@@ -368,14 +405,14 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
           </div>
         )}
       </header>
-      
+
       {/* Import Loading Overlay */}
       {isImporting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm animate-fadeIn">
-            <div className="bg-white p-5 rounded-2xl shadow-xl flex items-center gap-4 animate-slideUp">
-                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="font-medium text-gray-700">Importing memories...</span>
-            </div>
+          <div className="bg-white p-5 rounded-2xl shadow-xl flex items-center gap-4 animate-slideUp">
+            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <span className="font-medium text-gray-700">Importing memories...</span>
+          </div>
         </div>
       )}
 
@@ -387,30 +424,47 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
         ) : (
           filteredEntries.map((entry) => {
             const dateObj = new Date(entry.date);
-            const mainDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-            const yearTime = dateObj.toLocaleDateString(undefined, { year: 'numeric' }) + ' • ' + dateObj.toLocaleTimeString(undefined, {hour: '2-digit', minute:'2-digit'});
+            const mainDate = dateObj.toLocaleDateString(undefined, {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric'
+            });
+            const yearTime =
+              dateObj.toLocaleDateString(undefined, { year: 'numeric' }) +
+              ' • ' +
+              dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+            const moodMeta = MOODS.find(m => m.value === entry.mood);
 
             return (
-              <div 
-                key={entry.id} 
+              <div
+                key={entry.id}
                 onClick={() => onEdit(entry)}
                 className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 active:scale-[0.98] transition-transform duration-200 cursor-pointer group"
               >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex flex-col">
-                     <span className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{mainDate}</span>
-                     <span className="text-xs text-gray-400 font-medium">{yearTime}</span>
+                    <span className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
+                      {mainDate}
+                    </span>
+                    <span className="text-xs text-gray-400 font-medium">{yearTime}</span>
                   </div>
                   {entry.mood && (
-                     <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 ${MOODS.find(m => m.value === entry.mood)?.color || 'text-gray-500'}`}>
-                       {React.createElement(MOODS.find(m => m.value === entry.mood)?.icon || Meh, { size: 18 })}
-                     </div>
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 ${
+                        moodMeta?.color || 'text-gray-500'
+                      }`}
+                    >
+                      {React.createElement(moodMeta?.icon || Meh, { size: 18 })}
+                    </div>
                   )}
                 </div>
-                 
-                <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed mt-2 font-serif">{entry.content}</p>
-                 
-                {(entry.tags.length > 0 || entry.location) && (
+
+                <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed mt-2 font-serif">
+                  {entry.content}
+                </p>
+
+                {(entry.tags?.length > 0 || entry.location || entry.weather) && (
                   <div className="mt-3 flex items-center gap-3 overflow-hidden text-gray-400">
                     {entry.location && (
                       <div className="flex items-center text-xs bg-gray-50 px-2 py-1 rounded-md">
@@ -419,12 +473,12 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
                       </div>
                     )}
                     {entry.weather && (
-                       <div className="flex items-center text-xs bg-gray-50 px-2 py-1 rounded-md">
+                      <div className="flex items-center text-xs bg-gray-50 px-2 py-1 rounded-md">
                         <Cloud size={12} className="mr-1" />
                         <span>{entry.weather}</span>
                       </div>
                     )}
-                    {entry.tags.length > 0 && (
+                    {entry.tags?.length > 0 && (
                       <div className="flex items-center text-xs">
                         <Hash size={12} className="mr-1" />
                         <span className="truncate">{entry.tags.join(', ')}</span>
@@ -435,12 +489,16 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
 
                 {entry.images && entry.images.length > 0 && (
                   <div className="mt-3 h-24 w-full rounded-xl overflow-hidden relative">
-                     <img src={entry.images[0]} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" alt="Cover" />
-                     {entry.images.length > 1 && (
-                       <div className="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded-md">
-                         +{entry.images.length - 1}
-                       </div>
-                     )}
+                    <img
+                      src={entry.images[0]}
+                      className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+                      alt="Cover"
+                    />
+                    {entry.images.length > 1 && (
+                      <div className="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded-md">
+                        +{entry.images.length - 1}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -453,22 +511,31 @@ const JournalList = ({ entries, onEdit, onCreate, onAddOld, onImport, onExport, 
 };
 
 const StatsPage = ({ entries }) => {
-  const [filter, setFilter] = useState('all'); 
+  const [filter, setFilter] = useState('all');
 
   const now = new Date();
-  const filteredEntries = entries.filter(e => {
-    const d = new Date(e.date);
-    if (filter === 'month') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    if (filter === 'year') return d.getFullYear() === now.getFullYear();
-    return true;
-  }).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const filteredEntries = entries
+    .filter(e => {
+      const d = new Date(e.date);
+      if (filter === 'month') {
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }
+      if (filter === 'year') {
+        return d.getFullYear() === now.getFullYear();
+      }
+      return true;
+    })
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   const totalEntries = filteredEntries.length;
-  const streak = calculateStreak(entries); 
-   
+  const streak = calculateStreak(entries);
+
   const totalWords = filteredEntries.reduce((acc, curr) => acc + countWords(curr.content), 0);
   const avgWords = totalEntries > 0 ? Math.round(totalWords / totalEntries) : 0;
-  const maxWords = filteredEntries.reduce((max, curr) => Math.max(max, countWords(curr.content)), 0);
+  const maxWords = filteredEntries.reduce(
+    (max, curr) => Math.max(max, countWords(curr.content)),
+    0
+  );
 
   const graphData = filteredEntries.map(e => ({
     date: e.date,
@@ -482,27 +549,35 @@ const StatsPage = ({ entries }) => {
         <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Insights</h1>
         <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
           {['all', 'year', 'month'].map(f => (
-             <button 
-               key={f}
-               onClick={() => setFilter(f)}
-               className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-all ${filter === f ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-             >
-               {f}
-             </button>
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-all ${
+                filter === f ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {f}
+            </button>
           ))}
         </div>
       </div>
-       
+
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-5 rounded-3xl shadow-lg shadow-blue-500/20">
-          <p className="text-blue-100 text-sm font-medium mb-1 flex items-center gap-1"><Calendar size={14}/> Days Journaled</p>
+          <p className="text-blue-100 text-sm font-medium mb-1 flex items-center gap-1">
+            <Calendar size={14} /> Days Journaled
+          </p>
           <p className="text-3xl font-bold">{totalEntries}</p>
           <p className="text-xs text-blue-100 mt-2 opacity-80">in selected period</p>
         </div>
         <div className="bg-gradient-to-br from-orange-400 to-orange-500 text-white p-5 rounded-3xl shadow-lg shadow-orange-500/20">
-          <p className="text-orange-100 text-sm font-medium mb-1 flex items-center gap-1"><Sun size={14}/> Current Streak</p>
-          <p className="text-3xl font-bold">{streak} <span className="text-lg font-normal">days</span></p>
-           <p className="text-xs text-orange-100 mt-2 opacity-80">Keep it up!</p>
+          <p className="text-orange-100 text-sm font-medium mb-1 flex items-center gap-1">
+            <Sun size={14} /> Current Streak
+          </p>
+          <p className="text-3xl font-bold">
+            {streak} <span className="text-lg font-normal">days</span>
+          </p>
+          <p className="text-xs text-orange-100 mt-2 opacity-80">Keep it up!</p>
         </div>
       </div>
 
@@ -523,14 +598,14 @@ const StatsPage = ({ entries }) => {
 
       <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm">
         <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2 text-sm">
-          <BarChart2 size={16} className="text-blue-500"/> Mood Flow
+          <BarChart2 size={16} className="text-blue-500" /> Mood Flow
         </h3>
         <LineGraph data={graphData} dataKey="mood" color="#3B82F6" height={120} />
       </div>
 
       <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm">
         <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2 text-sm">
-          <Hash size={16} className="text-purple-500"/> Writing Volume
+          <Hash size={16} className="text-purple-500" /> Writing Volume
         </h3>
         <LineGraph data={graphData} dataKey="words" color="#A855F7" height={120} />
       </div>
@@ -540,22 +615,30 @@ const StatsPage = ({ entries }) => {
 
 const MediaGallery = ({ entries }) => {
   const allImages = entries.reduce((acc, entry) => {
-    return [...acc, ...entry.images.map(img => ({ src: img, entryId: entry.id }))];
+    const imgs = Array.isArray(entry.images) ? entry.images : [];
+    return [...acc, ...imgs.map(img => ({ src: img, entryId: entry.id }))];
   }, []);
 
   return (
     <div className="space-y-6 pb-24 px-6 pt-6">
       <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Media</h1>
       {allImages.length === 0 ? (
-         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-           <ImageIcon size={48} className="mb-4 opacity-50" />
-           <p>No photos added yet.</p>
-         </div>
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+          <ImageIcon size={48} className="mb-4 opacity-50" />
+          <p>No photos added yet.</p>
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {allImages.map((img, idx) => (
-            <div key={idx} className="aspect-square rounded-2xl overflow-hidden bg-gray-100 relative group">
-              <img src={img.src} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+            <div
+              key={`${img.entryId}-${idx}`}
+              className="aspect-square rounded-2xl overflow-hidden bg-gray-100 relative group"
+            >
+              <img
+                src={img.src}
+                alt=""
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+              />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
             </div>
           ))}
@@ -569,7 +652,7 @@ const MediaGallery = ({ entries }) => {
 
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const entryDate = entry?.date ? new Date(entry.date) : new Date();
-   
+
   const [content, setContent] = useState(entry?.content || '');
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
@@ -580,38 +663,55 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
+
   const fileInputRef = useRef(null);
-  const textareaRef = useRef(null); // Ref for the textarea
+  const textareaRef = useRef(null);
+  const scrollContainerRef = useRef(null);
 
   useEffect(() => {
     setImgIndex(0);
   }, [entry?.id]);
 
-  // Auto-resize logic
-  // Auto-resize logic with scroll position preservation
-useEffect(() => {
-  if (textareaRef.current) {
-    const currentScrollPos = textareaRef.current.scrollTop; // Save scroll position
-    textareaRef.current.style.height = 'auto'; // Reset height to recalculate
-    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    textareaRef.current.scrollTop = currentScrollPos; // Restore scroll position
-  }
-}, [content]);
+  // Auto-resize textarea and keep caret visible in viewport / scroll container on mobile
+  useEffect(() => {
+    if (!textareaRef.current) return;
+
+    const el = textareaRef.current;
+    const prevScrollTop = el.scrollTop;
+
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+    el.scrollTop = prevScrollTop;
+
+    // If user is actively editing this textarea, ensure it stays in view
+    if (document.activeElement === el) {
+      // Scroll nearest scrollable container so the caret is visible, which helps with mobile keyboards.[web:9][web:12]
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        if (scrollContainerRef.current) {
+          // Nudge scroll to bottom when content grows.
+          const sc = scrollContainerRef.current;
+          if (sc.scrollHeight > sc.clientHeight) {
+            sc.scrollTop = sc.scrollHeight;
+          }
+        }
+      });
+    }
+  }, [content]);
 
   const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
       setUploading(true);
       try {
         const compressedBase64 = await compressImage(file);
         setImages(prev => [...prev, compressedBase64]);
-        setImgIndex(images.length); 
+        setImgIndex(prev => prev + 1);
       } catch (err) {
         alert(err.message || "Failed to process image.");
         console.error(err);
       } finally {
         setUploading(false);
-        // FIX #10: Reset file input to allow same file upload
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
@@ -621,14 +721,14 @@ useEffect(() => {
 
   const handleLocation = () => {
     if (!navigator.onLine) {
-        const manual = prompt("You are offline. Please enter location manually:");
-        if(manual) setLocation(manual);
-        return;
+      const manual = window.prompt("You are offline. Please enter location manually:");
+      if (manual) setLocation(manual);
+      return;
     }
 
     if (!navigator.geolocation) {
-      const manual = prompt("Geolocation is not supported by your browser. Please enter location manually:");
-      if(manual) setLocation(manual);
+      const manual = window.prompt("Geolocation is not supported by your browser. Please enter location manually:");
+      if (manual) setLocation(manual);
       return;
     }
 
@@ -637,33 +737,34 @@ useEffect(() => {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        
+
         try {
-          // 1. Get Weather (Open-Meteo)
-          const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
+          const weatherRes = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+          );
           const weatherData = await weatherRes.json();
           const temp = weatherData.current_weather?.temperature;
           if (temp !== undefined) {
             setWeather(`${temp}°C`);
           }
 
-          // 2. Get Location Name (BigDataCloud - Free, No Key)
-          const locRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+          const locRes = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+          );
           const locData = await locRes.json();
-          
+
           const city = locData.city || locData.locality || locData.principalSubdivision;
           const country = locData.countryName;
-          
+
           if (city) {
             setLocation(country ? `${city}, ${country}` : city);
           } else {
-             setLocation("Unknown Location");
+            setLocation("Unknown Location");
           }
-
         } catch (error) {
           console.error("Error fetching data", error);
-          const manual = prompt("Could not fetch location details automatically. Please enter manually:");
-          if(manual) setLocation(manual);
+          const manual = window.prompt("Could not fetch location details automatically. Please enter manually:");
+          if (manual) setLocation(manual);
         } finally {
           setLoadingLocation(false);
         }
@@ -672,17 +773,16 @@ useEffect(() => {
         console.error("Geo error", error);
         let msg = "Unable to access location.";
         if (error.code === 1) msg = "Location permission denied.";
-        const manual = prompt(`${msg} Please enter manually:`);
-        if(manual) setLocation(manual);
+        const manual = window.prompt(`${msg} Please enter manually:`);
+        if (manual) setLocation(manual);
         setLoadingLocation(false);
       }
     );
   };
 
   const handleSave = () => {
-    // FIX #7: Validate content before saving
     if (!content.trim()) {
-      alert('Please write something before saving.');
+      window.alert('Please write something before saving.');
       return;
     }
 
@@ -699,13 +799,11 @@ useEffect(() => {
   };
 
   const handleDelete = () => {
-    // FIX #6: Check if entry has ID before attempting delete
     if (!entry?.id) {
-      // If no ID, this is a new unsaved entry, just close
       onClose();
       return;
     }
-    
+
     if (window.confirm('Are you sure you want to delete this entry completely?')) {
       onDelete(entry.id);
     }
@@ -720,11 +818,9 @@ useEffect(() => {
   };
 
   const deleteCurrentImage = () => {
-    if(window.confirm('Delete this image?')) {
+    if (window.confirm('Delete this image?')) {
       const newImages = images.filter((_, i) => i !== imgIndex);
       setImages(newImages);
-       
-      // FIX #7: Properly handle index after deletion
       if (newImages.length === 0) {
         setImgIndex(0);
       } else if (imgIndex >= newImages.length) {
@@ -737,19 +833,28 @@ useEffect(() => {
   const currentMoodColor = MOODS.find(m => m.value === mood)?.color || 'text-gray-500';
 
   return (
-    <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden">
+    <div
+      className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden"
+      style={{ height: '100dvh' }} // dynamic viewport height to cooperate with mobile keyboards.[web:5][web:14]
+    >
       {/* Header */}
       <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md absolute top-0 left-0 right-0 z-20 border-b border-gray-100/50">
-        <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
+        <button
+          onClick={onClose}
+          className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+        >
           <ChevronLeft size={24} />
         </button>
         <div className="flex items-center gap-2">
           {entry && entry.id && (
-            <button onClick={handleDelete} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors">
+            <button
+              onClick={handleDelete}
+              className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+            >
               <Trash2 size={20} />
             </button>
           )}
-          <button 
+          <button
             onClick={handleSave}
             className="px-4 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-md shadow-blue-500/20 active:scale-95 transition-all text-sm"
           >
@@ -759,46 +864,60 @@ useEffect(() => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto no-scrollbar pt-16">
-        
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto no-scrollbar pt-16"
+      >
         {/* Carousel / Cover Image */}
         {images.length > 0 && (
           <div className="w-full h-72 relative group bg-gray-100 mb-4">
-            <img 
-              src={images[imgIndex]} 
-              alt="Memory" 
-              className="w-full h-full object-contain bg-gray-50/50 backdrop-blur-sm" 
+            <img
+              src={images[imgIndex]}
+              alt="Memory"
+              className="w-full h-full object-contain bg-gray-50/50 backdrop-blur-sm"
             />
             <div className="absolute inset-0 -z-10 overflow-hidden">
-                <img src={images[imgIndex]} className="w-full h-full object-cover blur-xl opacity-50" alt="" />
+              <img
+                src={images[imgIndex]}
+                className="w-full h-full object-cover blur-xl opacity-50"
+                alt=""
+              />
             </div>
-            
+
             {images.length > 1 && (
               <div className="absolute inset-0 flex items-center justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={prevImage} className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors">
+                <button
+                  onClick={prevImage}
+                  className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors"
+                >
                   <ChevronLeft size={20} />
                 </button>
-                <button onClick={nextImage} className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors">
+                <button
+                  onClick={nextImage}
+                  className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors"
+                >
                   <ChevronRight size={20} />
                 </button>
               </div>
             )}
 
             <div className="absolute top-4 right-4 flex gap-2">
-                <button 
-                  onClick={deleteCurrentImage}
-                  className="bg-black/30 hover:bg-red-500/80 text-white p-1.5 rounded-full backdrop-blur-md transition-colors"
-                >
-                  <Trash2 size={14} />
-                </button>
+              <button
+                onClick={deleteCurrentImage}
+                className="bg-black/30 hover:bg-red-500/80 text-white p-1.5 rounded-full backdrop-blur-md transition-colors"
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
 
             {images.length > 1 && (
               <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
                 {images.map((_, i) => (
-                  <div 
-                    key={i} 
-                    className={`w-1.5 h-1.5 rounded-full transition-all ${i === imgIndex ? 'bg-white w-3' : 'bg-white/50'}`} 
+                  <div
+                    key={i}
+                    className={`w-1.5 h-1.5 rounded-full transition-all ${
+                      i === imgIndex ? 'bg-white w-3' : 'bg-white/50'
+                    }`}
                   />
                 ))}
               </div>
@@ -809,56 +928,74 @@ useEffect(() => {
         <div className="px-6 pb-12">
           <div className="mb-6">
             <h2 className="text-3xl font-extrabold text-gray-900 leading-tight">
-              {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+              {entryDate.toLocaleDateString(undefined, {
+                weekday: 'long',
+                month: 'short',
+                day: 'numeric'
+              })}
             </h2>
             <div className="flex items-center gap-2 text-gray-400 text-sm mt-1 font-medium">
-               <Clock size={14} />
-               {entryDate.toLocaleTimeString(undefined, {hour: '2-digit', minute:'2-digit'})}
-               <span>•</span>
-               <span>{entryDate.getFullYear()}</span>
+              <Clock size={14} />
+              {entryDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+              <span>•</span>
+              <span>{entryDate.getFullYear()}</span>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-3 mb-6">
-             <div className="relative">
-                <button 
-                  onClick={() => setIsMoodOpen(!isMoodOpen)}
-                  className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-xs font-medium transition-colors ${mood ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}
-                >
-                  <CurrentMoodIcon size={14} className={currentMoodColor} />
-                  <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
-                </button>
-                {isMoodOpen && (
-                  <MoodPopup 
-                    currentMood={mood} 
-                    onChange={setMood} 
-                    onClose={() => setIsMoodOpen(false)} 
-                  />
-                )}
-             </div>
-
-             <div className="flex items-center bg-gray-50 rounded-full pl-2 pr-1 py-0.5 border border-gray-100 max-w-[160px]">
-                <MapPin size={12} className="text-gray-400 mr-1 flex-shrink-0" />
-                <input 
-                  type="text" 
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Location"
-                  className="bg-transparent border-none p-0 text-xs text-gray-600 placeholder-gray-400 focus:ring-0 w-full truncate"
+            <div className="relative">
+              <button
+                onClick={() => setIsMoodOpen(!isMoodOpen)}
+                className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  mood ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                <CurrentMoodIcon size={14} className={currentMoodColor} />
+                <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
+              </button>
+              {isMoodOpen && (
+                <MoodPopup
+                  currentMood={mood}
+                  onChange={setMood}
+                  onClose={() => setIsMoodOpen(false)}
                 />
-                <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-gray-400 hover:text-blue-500 disabled:opacity-50">
-                   {loadingLocation ? <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"/> : <Plus size={10} />}
-                </button>
-             </div>
+              )}
+            </div>
 
-             {weather && (
-               <div className="flex items-center bg-orange-50 text-orange-600 rounded-full px-2 py-0.5 border border-orange-100 text-xs">
-                  <Cloud size={12} className="mr-1"/>
-                  {weather}
-               </div>
-             )}
+            <div className="flex items-center bg-gray-50 rounded-full pl-2 pr-1 py-0.5 border border-gray-100 max-w-[160px]">
+              <MapPin size={12} className="text-gray-400 mr-1 flex-shrink-0" />
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Location"
+                className="bg-transparent border-none p-0 text-xs text-gray-600 placeholder-gray-400 focus:ring-0 w-full truncate"
+              />
+              <button
+                onClick={handleLocation}
+                disabled={loadingLocation}
+                className="p-1 text-gray-400 hover:text-blue-500 disabled:opacity-50"
+              >
+                {loadingLocation ? (
+                  <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Plus size={10} />
+                )}
+              </button>
+            </div>
 
-             <TagInput tags={tags} onAdd={(t) => setTags([...tags, t])} onRemove={(t) => setTags(tags.filter(tag => tag !== t))} />
+            {weather && (
+              <div className="flex items-center bg-orange-50 text-orange-600 rounded-full px-2 py-0.5 border border-orange-100 text-xs">
+                <Cloud size={12} className="mr-1" />
+                {weather}
+              </div>
+            )}
+
+            <TagInput
+              tags={tags}
+              onAdd={(t) => setTags([...tags, t])}
+              onRemove={(t) => setTags(tags.filter(tag => tag !== t))}
+            />
           </div>
 
           <textarea
@@ -866,30 +1003,33 @@ useEffect(() => {
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Start writing..."
-            className="w-full min-h-[300px] resize-none text-lg text-gray-800 placeholder-gray-300 border-none p-0 focus:ring-0 outline-none focus:outline-none leading-7 font-serif bg-transparent pb-20 scroll-pb-20 overflow-hidden"
+            className="w-full min-h-[300px] resize-none text-lg text-gray-800 placeholder-gray-300 border-none p-0 focus:ring-0 outline-none leading-7 font-serif bg-transparent pb-20 overflow-hidden"
           />
 
           <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center text-gray-400">
-             <span className="text-xs uppercase tracking-wider font-medium">Attachments</span>
-             <div className="flex gap-2">
-               <button 
-                 onClick={() => fileInputRef.current.click()}
-                 disabled={uploading}
-                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors disabled:opacity-50"
-               >
-                 {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"/> : <ImageIcon size={18} />}
-                 <span className="text-xs">{uploading ? 'Processing...' : 'Add Image'}</span>
-               </button>
-             </div>
+            <span className="text-xs uppercase tracking-wider font-medium">Attachments</span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                disabled={uploading}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors disabled:opacity-50"
+              >
+                {uploading ? (
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <ImageIcon size={18} />
+                )}
+                <span className="text-xs">{uploading ? 'Processing...' : 'Add Image'}</span>
+              </button>
+            </div>
           </div>
-           <input 
-             type="file" 
-             ref={fileInputRef} 
-             className="hidden" 
-             accept="image/*" 
-             onChange={handleImageUpload} 
-           />
-
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept="image/*"
+            onChange={handleImageUpload}
+          />
         </div>
       </div>
     </div>
@@ -902,8 +1042,22 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('journal');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [isImporting, setIsImporting] = useState(false); // Add isImporting state to App
+  const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const [entries, setEntries] = useState(() => {
+    try {
+      const saved = typeof localStorage !== 'undefined'
+        ? localStorage.getItem('journal_entries')
+        : null;
+      return saved ? JSON.parse(saved) : INITIAL_ENTRIES;
+    } catch (e) {
+      return INITIAL_ENTRIES;
+    }
+  });
+
+  const dateInputRef = useRef(null);
+  const importInputRef = useRef(null);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -916,20 +1070,11 @@ const App = () => {
     };
   }, []);
 
-  const [entries, setEntries] = useState(() => {
-    try {
-      const saved = localStorage.getItem('journal_entries');
-      return saved ? JSON.parse(saved) : INITIAL_ENTRIES;
-    } catch (e) {
-      return INITIAL_ENTRIES;
-    }
-  });
-
-  const dateInputRef = useRef(null);
-
   useEffect(() => {
     try {
-      localStorage.setItem('journal_entries', JSON.stringify(entries));
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('journal_entries', JSON.stringify(entries));
+      }
     } catch (e) {
       if (e.name === 'QuotaExceededError') {
         alert('Storage full! Please delete some entries or images to save new data.');
@@ -938,11 +1083,12 @@ const App = () => {
   }, [entries]);
 
   const handleSaveEntry = (entry) => {
-    if (entries.some(e => e.id === entry.id)) {
-      setEntries(entries.map(e => e.id === entry.id ? entry : e));
-    } else {
-      setEntries([entry, ...entries]);
-    }
+    setEntries(prev => {
+      if (prev.some(e => e.id === entry.id)) {
+        return prev.map(e => (e.id === entry.id ? entry : e));
+      }
+      return [entry, ...prev];
+    });
     setIsEditorOpen(false);
     setEditingEntry(null);
   };
@@ -953,7 +1099,7 @@ const App = () => {
       setEditingEntry(null);
       return;
     }
-    setEntries(entries.filter(e => e.id !== id));
+    setEntries(prev => prev.filter(e => e.id !== id));
     setIsEditorOpen(false);
     setEditingEntry(null);
   };
@@ -977,17 +1123,16 @@ const App = () => {
 
   const handleAddOldEntry = () => {
     if (dateInputRef.current) {
-      dateInputRef.current.showPicker();
+      dateInputRef.current.showPicker?.();
     }
   };
 
   const handleDateSelect = (e) => {
     if (e.target.value) {
-      // FIX #8: Simplified date handling - browser handles timezone correctly
       const selectedDate = new Date(e.target.value + 'T12:00:00');
       openNewEditor(selectedDate);
     }
-    e.target.value = ''; 
+    e.target.value = '';
   };
 
   const handleExport = () => {
@@ -1000,136 +1145,147 @@ const App = () => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-     
-    // FIX #8: Revoke URL to prevent memory leak
     setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
   const handleImport = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsImporting(true); // Start loading
+    setIsImporting(true);
 
     const reader = new FileReader();
-    reader.onload = (event) => {
-      // Small timeout to allow UI to render loading state
-      setTimeout(() => {
-          try {
-            const imported = JSON.parse(event.target.result);
-            if (Array.isArray(imported)) {
-               if (confirm(`Import ${imported.length} entries? This will replace current data.`)) {
-                 setEntries(imported);
-               }
-            } else {
-              alert('Invalid file format.');
-            }
-          } catch (err) {
-            alert('Error parsing JSON.');
-          } finally {
-            setIsImporting(false); // Stop loading
-            e.target.value = ''; // Reset file input
-          }
-      }, 100);
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target.result;
+        const parsed = JSON.parse(text);
+
+        const candidateEntries = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed.entries)
+          ? parsed.entries
+          : [];
+
+        const normalized = candidateEntries
+          .filter(en => en && (en.id || en.date || en.content))
+          .map(en => ({
+            id: en.id || Date.now().toString() + Math.random().toString(16).slice(2),
+            content: en.content || '',
+            date: en.date || new Date().toISOString(),
+            mood: typeof en.mood === 'number' ? en.mood : 5,
+            location: en.location || '',
+            weather: en.weather || '',
+            tags: Array.isArray(en.tags) ? en.tags : [],
+            images: Array.isArray(en.images) ? en.images : []
+          }));
+
+        if (!normalized.length) {
+          alert('Import file does not contain valid entries.');
+          return;
+        }
+
+        setEntries(prev => {
+          const byId = new Map();
+          [...prev, ...normalized].forEach(en => {
+            byId.set(en.id, en);
+          });
+          return Array.from(byId.values()).sort(
+            (a, b) => new Date(b.date) - new Date(a.date)
+          );
+        });
+      } catch (err) {
+        console.error('Import error', err);
+        alert('Failed to import file. Make sure it is a valid JSON export.');
+      } finally {
+        setIsImporting(false);
+        if (e.target) {
+          e.target.value = '';
+        }
+      }
     };
+
+    reader.onerror = () => {
+      alert('Failed to read import file.');
+      setIsImporting(false);
+      if (e.target) {
+        e.target.value = '';
+      }
+    };
+
     reader.readAsText(file);
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-gray-900 font-sans selection:bg-blue-100 selection:text-blue-900">
-      <div className="max-w-md mx-auto min-h-screen relative bg-white shadow-2xl overflow-hidden flex flex-col">
-        
-        <input 
-          type="date" 
-          ref={dateInputRef} 
-          className="absolute top-0 left-0 opacity-0 pointer-events-none" 
+    <div className="min-h-screen bg-[#F3F4F6] text-gray-900">
+      <div className="max-w-xl mx-auto min-h-screen relative pb-16">
+        {activeTab === 'journal' && (
+          <JournalList
+            entries={entries}
+            onEdit={openEditEditor}
+            onCreate={() => openNewEditor()}
+            onAddOld={handleAddOldEntry}
+            onImport={handleImport}
+            onExport={handleExport}
+            isOffline={isOffline}
+            isImporting={isImporting}
+          />
+        )}
+        {activeTab === 'stats' && <StatsPage entries={entries} />}
+        {activeTab === 'media' && <MediaGallery entries={entries} />}
+
+        {/* Hidden date picker for adding past entries */}
+        <input
+          type="date"
+          ref={dateInputRef}
           onChange={handleDateSelect}
+          className="hidden"
         />
 
-        <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
-          {activeTab === 'journal' && (
-            <JournalList 
-              entries={entries} 
-              onEdit={openEditEditor} 
-              onCreate={() => openNewEditor()}
-              onAddOld={handleAddOldEntry}
-              onExport={handleExport}
-              onImport={handleImport}
-              isOffline={isOffline}
-              isImporting={isImporting} // Pass isImporting to JournalList
-            />
-          )}
-          {activeTab === 'stats' && <StatsPage entries={entries} />}
-          {activeTab === 'media' && <MediaGallery entries={entries} />}
-        </main>
-
-        {!isEditorOpen && activeTab === 'journal' && (
-          <div className="absolute bottom-24 right-6 z-30">
-            <button 
-              onClick={() => openNewEditor()}
-              className="w-14 h-14 bg-blue-500 rounded-full text-white shadow-lg shadow-blue-500/40 flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-200 group"
-            >
-              <Plus size={28} className="group-hover:rotate-90 transition-transform duration-200" />
-            </button>
-          </div>
-        )}
-
-        <nav className="border-t border-gray-100 bg-white/90 backdrop-blur-lg fixed bottom-0 w-full max-w-md z-20 pb-safe">
-          <div className="flex justify-around items-center h-16">
-            <button 
-              onClick={() => setActiveTab('journal')}
-              className={`flex flex-col items-center gap-1 w-16 ${activeTab === 'journal' ? 'text-blue-500' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              <Home size={24} strokeWidth={activeTab === 'journal' ? 2.5 : 2} />
-              <span className="text-[10px] font-medium">Journal</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('stats')}
-              className={`flex flex-col items-center gap-1 w-16 ${activeTab === 'stats' ? 'text-blue-500' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              <BarChart2 size={24} strokeWidth={activeTab === 'stats' ? 2.5 : 2} />
-              <span className="text-[10px] font-medium">Stats</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('media')}
-              className={`flex flex-col items-center gap-1 w-16 ${activeTab === 'media' ? 'text-blue-500' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              <Grid size={24} strokeWidth={activeTab === 'media' ? 2.5 : 2} />
-              <span className="text-[10px] font-medium">Media</span>
-            </button>
-          </div>
-        </nav>
-
         {isEditorOpen && (
-          <Editor 
-            entry={editingEntry} 
-            onClose={() => { setIsEditorOpen(false); setEditingEntry(null); }} 
+          <Editor
+            entry={editingEntry}
+            onClose={() => {
+              setIsEditorOpen(false);
+              setEditingEntry(null);
+            }}
             onSave={handleSaveEntry}
             onDelete={handleDeleteEntry}
           />
         )}
-
       </div>
-       
-      <style>{`
-        .no-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        @keyframes slideUp {
-          from { transform: translateY(100%); }
-          to { transform: translateY(0); }
-        }
-        .animate-slideUp {
-          animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .pb-safe {
-          padding-bottom: env(safe-area-inset-bottom);
-        }
-      `}</style>
+
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur-md z-40">
+        <div className="max-w-xl mx-auto flex justify-around py-2">
+          <button
+            onClick={() => setActiveTab('journal')}
+            className={`flex flex-col items-center text-xs ${
+              activeTab === 'journal' ? 'text-blue-600' : 'text-gray-400'
+            }`}
+          >
+            <Home size={20} />
+            <span>Journal</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('stats')}
+            className={`flex flex-col items-center text-xs ${
+              activeTab === 'stats' ? 'text-blue-600' : 'text-gray-400'
+            }`}
+          >
+            <BarChart2 size={20} />
+            <span>Stats</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('media')}
+            className={`flex flex-col items-center text-xs ${
+              activeTab === 'media' ? 'text-blue-600' : 'text-gray-400'
+            }`}
+          >
+            <Grid size={20} />
+            <span>Media</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 };
