@@ -127,7 +127,68 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   };
 
+
   // Location handling (same as before)...
+const handleLocation = () => {
+  if (!navigator.onLine) {
+    const manual = window.prompt("You are offline. Please enter location manually:");
+    if (manual) setLocation(manual);
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    const manual = window.prompt("Geolocation is not supported by your browser. Please enter location manually:");
+    if (manual) setLocation(manual);
+    return;
+  }
+
+  setLoadingLocation(true);
+
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const { latitude, longitude } = position.coords;
+
+      try {
+        // 1. Fetch weather
+        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
+        const weatherData = await weatherRes.json();
+        if (weatherData.current_weather?.temperature !== undefined) {
+          setWeather(`${weatherData.current_weather.temperature}°C`);
+        }
+
+        // 2. Fetch location name
+        const locRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+        const locData = await locRes.json();
+
+        const city = locData.city || locData.locality || locData.principalSubdivision;
+        const country = locData.countryName;
+
+        if (city) {
+          setLocation(country ? `${city}, ${country}` : city);
+        } else {
+          setLocation("Unknown Location");
+        }
+      } catch (error) {
+        console.error("Error fetching location data", error);
+        const manual = window.prompt("Could not fetch location automatically. Please enter manually:");
+        if (manual) setLocation(manual);
+      } finally {
+        setLoadingLocation(false);
+      }
+    },
+    (error) => {
+      console.error("Geolocation error", error);
+      let msg = "Unable to access location.";
+      if (error.code === 1) msg = "Location permission denied.";
+      const manual = window.prompt(`${msg} Please enter manually:`);
+      if (manual) setLocation(manual);
+      setLoadingLocation(false);
+    }
+  );
+};
+
+
+
 
   const handleSave = () => {
     if (!content.trim()) {
