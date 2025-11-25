@@ -151,27 +151,38 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     setImgIndex(0);
   }, [entry?.id]);
 
-  // Auto-resize textarea and handle scroll positioning
+  // Auto-resize textarea with scrollIntoView for mobile keyboard handling
   useEffect(() => {
     if (textareaRef.current && (mode === 'live' || mode === 'source')) {
       const el = textareaRef.current;
       el.style.height = 'auto';
       el.style.height = `${el.scrollHeight}px`;
+      
+      // Scroll textarea into view when content changes (typing)
+      // This keeps the caret visible on mobile when keyboard is open
+      if (document.activeElement === el) {
+        requestAnimationFrame(() => {
+          el.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'nearest',
+            inline: 'nearest'
+          });
+        });
+      }
     }
   }, [content, mode]);
 
-  // Handle textarea focus - scroll into view on mobile
-  const handleTextareaFocus = () => {
-    if (textareaRef.current) {
-      // Delay to ensure keyboard is visible
-      setTimeout(() => {
-        textareaRef.current?.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center',
-          inline: 'nearest'
-        });
-      }, 300);
-    }
+  // Handle textarea focus - ensure it's visible when keyboard appears
+  const handleTextareaFocus = (e) => {
+    const el = e.target;
+    // Small delay to let keyboard appear first
+    setTimeout(() => {
+      el.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center',
+        inline: 'nearest'
+      });
+    }, 100);
   };
 
   const handleImageUpload = async (e) => {
@@ -299,9 +310,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   return (
     <>
       <Styles />
+      {/* Use 100dvh for dynamic viewport that adjusts to mobile keyboard */}
       <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" style={{ height: '100dvh' }}>
-        {/* Header */}
-        <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md absolute top-0 left-0 right-0 z-20 border-b border-gray-100/50">
+        {/* Header - Fixed at top */}
+        <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md border-b border-gray-100/50 flex-shrink-0">
           <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
             <ChevronLeft size={24} />
           </button>
@@ -327,8 +339,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           </div>
         </div>
 
-        {/* Main Scroll Container */}
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar px-6 py-4 pb-24 pt-20">
+        {/* Main Scroll Container - takes remaining space */}
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar px-6 py-4 pb-24">
           {images.length > 0 && (
             <div className="w-full h-72 relative group bg-gray-100 mb-4 rounded-lg overflow-hidden shrink-0">
               <img src={images[imgIndex]} alt="Memory" className="w-full h-full object-contain bg-gray-50/50 backdrop-blur-sm" />
