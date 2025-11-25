@@ -3,6 +3,16 @@ import Editor from './components/Editor';
 import JournalList from './components/JournalList';
 import StatsPage from './components/StatsPage';
 import MediaGallery from './components/MediaGallery';
+import { 
+  Plus, Calendar, MapPin, Image as ImageIcon, 
+  BarChart2, Grid, Home, X, Hash, 
+  ChevronLeft, ChevronRight, Trash2,
+  Smile, Frown, Meh, Heart, Sun, CloudRain,
+  Search, Clock, 
+  Download, Upload, Settings, Cloud,
+  WifiOff
+} from 'lucide-react';
+
 
 // You can move INITIAL_ENTRIES to its own file if desired
 const INITIAL_ENTRIES = [

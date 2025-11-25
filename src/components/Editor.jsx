@@ -10,12 +10,65 @@ import {
   Image as ImageIcon,
   Eye,
   Code,
-  RefreshCw
+  RefreshCw,
+  X,
+  PenTool,
+  Type
 } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import MoodPopup from './MoodPopup';
-import TagInput from './TagInput';
+
+// --- MARKDOWN CONFIGURATION ---
+marked.use({
+  gfm: true,
+  breaks: true
+});
+
+// --- STYLES ---
+// You can move this CSS to a global stylesheet if preferred
+const Styles = () => (
+  <style>{`
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .animate-slideUp {
+      animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* --- MARKDOWN PREVIEW TYPOGRAPHY --- */
+    .prose { color: #374151; line-height: 1.6; }
+    .prose h1 { font-size: 2em; font-weight: 800; margin-top: 1em; margin-bottom: 0.6em; line-height: 1.2; color: #111827; }
+    .prose h2 { font-size: 1.5em; font-weight: 700; margin-top: 1.2em; margin-bottom: 0.6em; line-height: 1.3; color: #1f2937; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.3em; }
+    .prose h3 { font-size: 1.25em; font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; line-height: 1.4; color: #374151; }
+    .prose h4 { font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; }
+    .prose p { margin-bottom: 1em; }
+    .prose ul { list-style-type: disc; padding-left: 1.6em; margin-bottom: 1em; }
+    .prose ol { list-style-type: decimal; padding-left: 1.6em; margin-bottom: 1em; }
+    .prose li { margin-bottom: 0.3em; }
+    .prose li p { margin: 0; }
+    .prose strong, .prose b { font-weight: 700; color: #111827; }
+    .prose em, .prose i { font-style: italic; }
+    .prose u { text-decoration: underline; text-underline-offset: 2px; }
+    .prose blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #4b5563; font-style: italic; margin: 1.5em 0; background: #f9fafb; padding: 0.5em 1em; border-radius: 0 0.375em 0.375em 0; }
+    .prose a { color: #2563eb; text-decoration: underline; font-weight: 500; cursor: pointer; }
+    .prose pre { background-color: #1f2937; color: #e5e7eb; padding: 1em; border-radius: 0.5em; overflow-x: auto; margin: 1em 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.9em; }
+    .prose code { background-color: #f3f4f6; padding: 0.2em 0.4em; border-radius: 0.25em; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.85em; color: #be185d; }
+    .prose pre code { background-color: transparent; padding: 0; color: inherit; font-size: inherit; }
+    .prose img { max-width: 100%; height: auto; border-radius: 0.5em; margin: 1.5em 0; border: 1px solid #e5e7eb; }
+    .prose hr { margin: 2em 0; border: 0; border-top: 1px solid #e5e7eb; }
+    .prose table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.9em; }
+    .prose th { text-align: left; padding: 0.75em; border-bottom: 2px solid #e5e7eb; font-weight: 600; background: #f9fafb; }
+    .prose td { padding: 0.75em; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  `}</style>
+);
 
 const MOODS = [
   { value: 1, icon: Cloud, color: 'text-gray-400', label: 'Awful' },
@@ -30,7 +83,15 @@ const MOODS = [
   { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' }
 ];
 
-// Image compression helper (same as before)
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import MoodPopup from './MoodPopup';
+import TagInput from './TagInput';
+
+
+
+
+// --- HELPERS ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     if (file.size > 10 * 1024 * 1024) {
@@ -61,11 +122,7 @@ const compressImage = (file) => {
         ctx.drawImage(img, 0, 0, width, height);
         try {
           const compressed = canvas.toDataURL('image/jpeg', 0.6);
-          if (compressed.length > 500000) {
-            reject(new Error('Compressed image still too large. Try a smaller image.'));
-          } else {
-            resolve(compressed);
-          }
+          resolve(compressed);
         } catch {
           reject(new Error('Failed to compress image.'));
         }
@@ -75,6 +132,8 @@ const compressImage = (file) => {
     reader.onerror = () => reject(new Error('Failed to read file.'));
   });
 };
+
+// --- MAIN COMPONENT ---
 
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const entryDate = entry?.date ? new Date(entry.date) : new Date();
@@ -89,7 +148,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
-  const [mode, setMode] = useState('live'); // live, preview, source
+  
+  // MODES: 'live' (Sans Serif), 'preview' (Read Only), 'source' (Markdown Code)
+  const [mode, setMode] = useState('live'); 
 
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
@@ -100,13 +161,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   }, [entry?.id]);
 
   useEffect(() => {
-    if (!textareaRef.current) return;
-    const el = textareaRef.current;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-    if (document.activeElement === el) {
-      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    // Auto-resize textarea logic
+    if (textareaRef.current && (mode === 'live' || mode === 'source')) {
+        const el = textareaRef.current;
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight}px`;
     }
   }, [content, mode]);
 
@@ -117,7 +176,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       try {
         const compressedBase64 = await compressImage(file);
         setImages((prev) => [...prev, compressedBase64]);
-        setImgIndex((prev) => prev + 1);
+        setImgIndex((prev) => (prev + 1)); 
       } catch (err) {
         alert(err.message || 'Failed to process image.');
       } finally {
@@ -127,68 +186,28 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   };
 
-
-  // Location handling (same as before)...
-const handleLocation = () => {
-  if (!navigator.onLine) {
-    const manual = window.prompt("You are offline. Please enter location manually:");
-    if (manual) setLocation(manual);
-    return;
-  }
-
-  if (!navigator.geolocation) {
-    const manual = window.prompt("Geolocation is not supported by your browser. Please enter location manually:");
-    if (manual) setLocation(manual);
-    return;
-  }
-
-  setLoadingLocation(true);
-
-  navigator.geolocation.getCurrentPosition(
-    async (position) => {
-      const { latitude, longitude } = position.coords;
-
-      try {
-        // 1. Fetch weather
-        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
-        const weatherData = await weatherRes.json();
-        if (weatherData.current_weather?.temperature !== undefined) {
-          setWeather(`${weatherData.current_weather.temperature}°C`);
-        }
-
-        // 2. Fetch location name
-        const locRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
-        const locData = await locRes.json();
-
-        const city = locData.city || locData.locality || locData.principalSubdivision;
-        const country = locData.countryName;
-
-        if (city) {
-          setLocation(country ? `${city}, ${country}` : city);
-        } else {
-          setLocation("Unknown Location");
-        }
-      } catch (error) {
-        console.error("Error fetching location data", error);
-        const manual = window.prompt("Could not fetch location automatically. Please enter manually:");
-        if (manual) setLocation(manual);
-      } finally {
+  const handleLocation = async () => {
+    setLoadingLocation(true);
+    if (!navigator.geolocation) {
+        alert("Geolocation is not supported by your browser");
         setLoadingLocation(false);
-      }
-    },
-    (error) => {
-      console.error("Geolocation error", error);
-      let msg = "Unable to access location.";
-      if (error.code === 1) msg = "Location permission denied.";
-      const manual = window.prompt(`${msg} Please enter manually:`);
-      if (manual) setLocation(manual);
-      setLoadingLocation(false);
+        return;
     }
-  );
-};
 
-
-
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            setTimeout(() => {
+                setLocation(`${position.coords.latitude.toFixed(2)}, ${position.coords.longitude.toFixed(2)}`);
+                setWeather("Sunny 24°C"); 
+                setLoadingLocation(false);
+            }, 1000);
+        },
+        () => {
+            alert("Unable to retrieve your location");
+            setLoadingLocation(false);
+        }
+    );
+  };
 
   const handleSave = () => {
     if (!content.trim()) {
@@ -227,12 +246,34 @@ const handleLocation = () => {
     }
   };
 
+  // --- CYCLE BUTTON LOGIC ---
+  const toggleMode = () => {
+    setMode(current => {
+      if (current === 'live') return 'preview';
+      if (current === 'preview') return 'source';
+      return 'live';
+    });
+  };
+
+  const getModeIcon = () => {
+    switch (mode) {
+      case 'live': return Type;
+      case 'preview': return Eye;
+      case 'source': return Code;
+      default: return Type;
+    }
+  };
+
+  const ModeIcon = getModeIcon();
   const CurrentMoodIcon = MOODS.find((m) => m.value === mood)?.icon || Cloud;
   const currentMoodColor = MOODS.find((m) => m.value === mood)?.color || 'text-gray-500';
 
-  const renderedMarkdown = DOMPurify.sanitize(marked.parse(content));
+  const renderedMarkdown = content ? DOMPurify.sanitize(marked.parse(content)) : '';
 
   return (
+    <>
+    <Styles />
+    {/* Using '100dvh' for dynamic viewport height to fix mobile keyboard issues */}
     <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" style={{ height: '100dvh' }}>
       {/* Header */}
       <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md absolute top-0 left-0 right-0 z-20 border-b border-gray-100/50">
@@ -245,40 +286,25 @@ const handleLocation = () => {
               <Trash2 size={20} />
             </button>
           )}
+          
+          <button 
+            onClick={toggleMode}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+            title={`Switch mode (Current: ${mode})`}
+          >
+            <ModeIcon size={16} />
+          </button>
+
           <button onClick={handleSave} className="px-4 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-md shadow-blue-500/20 active:scale-95 transition-all text-sm">
             Done
           </button>
         </div>
       </div>
 
-      {/* Mode toggle */}
-      <div className="flex justify-center gap-2 mt-16 border-b border-gray-200 p-2">
-        <button
-          onClick={() => setMode('live')}
-          className={`flex items-center gap-1 px-3 py-1 rounded-md font-medium ${mode === 'live' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-        >
-          <RefreshCw size={16} />
-          Live
-        </button>
-        <button
-          onClick={() => setMode('preview')}
-          className={`flex items-center gap-1 px-3 py-1 rounded-md font-medium ${mode === 'preview' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-        >
-          <Eye size={16} />
-          Preview
-        </button>
-        <button
-          onClick={() => setMode('source')}
-          className={`flex items-center gap-1 px-3 py-1 rounded-md font-medium ${mode === 'source' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-        >
-          <Code size={16} />
-          Source
-        </button>
-      </div>
-
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar px-6 py-4">
+      {/* Main Scroll Container */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar px-6 py-4 pb-24 pt-20">
         {images.length > 0 && (
-          <div className="w-full h-72 relative group bg-gray-100 mb-4 rounded-lg overflow-hidden">
+          <div className="w-full h-72 relative group bg-gray-100 mb-4 rounded-lg overflow-hidden shrink-0">
             <img src={images[imgIndex]} alt="Memory" className="w-full h-full object-contain bg-gray-50/50 backdrop-blur-sm" />
             <div className="absolute inset-0 -z-10 overflow-hidden">
               <img src={images[imgIndex]} className="w-full h-full object-cover blur-xl opacity-50" alt="" />
@@ -293,7 +319,7 @@ const handleLocation = () => {
                 </button>
               </div>
             )}
-            <div className="absolute top-4 right-4 flex gap-2">
+            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={deleteCurrentImage} className="bg-black/30 hover:bg-red-500/80 text-white p-1.5 rounded-full backdrop-blur-md transition-colors">
                 <Trash2 size={14} />
               </button>
@@ -308,7 +334,7 @@ const handleLocation = () => {
           </div>
         )}
 
-        {/* Meta info section unchanged */}
+        {/* Meta info section */}
         <div className="mb-6">
           <h2 className="text-3xl font-extrabold text-gray-900 leading-tight">
             {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
@@ -321,18 +347,21 @@ const handleLocation = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3 mb-6">
+        <div className="flex flex-wrap gap-3 mb-6 relative z-20">
           <div className="relative">
             <button onClick={() => setIsMoodOpen(!isMoodOpen)} className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-xs font-medium transition-colors ${mood ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
               <CurrentMoodIcon size={14} className={currentMoodColor} />
               <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
             </button>
             {isMoodOpen && (
-              <MoodPopup currentMood={mood} onChange={setMood} onClose={() => setIsMoodOpen(false)} />
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setIsMoodOpen(false)} />
+                <MoodPopup currentMood={mood} onChange={setMood} onClose={() => setIsMoodOpen(false)} />
+              </>
             )}
           </div>
 
-          <div className="flex items-center bg-gray-50 rounded-full pl-2 pr-1 py-0.5 border border-gray-100 max-w-[160px]">
+          <div className="flex items-center bg-gray-50 rounded-full pl-2 pr-1 py-0.5 border border-gray-100 max-w-[200px]">
             <MapPin size={12} className="text-gray-400 mr-1 flex-shrink-0" />
             <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Location" className="bg-transparent border-none p-0 text-xs text-gray-600 placeholder-gray-400 focus:ring-0 w-full truncate" />
             <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-gray-400 hover:text-blue-500 disabled:opacity-50">
@@ -350,14 +379,13 @@ const handleLocation = () => {
           <TagInput tags={tags} onAdd={t => setTags([...tags, t])} onRemove={t => setTags(tags.filter(tag => tag !== t))} />
         </div>
 
-        {/* Editor modes content */}
         {mode === 'live' && (
           <textarea
             ref={textareaRef}
             value={content}
             onChange={e => setContent(e.target.value)}
-            placeholder="Start writing markdown..."
-            className="w-full min-h-[300px] resize-none text-lg text-gray-800 placeholder-gray-300 border border-gray-300 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 font-mono leading-relaxed"
+            placeholder="Start writing..."
+            className="w-full min-h-[300px] resize-none text-xl text-gray-800 placeholder-gray-300 border-none outline-none focus:ring-0 font-sans leading-relaxed"
           />
         )}
 
@@ -374,7 +402,7 @@ const handleLocation = () => {
 
         {mode === 'preview' && (
           <div
-            className="w-full min-h-[300px] p-4 bg-white rounded-lg border border-gray-300 overflow-auto prose max-w-none"
+            className="w-full min-h-[300px] prose prose-blue max-w-none"
             dangerouslySetInnerHTML={{ __html: renderedMarkdown }}
           />
         )}
@@ -391,6 +419,7 @@ const handleLocation = () => {
         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
       </div>
     </div>
+    </>
   );
 };
 
