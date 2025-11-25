@@ -8,6 +8,8 @@ import {
   Download, Upload, Settings, Cloud,
   WifiOff
 } from 'lucide-react';
+import MoodPopup from './MoodPopup';
+
 const JournalList = ({
   entries,
   onEdit,
