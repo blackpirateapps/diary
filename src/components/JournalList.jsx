@@ -1,6 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { WifiOff, Plus, Search, Calendar, Settings, Upload, Download } from 'lucide-react';
-
+import { 
+  Plus, Calendar, MapPin, Image as ImageIcon, 
+  BarChart2, Grid, Home, X, Hash, 
+  ChevronLeft, ChevronRight, Trash2,
+  Smile, Frown, Meh, Heart, Sun, CloudRain,
+  Search, Clock, 
+  Download, Upload, Settings, Cloud,
+  WifiOff
+} from 'lucide-react';
 const JournalList = ({
   entries,
   onEdit,
