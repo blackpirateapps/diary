@@ -1,27 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, Trash2, Plus, ChevronRight, MapPin, Cloud, Clock, Image as ImageIcon, Eye, Code, RefreshCw } from 'lucide-react';
+import {
+  ChevronLeft,
+  Trash2,
+  Plus,
+  ChevronRight,
+  MapPin,
+  Cloud,
+  Clock,
+  Image as ImageIcon,
+  Eye,
+  Code,
+  RefreshCw
+} from 'lucide-react';
 import { marked } from 'marked';
-import DOMPurify from 'dompurify'; // For sanitizing markdown HTML, install with npm i dompurify
+import DOMPurify from 'dompurify';
 import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
 
-// MOODS and compressImage helpers same as before, omitted here for brevity, assume imported or present above...
-
-// Import MOODS and compressImage from helpers/constants if moved
 const MOODS = [
   { value: 1, icon: Cloud, color: 'text-gray-400', label: 'Awful' },
   { value: 2, icon: Cloud, color: 'text-blue-400', label: 'Bad' },
-  { value: 3, icon: Trash2, color: 'text-blue-500', label: 'Sad' },
-  { value: 4, icon: ChevronLeft, color: 'text-indigo-400', label: 'Meh' },
-  { value: 5, icon: ChevronLeft, color: 'text-indigo-500', label: 'Okay' },
+  { value: 3, icon: Cloud, color: 'text-blue-500', label: 'Sad' },
+  { value: 4, icon: Cloud, color: 'text-indigo-400', label: 'Meh' },
+  { value: 5, icon: Cloud, color: 'text-indigo-500', label: 'Okay' },
   { value: 6, icon: Cloud, color: 'text-yellow-500', label: 'Good' },
   { value: 7, icon: Cloud, color: 'text-orange-500', label: 'Great' },
   { value: 8, icon: Cloud, color: 'text-orange-600', label: 'Happy' },
   { value: 9, icon: Cloud, color: 'text-pink-500', label: 'Loved' },
-  { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' },
+  { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' }
 ];
 
-// Helper (could be imported)
+// Image compression helper (same as before)
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     if (file.size > 10 * 1024 * 1024) {
@@ -39,7 +48,6 @@ const compressImage = (file) => {
         const MAX_HEIGHT = 800;
         let width = img.width;
         let height = img.height;
-
         if (width > height && width > MAX_WIDTH) {
           height *= MAX_WIDTH / width;
           width = MAX_WIDTH;
@@ -47,12 +55,10 @@ const compressImage = (file) => {
           width *= MAX_HEIGHT / height;
           height = MAX_HEIGHT;
         }
-
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-
         try {
           const compressed = canvas.toDataURL('image/jpeg', 0.6);
           if (compressed.length > 500000) {
@@ -60,7 +66,7 @@ const compressImage = (file) => {
           } else {
             resolve(compressed);
           }
-        } catch (err) {
+        } catch {
           reject(new Error('Failed to compress image.'));
         }
       };
@@ -70,12 +76,9 @@ const compressImage = (file) => {
   });
 };
 
-
-
-
-
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const entryDate = entry?.date ? new Date(entry.date) : new Date();
+
   const [content, setContent] = useState(entry?.content || '');
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
@@ -86,7 +89,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
-  const [mode, setMode] = useState('live'); // 'live', 'preview', 'source'
+  const [mode, setMode] = useState('live'); // live, preview, source
 
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
@@ -103,7 +106,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     el.style.height = `${el.scrollHeight}px`;
     if (document.activeElement === el) {
       el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      scrollContainerRef.current && (scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight);
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
   }, [content, mode]);
 
@@ -113,10 +116,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       setUploading(true);
       try {
         const compressedBase64 = await compressImage(file);
-        setImages(prev => [...prev, compressedBase64]);
-        setImgIndex(prev => prev + 1);
+        setImages((prev) => [...prev, compressedBase64]);
+        setImgIndex((prev) => prev + 1);
       } catch (err) {
-        alert(err.message || "Failed to process image.");
+        alert(err.message || 'Failed to process image.');
       } finally {
         setUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -124,7 +127,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   };
 
-  // location handling remains the same...
+  // Location handling (same as before)...
 
   const handleSave = () => {
     if (!content.trim()) {
@@ -163,14 +166,14 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   };
 
-  const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Cloud;
-  const currentMoodColor = MOODS.find(m => m.value === mood)?.color || 'text-gray-500';
+  const CurrentMoodIcon = MOODS.find((m) => m.value === mood)?.icon || Cloud;
+  const currentMoodColor = MOODS.find((m) => m.value === mood)?.color || 'text-gray-500';
 
-  // Convert markdown to sanitized HTML
   const renderedMarkdown = DOMPurify.sanitize(marked.parse(content));
 
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" style={{ height: '100dvh' }}>
+      {/* Header */}
       <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md absolute top-0 left-0 right-0 z-20 border-b border-gray-100/50">
         <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
           <ChevronLeft size={24} />
@@ -188,15 +191,27 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       </div>
 
       {/* Mode toggle */}
-      <div className="flex justify-center gap-2 mt-16 border-b border-gray-200 slick p-2">
-        <button onClick={() => setMode('live')} className={`flex items-center gap-1 px-3 py-1 rounded-md font-medium ${mode === 'live' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-          <RefreshCw size={16} /> Live
+      <div className="flex justify-center gap-2 mt-16 border-b border-gray-200 p-2">
+        <button
+          onClick={() => setMode('live')}
+          className={`flex items-center gap-1 px-3 py-1 rounded-md font-medium ${mode === 'live' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+        >
+          <RefreshCw size={16} />
+          Live
         </button>
-        <button onClick={() => setMode('preview')} className={`flex items-center gap-1 px-3 py-1 rounded-md font-medium ${mode === 'preview' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-          <Eye size={16} /> Preview
+        <button
+          onClick={() => setMode('preview')}
+          className={`flex items-center gap-1 px-3 py-1 rounded-md font-medium ${mode === 'preview' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+        >
+          <Eye size={16} />
+          Preview
         </button>
-        <button onClick={() => setMode('source')} className={`flex items-center gap-1 px-3 py-1 rounded-md font-medium ${mode === 'source' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-          <Code size={16} /> Source
+        <button
+          onClick={() => setMode('source')}
+          className={`flex items-center gap-1 px-3 py-1 rounded-md font-medium ${mode === 'source' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+        >
+          <Code size={16} />
+          Source
         </button>
       </div>
 
@@ -232,7 +247,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           </div>
         )}
 
-        {/* Metadata section remains unchanged */}
+        {/* Meta info section unchanged */}
         <div className="mb-6">
           <h2 className="text-3xl font-extrabold text-gray-900 leading-tight">
             {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
@@ -258,7 +273,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
           <div className="flex items-center bg-gray-50 rounded-full pl-2 pr-1 py-0.5 border border-gray-100 max-w-[160px]">
             <MapPin size={12} className="text-gray-400 mr-1 flex-shrink-0" />
-            <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location" className="bg-transparent border-none p-0 text-xs text-gray-600 placeholder-gray-400 focus:ring-0 w-full truncate" />
+            <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Location" className="bg-transparent border-none p-0 text-xs text-gray-600 placeholder-gray-400 focus:ring-0 w-full truncate" />
             <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-gray-400 hover:text-blue-500 disabled:opacity-50">
               {loadingLocation ? (<div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />) : (<Plus size={10} />)}
             </button>
@@ -274,7 +289,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           <TagInput tags={tags} onAdd={t => setTags([...tags, t])} onRemove={t => setTags(tags.filter(tag => tag !== t))} />
         </div>
 
-        {/* Editor Modes */}
+        {/* Editor modes content */}
         {mode === 'live' && (
           <textarea
             ref={textareaRef}
