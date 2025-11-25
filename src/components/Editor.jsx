@@ -15,8 +15,6 @@ import {
   PenTool,
   Type
 } from 'lucide-react';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
 
 // --- MARKDOWN CONFIGURATION ---
 marked.use({
