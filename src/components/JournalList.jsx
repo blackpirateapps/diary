@@ -132,12 +132,17 @@ const JournalList = ({
                     <span className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{mainDate}</span>
                     <span className="text-xs text-gray-400 font-medium">{yearTime}</span>
                   </div>
-                  {entry.mood && (
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 text-gray-500`}>
-                      {/* Replace below with your mood icon if needed */}
-                      <span>{entry.mood}</span>
-                    </div>
-                  )}
+                 {entry.mood && (() => {
+  const moodMeta = MOODS.find(m => m.value === entry.mood);
+  if (!moodMeta) return null;
+  const Icon = moodMeta.icon;
+  return (
+    <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 ${moodMeta.color}`}>
+      <Icon size={18} />
+    </div>
+  );
+})()}
+
                 </div>
                 <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed mt-2 font-serif">{entry.content}</p>
                 {(entry.tags?.length > 0 || entry.location || entry.weather) && (
