@@ -43,12 +43,6 @@ const Styles = () => (
       scrollbar-width: none;
     }
 
-    /* Mobile keyboard handling */
-    .editor-textarea:focus {
-      scroll-margin-top: 20px;
-      scroll-margin-bottom: 20px;
-    }
-
     /* --- MARKDOWN PREVIEW TYPOGRAPHY --- */
     .prose { color: #374151; line-height: 1.6; }
     .prose h1 { font-size: 2em; font-weight: 800; margin-top: 1em; margin-bottom: 0.6em; line-height: 1.2; color: #111827; }
@@ -152,69 +146,37 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const scrollContainerRef = useRef(null);
-  const isScrollingRef = useRef(false);
 
   useEffect(() => {
     setImgIndex(0);
   }, [entry?.id]);
 
-  // Auto-resize textarea
+  // Auto-resize textarea and keep caret visible - THE KEY FIX
   useEffect(() => {
-    if (textareaRef.current && (mode === 'live' || mode === 'source')) {
-      const el = textareaRef.current;
-      el.style.height = 'auto';
-      el.style.height = `${el.scrollHeight}px`;
-    }
-  }, [content, mode]);
+    if (!textareaRef.current || (mode !== 'live' && mode !== 'source')) return;
 
-  // Handle textarea focus with improved mobile keyboard support
-  const handleTextareaFocus = (e) => {
-    if (isScrollingRef.current) return;
-    
-    const el = e.target;
-    isScrollingRef.current = true;
-    
-    // Wait for keyboard to appear
-    setTimeout(() => {
-      // Get the bounding rect of the textarea
-      const rect = el.getBoundingClientRect();
-      const viewportHeight = window.visualViewport?.height || window.innerHeight;
-      
-      // Check if textarea is hidden by keyboard
-      if (rect.bottom > viewportHeight * 0.6) {
-        el.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center',
-          inline: 'nearest'
-        });
-      }
-      
-      isScrollingRef.current = false;
-    }, 300);
-  };
+    const el = textareaRef.current;
+    const prevScrollTop = el.scrollTop;
 
-  // Handle input changes with scroll adjustment
-  const handleContentChange = (e) => {
-    setContent(e.target.value);
-    
-    // Keep cursor visible while typing
-    if (document.activeElement === e.target && !isScrollingRef.current) {
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+    el.scrollTop = prevScrollTop;
+
+    // If user is actively editing, ensure textarea stays in view
+    if (document.activeElement === el) {
       requestAnimationFrame(() => {
-        const el = e.target;
-        const rect = el.getBoundingClientRect();
-        const viewportHeight = window.visualViewport?.height || window.innerHeight;
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         
-        // Only scroll if near bottom of visible area
-        if (rect.bottom > viewportHeight - 50) {
-          el.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'nearest',
-            inline: 'nearest'
-          });
+        // Nudge scroll container to bottom when content grows
+        if (scrollContainerRef.current) {
+          const sc = scrollContainerRef.current;
+          if (sc.scrollHeight > sc.clientHeight) {
+            sc.scrollTop = sc.scrollHeight;
+          }
         }
       });
     }
-  };
+  }, [content, mode]);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -342,8 +304,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     <>
       <Styles />
       <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" style={{ height: '100dvh' }}>
-        {/* Header - Fixed at top */}
-        <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md border-b border-gray-100/50 flex-shrink-0">
+        {/* Header - Absolute positioned */}
+        <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md absolute top-0 left-0 right-0 z-20 border-b border-gray-100/50">
           <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
             <ChevronLeft size={24} />
           </button>
@@ -369,14 +331,13 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           </div>
         </div>
 
-        {/* Main Scroll Container with extra bottom padding for keyboard */}
+        {/* Main Scroll Container with pt-16 for header spacing */}
         <div 
           ref={scrollContainerRef} 
-          className="flex-1 overflow-y-auto no-scrollbar px-6 py-4"
-          style={{ paddingBottom: '40vh' }}
+          className="flex-1 overflow-y-auto no-scrollbar pt-16"
         >
           {images.length > 0 && (
-            <div className="w-full h-72 relative group bg-gray-100 mb-4 rounded-lg overflow-hidden shrink-0">
+            <div className="w-full h-72 relative group bg-gray-100 mb-4">
               <img src={images[imgIndex]} alt="Memory" className="w-full h-full object-contain bg-gray-50/50 backdrop-blur-sm" />
               <div className="absolute inset-0 -z-10 overflow-hidden">
                 <img src={images[imgIndex]} className="w-full h-full object-cover blur-xl opacity-50" alt="" />
@@ -391,7 +352,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                   </button>
                 </div>
               )}
-              <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute top-4 right-4 flex gap-2">
                 <button onClick={deleteCurrentImage} className="bg-black/30 hover:bg-red-500/80 text-white p-1.5 rounded-full backdrop-blur-md transition-colors">
                   <Trash2 size={14} />
                 </button>
@@ -406,96 +367,94 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             </div>
           )}
 
-          {/* Meta info section */}
-          <div className="mb-6">
-            <h2 className="text-3xl font-extrabold text-gray-900 leading-tight">
-              {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-            </h2>
-            <div className="flex items-center gap-2 text-gray-400 text-sm mt-1 font-medium">
-              <Clock size={14} />
-              {entryDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-              <span>•</span>
-              <span>{entryDate.getFullYear()}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3 mb-6 relative z-10">
-            <div className="relative">
-              <button onClick={() => setIsMoodOpen(!isMoodOpen)} className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-xs font-medium transition-colors ${mood ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                <CurrentMoodIcon size={14} className={currentMoodColor} />
-                <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
-              </button>
-              {isMoodOpen && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setIsMoodOpen(false)} />
-                  <MoodPopup currentMood={mood} onChange={setMood} onClose={() => setIsMoodOpen(false)} />
-                </>
-              )}
-            </div>
-
-            <div className="flex items-center bg-gray-50 rounded-full pl-2 pr-1 py-0.5 border border-gray-100 max-w-[200px]">
-              <MapPin size={12} className="text-gray-400 mr-1 flex-shrink-0" />
-              <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Location" className="bg-transparent border-none p-0 text-xs text-gray-600 placeholder-gray-400 focus:ring-0 w-full truncate" />
-              <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-gray-400 hover:text-blue-500 disabled:opacity-50 flex-shrink-0">
-                {loadingLocation ? (<div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />) : (<Plus size={10} />)}
-              </button>
-            </div>
-
-            {weather && (
-              <div className="flex items-center bg-orange-50 text-orange-600 rounded-full px-2 py-0.5 border border-orange-100 text-xs">
-                <Cloud size={12} className="mr-1" />
-                {weather}
+          <div className="px-6 pb-12">
+            {/* Meta info section */}
+            <div className="mb-6">
+              <h2 className="text-3xl font-extrabold text-gray-900 leading-tight">
+                {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+              </h2>
+              <div className="flex items-center gap-2 text-gray-400 text-sm mt-1 font-medium">
+                <Clock size={14} />
+                {entryDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                <span>•</span>
+                <span>{entryDate.getFullYear()}</span>
               </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3 mb-6 relative z-10">
+              <div className="relative">
+                <button onClick={() => setIsMoodOpen(!isMoodOpen)} className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-xs font-medium transition-colors ${mood ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                  <CurrentMoodIcon size={14} className={currentMoodColor} />
+                  <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
+                </button>
+                {isMoodOpen && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setIsMoodOpen(false)} />
+                    <MoodPopup currentMood={mood} onChange={setMood} onClose={() => setIsMoodOpen(false)} />
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center bg-gray-50 rounded-full pl-2 pr-1 py-0.5 border border-gray-100 max-w-[200px]">
+                <MapPin size={12} className="text-gray-400 mr-1 flex-shrink-0" />
+                <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Location" className="bg-transparent border-none p-0 text-xs text-gray-600 placeholder-gray-400 focus:ring-0 w-full truncate" />
+                <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-gray-400 hover:text-blue-500 disabled:opacity-50 flex-shrink-0">
+                  {loadingLocation ? (<div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />) : (<Plus size={10} />)}
+                </button>
+              </div>
+
+              {weather && (
+                <div className="flex items-center bg-orange-50 text-orange-600 rounded-full px-2 py-0.5 border border-orange-100 text-xs">
+                  <Cloud size={12} className="mr-1" />
+                  {weather}
+                </div>
+              )}
+
+              <TagInput tags={tags} onAdd={t => setTags([...tags, t])} onRemove={t => setTags(tags.filter(tag => tag !== t))} />
+            </div>
+
+            {/* LIVE MODE - Sans Serif Editor */}
+            {mode === 'live' && (
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                placeholder="Start writing..."
+                className="w-full min-h-[300px] resize-none text-xl text-gray-800 placeholder-gray-300 border-none outline-none focus:ring-0 font-sans leading-relaxed pb-20 overflow-hidden"
+              />
             )}
 
-            <TagInput tags={tags} onAdd={t => setTags([...tags, t])} onRemove={t => setTags(tags.filter(tag => tag !== t))} />
-          </div>
+            {/* SOURCE MODE - Markdown Code */}
+            {mode === 'source' && (
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                placeholder="Edit markdown source..."
+                spellCheck={false}
+                className="w-full min-h-[300px] resize-none text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg p-4 font-mono leading-relaxed bg-gray-50 pb-20 overflow-hidden"
+              />
+            )}
 
-          {/* LIVE MODE - Sans Serif Editor */}
-          {mode === 'live' && (
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={handleContentChange}
-              onFocus={handleTextareaFocus}
-              placeholder="Start writing..."
-              className="editor-textarea w-full min-h-[300px] resize-none text-xl text-gray-800 placeholder-gray-300 border-none outline-none focus:ring-0 font-sans leading-relaxed"
-              style={{ overflowY: 'hidden' }}
-            />
-          )}
+            {/* PREVIEW MODE - Read Only */}
+            {mode === 'preview' && (
+              <div
+                className="w-full min-h-[300px] prose prose-blue max-w-none pb-20"
+                dangerouslySetInnerHTML={{ __html: renderedMarkdown }}
+              />
+            )}
 
-          {/* SOURCE MODE - Markdown Code */}
-          {mode === 'source' && (
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={handleContentChange}
-              onFocus={handleTextareaFocus}
-              placeholder="Edit markdown source..."
-              spellCheck={false}
-              className="editor-textarea w-full min-h-[300px] resize-none text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg p-4 font-mono leading-relaxed bg-gray-50"
-              style={{ overflowY: 'hidden' }}
-            />
-          )}
-
-          {/* PREVIEW MODE - Read Only */}
-          {mode === 'preview' && (
-            <div
-              className="w-full min-h-[300px] prose prose-blue max-w-none"
-              dangerouslySetInnerHTML={{ __html: renderedMarkdown }}
-            />
-          )}
-
-          <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center text-gray-400">
-            <span className="text-xs uppercase tracking-wider font-medium">Attachments</span>
-            <div className="flex gap-2">
-              <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors disabled:opacity-50">
-                {uploading ? (<div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />) : (<ImageIcon size={18} />)}
-                <span className="text-xs">{uploading ? 'Processing...' : 'Add Image'}</span>
-              </button>
+            <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center text-gray-400">
+              <span className="text-xs uppercase tracking-wider font-medium">Attachments</span>
+              <div className="flex gap-2">
+                <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors disabled:opacity-50">
+                  {uploading ? (<div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />) : (<ImageIcon size={18} />)}
+                  <span className="text-xs">{uploading ? 'Processing...' : 'Add Image'}</span>
+                </button>
+              </div>
             </div>
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
           </div>
-          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
         </div>
       </div>
     </>
