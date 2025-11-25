@@ -246,24 +246,33 @@ const App = () => {
       </div>
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur-md z-40">
-        <div className="max-w-xl mx-auto flex justify-around py-2">
-          <button
-            onClick={() => setActiveTab('journal')}
-            className={`flex flex-col items-center text-xs ${activeTab === 'journal' ? 'text-blue-600' : 'text-gray-400'}`}>
-            <span>Journal</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('stats')}
-            className={`flex flex-col items-center text-xs ${activeTab === 'stats' ? 'text-blue-600' : 'text-gray-400'}`}>
-            <span>Stats</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('media')}
-            className={`flex flex-col items-center text-xs ${activeTab === 'media' ? 'text-blue-600' : 'text-gray-400'}`}>
-            <span>Media</span>
-          </button>
-        </div>
-      </nav>
+  <div className="max-w-xl mx-auto flex justify-around py-2">
+    <button
+      onClick={() => setActiveTab('journal')}
+      className={`flex flex-col items-center text-xs ${activeTab === 'journal' ? 'text-blue-600' : 'text-gray-400'}`}
+      aria-label="Journal"
+    >
+      <Home size={20} />
+      <span>Journal</span>
+    </button>
+    <button
+      onClick={() => setActiveTab('stats')}
+      className={`flex flex-col items-center text-xs ${activeTab === 'stats' ? 'text-blue-600' : 'text-gray-400'}`}
+      aria-label="Stats"
+    >
+      <BarChart2 size={20} />
+      <span>Stats</span>
+    </button>
+    <button
+      onClick={() => setActiveTab('media')}
+      className={`flex flex-col items-center text-xs ${activeTab === 'media' ? 'text-blue-600' : 'text-gray-400'}`}
+      aria-label="Media"
+    >
+      <Grid size={20} />
+      <span>Media</span>
+    </button>
+  </div>
+</nav>
     </div>
   );
 };
