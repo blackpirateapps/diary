@@ -61,6 +61,7 @@ const App = () => {
   const [showFlashback, setShowFlashback] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState(null); // New State for tracking errors
 
   // Load from localStorage
   const [entries, setEntries] = useState(() => {
@@ -103,7 +104,6 @@ const App = () => {
   // --- CRUD OPERATIONS ---
   const handleSaveEntry = (entry) => {
     setEntries(prev => {
-      // Update existing or add new
       if (prev.some(e => e.id === entry.id)) {
         return prev.map(e => (e.id === entry.id ? entry : e));
       }
@@ -151,19 +151,16 @@ const App = () => {
 
   const handleExport = () => {
     try {
-      // 1. Create a clean backup object
       const backupData = {
         version: 1,
         timestamp: new Date().toISOString(),
-        entries: entries // Saves EVERYTHING: images, coords, text, dates
+        entries: entries 
       };
 
-      // 2. Generate file
       const dataStr = JSON.stringify(backupData, null, 2);
       const blob = new Blob([dataStr], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       
-      // 3. Trigger download
       const a = document.createElement('a');
       a.href = url;
       a.download = `blackpirates_journal_${new Date().toISOString().split('T')[0]}.json`;
@@ -181,79 +178,80 @@ const App = () => {
     if (!file) return;
 
     setIsImporting(true);
+    setImportError(null);
+
     const reader = new FileReader();
 
     reader.onload = (ev) => {
       try {
         const text = ev.target.result;
-        const parsed = JSON.parse(text);
+        let parsed;
+        try {
+          parsed = JSON.parse(text);
+        } catch (jsonErr) {
+          throw new Error("Invalid JSON format. The file might be corrupted.");
+        }
         
-        // Support both old array format and new object format
         let incomingEntries = [];
         if (Array.isArray(parsed)) {
           incomingEntries = parsed;
         } else if (parsed.entries && Array.isArray(parsed.entries)) {
           incomingEntries = parsed.entries;
         } else {
-          throw new Error("Invalid file format. Could not find entries.");
+          throw new Error("Could not find 'entries' array in the file.");
         }
 
-        // Helper to check for valid date
-        const isValidDate = (d) => {
-          const date = new Date(d);
-          return date instanceof Date && !isNaN(date.getTime());
-        };
+        const validEntries = incomingEntries.map((entry, index) => {
+          // Normalize ID
+          const id = entry.id || `imported_${Date.now()}_${index}`;
+          
+          // Strict Date Validation
+          let date = entry.date;
+          const parsedDate = new Date(date);
+          if (!date || isNaN(parsedDate.getTime())) {
+            console.warn(`Entry ${id} has invalid date: ${date}. Defaulting to NOW.`);
+            date = new Date().toISOString();
+          }
 
-        // Validate and normalize each entry
-        const validEntries = incomingEntries.map(entry => ({
-          id: entry.id || crypto.randomUUID(), // Ensure ID exists
-          content: entry.content || '',
-          // FIX: Strictly validate date. Fallback to NOW if invalid.
-          // This prevents the "White Screen" crash on render.
-          date: isValidDate(entry.date) ? entry.date : new Date().toISOString(),
-          mood: typeof entry.mood === 'number' ? entry.mood : 5,
-          // Location Data
-          location: entry.location || '',
-          locationLat: entry.locationLat || null,
-          locationLng: entry.locationLng || null,
-          weather: entry.weather || '',
-          // Arrays (Default to empty)
-          tags: Array.isArray(entry.tags) ? entry.tags : [],
-          images: Array.isArray(entry.images) ? entry.images : []
-        }));
+          return {
+            id,
+            content: entry.content || '',
+            date: date, // Guaranteed valid ISO string
+            mood: typeof entry.mood === 'number' ? entry.mood : 5,
+            location: entry.location || '',
+            locationLat: entry.locationLat || null,
+            locationLng: entry.locationLng || null,
+            weather: entry.weather || '',
+            tags: Array.isArray(entry.tags) ? entry.tags : [],
+            images: Array.isArray(entry.images) ? entry.images : []
+          };
+        });
 
         if (validEntries.length === 0) {
-          alert("No valid entries found in file.");
-          return;
+          throw new Error("No valid entries found to import.");
         }
 
-        if (window.confirm(`Found ${validEntries.length} entries. Import them? This will merge with your current journal.`)) {
-          setEntries(prev => {
-            // Merge logic: Create Map by ID to prevent duplicates
-            const entryMap = new Map(prev.map(e => [e.id, e]));
-            
-            validEntries.forEach(e => {
-              // Overwrite if exists, add if new
-              entryMap.set(e.id, e);
-            });
+        // Force a re-render by creating a completely new array reference
+        setEntries(prev => {
+          const entryMap = new Map(prev.map(e => [e.id, e]));
+          validEntries.forEach(e => entryMap.set(e.id, e));
+          const newEntries = Array.from(entryMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
+          return [...newEntries]; // Spread to ensure new reference
+        });
 
-            // Convert back to array and sort by date (newest first)
-            return Array.from(entryMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
-          });
-          alert("Import successful!");
-        }
+        alert(`Success! Imported ${validEntries.length} entries.`);
 
       } catch (err) {
-        console.error(err);
-        alert(`Import Failed: ${err.message}. Please check if the file is a valid JSON backup.`);
+        console.error("Import Error:", err);
+        setImportError(err.message); // Show error in UI
       } finally {
         setIsImporting(false);
-        if (e.target) e.target.value = ''; // Reset input so same file can be selected again
+        if (e.target) e.target.value = ''; 
       }
     };
 
     reader.onerror = () => {
-      alert("Error reading file.");
+      setImportError("Failed to read the file from disk.");
       setIsImporting(false);
     };
 
@@ -264,6 +262,35 @@ const App = () => {
     <div className="min-h-screen bg-[#F3F4F6] text-gray-900">
       <div className="max-w-xl mx-auto min-h-screen relative pb-16">
         
+        {/* IMPORT LOADING OVERLAY */}
+        {isImporting && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-slideUp">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="font-semibold text-gray-700">Processing backup file...</p>
+            </div>
+          </div>
+        )}
+
+        {/* IMPORT ERROR OVERLAY */}
+        {importError && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white p-6 rounded-2xl shadow-xl max-w-sm w-full animate-slideUp">
+              <div className="flex items-center gap-3 text-red-500 mb-2">
+                <Trash2 size={24} />
+                <h3 className="font-bold text-lg">Import Failed</h3>
+              </div>
+              <p className="text-gray-600 text-sm mb-4">{importError}</p>
+              <button 
+                onClick={() => setImportError(null)}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-xl transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* CONDITIONAL ROUTING */}
         {showFlashback ? (
           <FlashbackPage 
