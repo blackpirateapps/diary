@@ -198,12 +198,20 @@ const App = () => {
           throw new Error("Invalid file format. Could not find entries.");
         }
 
+        // Helper to check for valid date
+        const isValidDate = (d) => {
+          const date = new Date(d);
+          return date instanceof Date && !isNaN(date.getTime());
+        };
+
         // Validate and normalize each entry
         const validEntries = incomingEntries.map(entry => ({
           id: entry.id || crypto.randomUUID(), // Ensure ID exists
           content: entry.content || '',
-          date: entry.date || new Date().toISOString(),
-          mood: entry.mood || 5,
+          // FIX: Strictly validate date. Fallback to NOW if invalid.
+          // This prevents the "White Screen" crash on render.
+          date: isValidDate(entry.date) ? entry.date : new Date().toISOString(),
+          mood: typeof entry.mood === 'number' ? entry.mood : 5,
           // Location Data
           location: entry.location || '',
           locationLat: entry.locationLat || null,
