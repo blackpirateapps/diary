@@ -5,9 +5,14 @@ import StatsPage from './components/StatsPage';
 import MediaGallery from './components/MediaGallery';
 import FlashbackPage from './components/FlashbackPage';
 import MapPage from './components/MapPage';
-import { BarChart2, Grid, Home, Map, Plus, Calendar, MapPin, Image as ImageIcon, X, Hash, 
-         ChevronLeft, ChevronRight, Trash2, Smile, Frown, Meh, Heart, Sun, CloudRain, 
-         Search, Clock, Download, Upload, Settings, Cloud, WifiOff } from 'lucide-react';
+import { 
+  BarChart2, Grid, Home, Map, 
+  Plus, Calendar, MapPin, Image as ImageIcon, 
+  X, Hash, ChevronLeft, ChevronRight, Trash2,
+  Smile, Frown, Meh, Heart, Sun, CloudRain,
+  Search, Clock, Download, Upload, Settings, Cloud,
+  WifiOff
+} from 'lucide-react';
 
 const INITIAL_ENTRIES = [
   {
@@ -56,8 +61,9 @@ const App = () => {
   const [showFlashback, setShowFlashback] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [isImporting, setIsImporting] = useState(false);
-  const [importError, setImportError] = useState(null);
+  const [importError, setImportError] = useState(null); // New State for tracking errors
 
+  // Load from localStorage
   const [entries, setEntries] = useState(() => {
     try {
       const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('journal_entries') : null;
@@ -142,16 +148,19 @@ const App = () => {
   };
 
   // --- IMPORT / EXPORT LOGIC ---
+
   const handleExport = () => {
     try {
       const backupData = {
         version: 1,
         timestamp: new Date().toISOString(),
-        entries: entries
+        entries: entries 
       };
+
       const dataStr = JSON.stringify(backupData, null, 2);
       const blob = new Blob([dataStr], { type: "application/json" });
       const url = URL.createObjectURL(blob);
+      
       const a = document.createElement('a');
       a.href = url;
       a.download = `blackpirates_journal_${new Date().toISOString().split('T')[0]}.json`;
@@ -172,18 +181,17 @@ const App = () => {
     setImportError(null);
 
     const reader = new FileReader();
-    
+
     reader.onload = (ev) => {
       try {
         const text = ev.target.result;
         let parsed;
-        
         try {
           parsed = JSON.parse(text);
         } catch (jsonErr) {
           throw new Error("Invalid JSON format. The file might be corrupted.");
         }
-
+        
         let incomingEntries = [];
         if (Array.isArray(parsed)) {
           incomingEntries = parsed;
@@ -194,22 +202,21 @@ const App = () => {
         }
 
         const validEntries = incomingEntries.map((entry, index) => {
+          // Normalize ID
           const id = entry.id || `imported_${Date.now()}_${index}`;
           
-          // Strict Date Validation - FIXED
-          let date;
-          const parsedDate = new Date(entry.date);
-          if (!entry.date || isNaN(parsedDate.getTime())) {
-            console.warn(`Entry ${id} has invalid date: ${entry.date}. Defaulting to NOW.`);
+          // Strict Date Validation
+          let date = entry.date;
+          const parsedDate = new Date(date);
+          if (!date || isNaN(parsedDate.getTime())) {
+            console.warn(`Entry ${id} has invalid date: ${date}. Defaulting to NOW.`);
             date = new Date().toISOString();
-          } else {
-            date = parsedDate.toISOString(); // Convert valid dates too!
           }
 
           return {
             id,
             content: entry.content || '',
-            date: date,
+            date: date, // Guaranteed valid ISO string
             mood: typeof entry.mood === 'number' ? entry.mood : 5,
             location: entry.location || '',
             locationLat: entry.locationLat || null,
@@ -224,23 +231,22 @@ const App = () => {
           throw new Error("No valid entries found to import.");
         }
 
+        // Force a re-render by creating a completely new array reference
         setEntries(prev => {
           const entryMap = new Map(prev.map(e => [e.id, e]));
           validEntries.forEach(e => entryMap.set(e.id, e));
-          const newEntries = Array.from(entryMap.values()).sort(
-            (a, b) => new Date(b.date) - new Date(a.date)
-          );
-          return newEntries;
+          const newEntries = Array.from(entryMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
+          return [...newEntries]; // Spread to ensure new reference
         });
 
         alert(`Success! Imported ${validEntries.length} entries.`);
-        
+
       } catch (err) {
         console.error("Import Error:", err);
-        setImportError(err.message);
+        setImportError(err.message); // Show error in UI
       } finally {
         setIsImporting(false);
-        if (e.target) e.target.value = '';
+        if (e.target) e.target.value = ''; 
       }
     };
 
@@ -253,154 +259,121 @@ const App = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100">
-      {isOffline && (
-        <div className="bg-amber-600/20 border-b border-amber-600/30 px-4 py-2 flex items-center gap-2 text-amber-400 text-sm">
-          <WifiOff size={16} />
-          <span>You're offline. Changes will sync when reconnected.</span>
-        </div>
-      )}
-
-      {/* Import Status Messages */}
-      {isImporting && (
-        <div className="bg-blue-600/20 border-b border-blue-600/30 px-4 py-2 flex items-center gap-2 text-blue-400 text-sm">
-          <Cloud size={16} className="animate-pulse" />
-          <span>Processing backup file...</span>
-        </div>
-      )}
-
-      {importError && (
-        <div className="bg-red-600/20 border-b border-red-600/30 px-4 py-2 flex items-center gap-2 text-red-400 text-sm">
-          <X size={16} />
-          <span>{importError}</span>
-          <button 
-            onClick={() => setImportError(null)}
-            className="ml-auto hover:bg-red-600/30 p-1 rounded"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Black Pirates Journal</h1>
-          <p className="text-xs text-zinc-500 mt-0.5">{entries.length} total entries</p>
-        </div>
+    <div className="min-h-screen bg-[#F3F4F6] text-gray-900">
+      <div className="max-w-xl mx-auto min-h-screen relative pb-16">
         
-        <div className="flex gap-2">
-          <button
-            onClick={handleExport}
-            className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
-            title="Export Backup"
-          >
-            <Download size={20} />
-          </button>
-          
-          <label className="p-2 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer" title="Import Backup">
-            <Upload size={20} />
-            <input
-              type="file"
-              accept=".json"
-              onChange={handleImport}
-              className="hidden"
-            />
-          </label>
+        {/* IMPORT LOADING OVERLAY */}
+        {isImporting && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-slideUp">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="font-semibold text-gray-700">Processing backup file...</p>
+            </div>
+          </div>
+        )}
 
-          <button
-            onClick={() => dateInputRef.current?.showPicker()}
-            className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
-            title="Pick a Date"
-          >
-            <Calendar size={20} />
-          </button>
-          <input
-            ref={dateInputRef}
-            type="date"
-            onChange={handleDateSelect}
-            className="hidden"
+        {/* IMPORT ERROR OVERLAY */}
+        {importError && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white p-6 rounded-2xl shadow-xl max-w-sm w-full animate-slideUp">
+              <div className="flex items-center gap-3 text-red-500 mb-2">
+                <Trash2 size={24} />
+                <h3 className="font-bold text-lg">Import Failed</h3>
+              </div>
+              <p className="text-gray-600 text-sm mb-4">{importError}</p>
+              <button 
+                onClick={() => setImportError(null)}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-xl transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* CONDITIONAL ROUTING */}
+        {showFlashback ? (
+          <FlashbackPage 
+            entries={entries} 
+            onBack={() => setShowFlashback(false)} 
+            onEdit={(entry) => {
+              setShowFlashback(false);
+              openEditEditor(entry);
+            }}
           />
+        ) : (
+          <>
+            {activeTab === 'journal' && (
+              <JournalList
+                entries={entries}
+                onEdit={openEditEditor}
+                onCreate={() => openNewEditor()}
+                onAddOld={() => dateInputRef.current?.showPicker()}
+                onImport={handleImport}
+                onExport={handleExport}
+                isOffline={isOffline}
+                isImporting={isImporting}
+                onOpenFlashback={() => setShowFlashback(true)} 
+              />
+            )}
+            {activeTab === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
+            {activeTab === 'stats' && <StatsPage entries={entries} />}
+            {activeTab === 'media' && <MediaGallery entries={entries} />}
+          </>
+        )}
 
-          <button
-            onClick={() => openNewEditor()}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors"
-          >
-            <Plus size={20} />
-            <span className="text-sm font-medium">New Entry</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {activeTab === 'journal' && (
-          <JournalList 
-            entries={entries}
-            onEdit={openEditEditor}
+        {/* HIDDEN INPUTS & MODALS */}
+        <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
+        
+        {isEditorOpen && (
+          <Editor
+            entry={editingEntry}
+            onClose={() => {
+              setIsEditorOpen(false);
+              setEditingEntry(null);
+            }}
+            onSave={handleSaveEntry}
             onDelete={handleDeleteEntry}
           />
         )}
-        {activeTab === 'stats' && <StatsPage entries={entries} />}
-        {activeTab === 'gallery' && <MediaGallery entries={entries} />}
-        {activeTab === 'map' && <MapPage entries={entries} />}
       </div>
 
-      {/* Bottom Navigation */}
-      <div className="border-t border-zinc-800 px-4 py-3 flex justify-around">
-        <button
-          onClick={() => setActiveTab('journal')}
-          className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
-            activeTab === 'journal' ? 'bg-zinc-800 text-blue-400' : 'text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          <Home size={20} />
-          <span className="text-xs">Journal</span>
-        </button>
-        
-        <button
-          onClick={() => setActiveTab('stats')}
-          className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
-            activeTab === 'stats' ? 'bg-zinc-800 text-blue-400' : 'text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          <BarChart2 size={20} />
-          <span className="text-xs">Stats</span>
-        </button>
-        
-        <button
-          onClick={() => setActiveTab('gallery')}
-          className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
-            activeTab === 'gallery' ? 'bg-zinc-800 text-blue-400' : 'text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          <Grid size={20} />
-          <span className="text-xs">Gallery</span>
-        </button>
-        
-        <button
-          onClick={() => setActiveTab('map')}
-          className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
-            activeTab === 'map' ? 'bg-zinc-800 text-blue-400' : 'text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          <Map size={20} />
-          <span className="text-xs">Map</span>
-        </button>
-      </div>
+      {/* BOTTOM NAVIGATION */}
+      <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur-md z-40 pb-safe">
+        <div className="max-w-xl mx-auto flex justify-around py-3">
+          <button
+            onClick={() => { setActiveTab('journal'); setShowFlashback(false); }}
+            className={`flex flex-col items-center gap-0.5 ${activeTab === 'journal' && !showFlashback ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            <Home size={22} strokeWidth={activeTab === 'journal' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Journal</span>
+          </button>
+          
+          <button
+            onClick={() => { setActiveTab('map'); setShowFlashback(false); }}
+            className={`flex flex-col items-center gap-0.5 ${activeTab === 'map' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            <Map size={22} strokeWidth={activeTab === 'map' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Atlas</span>
+          </button>
 
-      {/* Editor Modal */}
-      {isEditorOpen && (
-        <Editor
-          entry={editingEntry}
-          onSave={handleSaveEntry}
-          onClose={() => {
-            setIsEditorOpen(false);
-            setEditingEntry(null);
-          }}
-          onDelete={handleDeleteEntry}
-        />
-      )}
+          <button
+            onClick={() => { setActiveTab('stats'); setShowFlashback(false); }}
+            className={`flex flex-col items-center gap-0.5 ${activeTab === 'stats' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            <BarChart2 size={22} strokeWidth={activeTab === 'stats' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Stats</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('media'); setShowFlashback(false); }}
+            className={`flex flex-col items-center gap-0.5 ${activeTab === 'media' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            <Grid size={22} strokeWidth={activeTab === 'media' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Media</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 };
