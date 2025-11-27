@@ -3,7 +3,6 @@ import {
   ChevronLeft,
   Trash2,
   Plus,
-  ChevronRight,
   MapPin,
   Cloud,
   Clock,
@@ -47,46 +46,27 @@ const Styles = () => (
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* --- THINGS 3 AESTHETIC OVERRIDES --- */
-    
-    /* 1. Typography: Use System Fonts (San Francisco/Segoe UI) instead of Monospace */
-    .w-md-editor-text-pre, 
-    .w-md-editor-text-input, 
-    .w-md-editor-text {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-      font-size: 17px !important; 
-      line-height: 1.6 !important;
-      color: #374151 !important; /* Gray-700 */
+    /* THINGS 3 AESTHETIC TYPOGRAPHY */
+    .native-input {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 17px;
+      line-height: 1.5;
+      color: #374151;
     }
 
-    /* 2. Editor Container: Clean, no heavy borders */
-    .w-md-editor {
-      background-color: transparent !important;
-      box-shadow: none !important;
-      border: none !important;
-      color: #374151 !important;
-    }
-    
-    /* 3. Hide the default markdown toolbar (we built our own minimal one) */
-    .w-md-editor-toolbar {
-      display: none !important;
-    }
-    
-    /* 4. Preview Area Styling */
+    /* MARKDOWN PREVIEW STYLING */
     .wmde-markdown {
       background-color: transparent !important;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
       font-size: 17px !important;
       color: #374151 !important;
     }
-    
-    /* Markdown Element Styling for Preview */
-    .wmde-markdown h1 { border-bottom: none !important; font-weight: 800; font-size: 1.8em; margin-top: 1em; }
-    .wmde-markdown h2 { border-bottom: none !important; font-weight: 700; font-size: 1.5em; margin-top: 1em; }
-    .wmde-markdown p { margin-bottom: 1em; }
-    .wmde-markdown ul { list-style-type: disc !important; padding-left: 1.5em !important; }
-    .wmde-markdown ol { list-style-type: decimal !important; padding-left: 1.5em !important; }
-    .wmde-markdown blockquote { border-left: 4px solid #e5e7eb !important; color: #6b7280 !important; }
+    .wmde-markdown h1 { border-bottom: none !important; font-weight: 800; font-size: 1.8em; margin-top: 1em; color: #111827 !important; }
+    .wmde-markdown h2 { border-bottom: none !important; font-weight: 700; font-size: 1.5em; margin-top: 1em; color: #1f2937 !important; }
+    .wmde-markdown p { margin-bottom: 0.8em; }
+    .wmde-markdown ul { list-style-type: disc !important; padding-left: 1.5em !important; margin-bottom: 1em !important; }
+    .wmde-markdown ol { list-style-type: decimal !important; padding-left: 1.5em !important; margin-bottom: 1em !important; }
+    .wmde-markdown blockquote { border-left: 4px solid #e5e7eb !important; color: #6b7280 !important; padding-left: 1em !important; margin: 1em 0 !important; }
     .wmde-markdown a { color: #2563eb !important; text-decoration: none !important; }
   `}</style>
 );
@@ -144,7 +124,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const entryDate = entry?.date ? new Date(entry.date) : new Date();
   
   // Logic: Is this entry from "Today"?
-  const isToday = new Date().toDateString() === entryDate.toDateString();
+  const isToday = new Date().toDateString() === new Date().toDateString();
 
   // State
   const [content, setContent] = useState(entry?.content || '');
@@ -154,7 +134,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
   
-  // Mode State: If not today, default to Preview
+  // Default to Preview if not today, Edit if today
   const [mode, setMode] = useState(isToday ? 'edit' : 'preview');
   
   const [isMoodOpen, setIsMoodOpen] = useState(false);
@@ -164,17 +144,36 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [saveStatus, setSaveStatus] = useState('idle'); // 'idle', 'saving', 'saved'
 
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
 
-  useEffect(() => { setImgIndex(0); }, [entry?.id]);
+  // Reset state when entry changes
+  useEffect(() => {
+    setContent(entry?.content || '');
+    setMood(entry?.mood || 5);
+    setLocation(entry?.location || '');
+    setWeather(entry?.weather || '');
+    setTags(entry?.tags || []);
+    setImages(entry?.images || []);
+    setImgIndex(0);
+    setMode(new Date(entry?.date).toDateString() === new Date().toDateString() ? 'edit' : 'preview');
+  }, [entry?.id]);
+
+  // Auto-Resize Textarea (The Native App Feel)
+  useEffect(() => {
+    if (mode === 'edit' && textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [content, mode]);
 
   // --- AUTO SAVE LOGIC ---
-  // We use useCallback to create a stable function for the effect
   const saveData = useCallback((isAutoSave = false) => {
-    // Don't save empty entries on auto-save
     if (isAutoSave && !content.trim() && images.length === 0) return;
 
     setSaveStatus('saving');
     
+    // Call the parent onSave. 
+    // NOTE: This assumes parent onSave does NOT close the modal automatically.
     onSave({
       id: entry?.id || Date.now().toString(),
       content,
@@ -182,19 +181,21 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       date: entry?.date || new Date().toISOString()
     });
 
-    // Show "Saved" tick briefly
     setTimeout(() => setSaveStatus('saved'), 500);
-    setTimeout(() => setSaveStatus('idle'), 2000);
+    setTimeout(() => setSaveStatus('idle'), 2500);
   }, [entry?.id, entry?.date, content, mood, location, weather, tags, images, onSave]);
 
-  // Trigger Auto-Save when data changes (Debounced)
+  // Trigger Auto-Save 2 seconds after typing stops
   useEffect(() => {
-    const timer = setTimeout(() => {
-      saveData(true);
-    }, 2000); // Wait 2 seconds after last change
-
-    return () => clearTimeout(timer);
-  }, [content, mood, location, weather, tags, images, saveData]);
+    // Only auto-save if something changed from initial entry
+    // (Simple check to avoid saving on load)
+    if (content !== (entry?.content || '')) {
+      const timer = setTimeout(() => {
+        saveData(true);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [content, saveData, entry?.content]);
 
   // Handlers
   const handleImageUpload = async (e) => {
@@ -205,6 +206,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         const compressedBase64 = await compressImage(file);
         setImages(prev => [...prev, compressedBase64]);
         setImgIndex(images.length);
+        saveData(true); // Auto-save after image upload
       } catch (err) {
         alert(err.message);
       } finally {
@@ -229,12 +231,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         if (locRes.ok) {
           const data = await locRes.json();
           const city = data.address.city || data.address.town || data.address.village;
-          setLocation([city, data.address.country].filter(Boolean).join(', '));
+          const country = data.address.country;
+          const newLoc = [city, country].filter(Boolean).join(', ');
+          setLocation(newLoc);
         }
         const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
         if (weatherRes.ok) {
           const data = await weatherRes.json();
-          setWeather(`${getWeatherLabel(data.current_weather.weathercode)} ${Math.round(data.current_weather.temperature)}°C`);
+          const newWeather = `${getWeatherLabel(data.current_weather.weathercode)} ${Math.round(data.current_weather.temperature)}°C`;
+          setWeather(newWeather);
         }
       } catch (e) {
         console.error(e);
@@ -247,9 +252,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     });
   };
 
-  const handleManualSave = () => {
+  const handleManualDone = () => {
     saveData(false);
-    onClose(); // Close on manual "Done"
+    onClose(); 
   };
 
   const handleDelete = () => {
@@ -270,12 +275,13 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" data-color-mode="light">
         
         {/* --- HEADER --- */}
-        <div className="px-4 py-3 flex justify-between items-center bg-white/90 backdrop-blur-md z-30 border-b border-gray-100 absolute top-0 left-0 right-0">
+        <div className="px-4 py-3 flex justify-between items-center bg-white/95 backdrop-blur-xl z-30 border-b border-gray-100 absolute top-0 left-0 right-0 h-16">
           <div className="flex items-center gap-3">
-            <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full">
+            <button onClick={onClose} className="p-2 -ml-2 text-blue-500 hover:bg-blue-50 rounded-full transition-colors flex items-center gap-1">
               <ChevronLeft size={24} />
+              <span className="text-base font-medium">Back</span>
             </button>
-            {/* Auto-Save Indicator */}
+            {/* Save Status Indicator */}
             <div className="text-xs font-medium text-gray-400 flex items-center gap-1 transition-opacity duration-300">
                {saveStatus === 'saving' && <span>Saving...</span>}
                {saveStatus === 'saved' && <span className="text-green-500 flex items-center gap-1"><CheckCircle2 size={12}/> Saved</span>}
@@ -284,43 +290,44 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
           <div className="flex items-center gap-2">
             {entry?.id && (
-              <button onClick={handleDelete} className="p-2 text-red-500 hover:bg-red-50 rounded-full">
+              <button onClick={handleDelete} className="p-2 text-red-400 hover:bg-red-50 rounded-full transition-colors">
                 <Trash2 size={20} />
               </button>
             )}
             
-            {/* PREVIEW BUTTON */}
+            {/* MODE TOGGLE */}
             <button 
               onClick={toggleMode}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-xs font-medium"
             >
               {mode === 'edit' ? <Eye size={14} /> : <PenLine size={14} />}
-              <span>{mode === 'edit' ? 'Preview' : 'Editor'}</span>
+              <span>{mode === 'edit' ? 'Preview' : 'Edit'}</span>
             </button>
 
-            <button onClick={handleManualSave} className="px-4 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-md shadow-blue-500/20 active:scale-95 transition-all text-sm">
+            <button onClick={handleManualDone} className="px-5 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-lg shadow-blue-500/30 active:scale-95 transition-all text-sm">
               Done
             </button>
           </div>
         </div>
 
-        {/* --- SCROLLABLE CONTENT --- */}
-        <div className="flex-1 overflow-y-auto no-scrollbar pt-16 pb-0 flex flex-col">
+        {/* --- SCROLLABLE CONTAINER --- */}
+        {/* This container handles the scroll for the whole app */}
+        <div className="flex-1 overflow-y-auto no-scrollbar pt-16 flex flex-col bg-white">
           
           {/* IMAGE CAROUSEL */}
           {images.length > 0 && (
-            <div className="w-full h-64 relative group bg-gray-100 flex-shrink-0">
+            <div className="w-full h-72 relative group bg-gray-50 flex-shrink-0">
               <img src={images[imgIndex]} alt="Memory" className="w-full h-full object-contain" />
               <div className="absolute inset-0 -z-10">
-                <img src={images[imgIndex]} className="w-full h-full object-cover blur-xl opacity-50" alt="" />
+                <img src={images[imgIndex]} className="w-full h-full object-cover blur-2xl opacity-30" alt="" />
               </div>
               {images.length > 1 && (
                 <>
-                  <button onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/30 backdrop-blur rounded-full text-white"><ChevronLeft size={20} /></button>
-                  <button onClick={() => setImgIndex((i) => (i + 1) % images.length)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/30 backdrop-blur rounded-full text-white"><ChevronRight size={20} /></button>
-                  <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
+                  <button onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/20 backdrop-blur-lg rounded-full text-white hover:bg-white/30 transition-colors"><ChevronLeft size={20} /></button>
+                  <button onClick={() => setImgIndex((i) => (i + 1) % images.length)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/20 backdrop-blur-lg rounded-full text-white hover:bg-white/30 transition-colors"><ChevronLeft size={20} className="rotate-180" /></button>
+                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
                     {images.map((_, i) => (
-                      <div key={i} className={`w-1.5 h-1.5 rounded-full ${i === imgIndex ? 'bg-white' : 'bg-white/50'}`} />
+                      <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === imgIndex ? 'bg-white w-3' : 'bg-white/50'}`} />
                     ))}
                   </div>
                 </>
@@ -328,81 +335,94 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               <button onClick={() => {
                  setImages(imgs => imgs.filter((_, i) => i !== imgIndex));
                  setImgIndex(0);
-              }} className="absolute top-2 right-2 p-1.5 bg-black/30 text-white rounded-full"><Trash2 size={14} /></button>
+                 saveData(true);
+              }} className="absolute top-4 right-4 p-2 bg-black/20 backdrop-blur-md text-white rounded-full hover:bg-red-500/80 transition-colors"><Trash2 size={16} /></button>
             </div>
           )}
 
-          <div className="px-4 flex flex-col gap-4 flex-1 pb-20">
+          <div className="px-6 flex flex-col gap-6 flex-1 pb-32 max-w-2xl mx-auto w-full">
             {/* Header Info */}
-            <div className="pt-4">
-              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
-                {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+            <div className="pt-8 border-b border-gray-100 pb-6">
+              <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight leading-tight">
+                {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
               </h2>
-              <div className="flex items-center gap-2 text-gray-400 text-xs mt-1 font-medium">
-                <Clock size={12} />
-                {entryDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                {!isToday && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide">Past Entry</span>}
+              <div className="flex items-center gap-3 text-gray-400 text-sm mt-2 font-medium">
+                <div className="flex items-center gap-1.5">
+                    <Clock size={14} />
+                    {entryDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                {!isToday && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wide font-bold">Past Entry</span>}
               </div>
             </div>
 
             {/* Metadata Bar */}
             <div className="flex flex-wrap gap-2">
               <div className="relative">
-                <button onClick={() => setIsMoodOpen(!isMoodOpen)} className={`flex items-center gap-1 pl-2 pr-3 py-1 rounded-full text-xs font-medium border ${mood ? 'bg-blue-50 border-blue-100 text-blue-600' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
-                  <CurrentMoodIcon size={12} className={currentMoodColor} />
+                <button onClick={() => setIsMoodOpen(!isMoodOpen)} className={`flex items-center gap-1.5 pl-3 pr-4 py-1.5 rounded-full text-sm font-medium transition-colors ${mood ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                  <CurrentMoodIcon size={16} className={currentMoodColor} />
                   <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
                 </button>
                 {isMoodOpen && (
                   <>
                     <div className="fixed inset-0 z-20" onClick={() => setIsMoodOpen(false)} />
-                    <MoodPopup currentMood={mood} onChange={setMood} onClose={() => setIsMoodOpen(false)} />
+                    <MoodPopup currentMood={mood} onChange={(m) => { setMood(m); saveData(true); }} onClose={() => setIsMoodOpen(false)} />
                   </>
                 )}
               </div>
 
-              <div className="flex items-center bg-gray-50 rounded-full pl-2 pr-1 py-0.5 border border-gray-200">
-                <MapPin size={12} className="text-gray-400 mr-1" />
-                <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Location" className="bg-transparent text-xs w-24 outline-none text-gray-600 placeholder-gray-400" />
-                <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-blue-500">
-                  {loadingLocation ? <div className="w-2 h-2 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <Plus size={10} />}
+              <div className="flex items-center bg-gray-50 rounded-full pl-3 pr-2 py-1.5 hover:bg-gray-100 transition-colors">
+                <MapPin size={14} className="text-gray-400 mr-2" />
+                <input 
+                    type="text" 
+                    value={location} 
+                    onChange={e => setLocation(e.target.value)} 
+                    placeholder="Add Location" 
+                    className="bg-transparent text-sm w-32 outline-none text-gray-600 placeholder-gray-400 native-input" 
+                />
+                <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-blue-500 hover:bg-blue-100 rounded-full transition-colors ml-1">
+                  {loadingLocation ? <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <Plus size={14} />}
                 </button>
               </div>
 
               {weather && (
-                <div className="flex items-center bg-orange-50 text-orange-600 rounded-full px-2 py-0.5 border border-orange-100 text-xs">
-                  <Cloud size={12} className="mr-1" />
+                <div className="flex items-center bg-orange-50 text-orange-600 rounded-full px-3 py-1.5 text-sm font-medium">
+                  <Cloud size={14} className="mr-2" />
                   {weather}
                 </div>
               )}
               
-              <TagInput tags={tags} onAdd={t => setTags([...tags, t])} onRemove={t => setTags(tags.filter(tag => tag !== t))} />
+              <TagInput tags={tags} onAdd={t => { setTags([...tags, t]); saveData(true); }} onRemove={t => { setTags(tags.filter(tag => tag !== t)); saveData(true); }} />
             </div>
 
-            {/* --- EDITOR vs PREVIEW --- */}
-            <div className="flex-1 w-full mt-2">
-              <MDEditor
-                value={content}
-                onChange={setContent}
-                preview={mode} // 'edit' shows textarea, 'preview' shows rendered HTML
-                height="100%"
-                visibleDragbar={false}
-                hideToolbar={true} // Hidden via CSS, but this prop ensures internal state matches
-                enableScroll={false}
-                textareaProps={{
-                  placeholder: isToday ? "What's on your mind today?" : "Entry for this day..."
-                }}
-              />
+            {/* --- EDITOR AREA --- */}
+            <div className="flex-1 w-full min-h-[300px]">
+              {mode === 'edit' ? (
+                /* Native Textarea for Edit Mode */
+                <textarea
+                  ref={textareaRef}
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="What's on your mind?"
+                  className="w-full h-full resize-none outline-none border-none bg-transparent native-input placeholder-gray-300"
+                  spellCheck={false}
+                />
+              ) : (
+                /* Library for Preview Mode */
+                <div className="native-input text-gray-800">
+                    <MDEditor.Markdown source={content} />
+                </div>
+              )}
             </div>
 
           </div>
         </div>
 
         {/* Attachments Footer */}
-        <div className="px-4 py-3 border-t border-gray-100 bg-white flex justify-between items-center text-gray-400 z-20 safe-area-bottom">
-          <span className="text-xs font-bold uppercase tracking-wider">Attachments</span>
-          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors">
-            {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ImageIcon size={16} />}
-            <span className="text-xs">{uploading ? 'Uploading...' : 'Add Image'}</span>
+        <div className="px-4 py-3 border-t border-gray-100 bg-white/90 backdrop-blur-md flex justify-between items-center text-gray-400 z-20 safe-area-bottom absolute bottom-0 left-0 right-0">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">Attachments</span>
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-4 py-2 rounded-full hover:bg-gray-50 text-sm transition-colors text-gray-600 font-medium">
+            {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ImageIcon size={18} />}
+            <span>{uploading ? 'Uploading...' : 'Add Photo'}</span>
           </button>
           <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
         </div>
