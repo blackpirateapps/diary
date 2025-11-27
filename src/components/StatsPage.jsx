@@ -1,17 +1,31 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, Sun, BarChart2, Hash, Activity, ArrowLeft } from 'lucide-react';
+import { Calendar, Sun, BarChart2, Hash, Activity, ArrowLeft, Clock, Grid } from 'lucide-react';
+import CalendarHeatmap from 'react-calendar-heatmap';
 import { 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  BarChart, Bar, Cell, PieChart, Pie 
 } from 'recharts';
+
+// --- STYLES FOR HEATMAP ---
+// We inject these styles directly to ensure the library looks like your theme
+const HeatmapStyles = () => (
+  <style>{`
+    .react-calendar-heatmap text {
+      font-size: 10px;
+      fill: #9ca3af; /* gray-400 */
+    }
+    .react-calendar-heatmap .react-calendar-heatmap-rect-hover:hover {
+      stroke: #555;
+      stroke-width: 1px;
+    }
+    /* Color Scale (Matches the previous blue theme) */
+    .react-calendar-heatmap .color-empty { fill: #f3f4f6; } /* gray-100 */
+    .react-calendar-heatmap .color-scale-1 { fill: #bfdbfe; } /* blue-200 */
+    .react-calendar-heatmap .color-scale-2 { fill: #93c5fd; } /* blue-300 */
+    .react-calendar-heatmap .color-scale-3 { fill: #3b82f6; } /* blue-500 */
+    .react-calendar-heatmap .color-scale-4 { fill: #1d4ed8; } /* blue-700 */
+  `}</style>
+);
 
 // --- HELPERS ---
 const calculateStreak = (entries) => {
@@ -47,7 +61,7 @@ const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Se
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white p-3 border border-gray-100 shadow-xl rounded-xl text-xs">
+      <div className="bg-white p-3 border border-gray-100 shadow-xl rounded-xl text-xs z-50">
         <p className="font-bold text-gray-700 mb-1">{label}</p>
         <p className="text-blue-500 font-medium">
           {payload[0].name}: {payload[0].value}
@@ -60,10 +74,18 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 const StatsPage = ({ entries }) => {
   const [filter, setFilter] = useState('year'); 
-  const [selectedYear, setSelectedYear] = useState(null); // State for graph drill-down
+  const [selectedYear, setSelectedYear] = useState(null); 
   const now = new Date();
+  
+  // 1. Prepare Heatmap Data
+  const heatmapData = useMemo(() => {
+    return entries.map(e => ({
+      date: new Date(e.date),
+      count: countWords(e.content)
+    }));
+  }, [entries]);
 
-  // 1. Global Filter Data (For streaks, totals, area charts)
+  // 2. Global Filter Data 
   const filteredEntries = useMemo(() => {
     return entries.filter(e => {
       const d = new Date(e.date);
@@ -73,10 +95,9 @@ const StatsPage = ({ entries }) => {
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
   }, [entries, filter, now]);
 
-  // 2. Drill-Down Graph Data Preparation
+  // 3. Drill-Down Graph Data
   const chartData = useMemo(() => {
     if (selectedYear) {
-      // MONTHLY VIEW (For Selected Year)
       const data = new Array(12).fill(0).map((_, i) => ({ name: MONTH_NAMES[i], count: 0 }));
       entries
         .filter(e => new Date(e.date).getFullYear().toString() === selectedYear)
@@ -86,38 +107,52 @@ const StatsPage = ({ entries }) => {
         });
       return data;
     } else {
-      // YEARLY VIEW (All Time)
       const counts = {};
       entries.forEach(e => {
         const y = new Date(e.date).getFullYear().toString();
         counts[y] = (counts[y] || 0) + 1;
       });
-      // Convert to array and sort by year
-      return Object.keys(counts)
-        .sort()
-        .map(year => ({ name: year, count: counts[year] }));
+      return Object.keys(counts).sort().map(year => ({ name: year, count: counts[year] }));
     }
   }, [entries, selectedYear]);
 
-  // 3. Area Charts Data (Mood & Words)
+  // 4. Area Charts Data
   const graphData = useMemo(() => {
     return filteredEntries.map(e => ({
       date: new Date(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-      fullDate: new Date(e.date).toLocaleDateString(),
       mood: e.mood || 5,
       words: countWords(e.content)
     }));
   }, [filteredEntries]);
 
-  // 4. Calculate Stats
+  // 5. Time of Day Data
+  const timeOfDayData = useMemo(() => {
+    const buckets = [
+      { name: 'Morning', value: 0, color: '#FDBA74' }, // 5am - 12pm
+      { name: 'Afternoon', value: 0, color: '#60A5FA' }, // 12pm - 5pm
+      { name: 'Evening', value: 0, color: '#818CF8' }, // 5pm - 9pm
+      { name: 'Night', value: 0, color: '#4B5563' }, // 9pm - 5am
+    ];
+
+    filteredEntries.forEach(e => {
+      const hour = new Date(e.date).getHours();
+      if (hour >= 5 && hour < 12) buckets[0].value++;
+      else if (hour >= 12 && hour < 17) buckets[1].value++;
+      else if (hour >= 17 && hour < 21) buckets[2].value++;
+      else buckets[3].value++;
+    });
+
+    return buckets.filter(b => b.value > 0);
+  }, [filteredEntries]);
+
+  // 6. Calculate Stats
   const totalEntries = filteredEntries.length;
-  const streak = calculateStreak(entries); // Streak is usually calculated on ALL entries, not filtered
+  const streak = calculateStreak(entries);
   const totalWords = filteredEntries.reduce((acc, curr) => acc + countWords(curr.content), 0);
   const avgWords = totalEntries > 0 ? Math.round(totalWords / totalEntries) : 0;
   const maxWords = filteredEntries.reduce((max, curr) => Math.max(max, countWords(curr.content)), 0);
 
   const handleBarClick = (data) => {
-    // Only drill down if we are in "Yearly" view
     if (!selectedYear && data && data.activePayload) {
       setSelectedYear(data.activePayload[0].payload.name);
     }
@@ -125,6 +160,8 @@ const StatsPage = ({ entries }) => {
 
   return (
     <div className="space-y-6 pb-24 px-6 pt-6 max-w-4xl mx-auto">
+      <HeatmapStyles />
+      
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Insights</h1>
@@ -180,7 +217,86 @@ const StatsPage = ({ entries }) => {
         ))}
       </div>
 
-      {/* Graph 1: Interactive History (Year -> Month Drilldown) */}
+      {/* HEATMAP & TIME OF DAY */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        {/* Calendar Heatmap (Library Version) */}
+        <div className="md:col-span-2 bg-white border border-gray-100 p-6 rounded-3xl shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+              <Grid size={18} className="text-emerald-500" /> Writing Consistency
+            </h3>
+            <span className="text-xs text-gray-400 font-medium">{now.getFullYear()}</span>
+          </div>
+          
+          <div className="w-full">
+            <CalendarHeatmap
+              startDate={new Date(`${now.getFullYear()}-01-01`)}
+              endDate={new Date(`${now.getFullYear()}-12-31`)}
+              values={heatmapData}
+              classForValue={(value) => {
+                if (!value || value.count === 0) return 'color-empty';
+                if (value.count < 50) return 'color-scale-1';
+                if (value.count < 100) return 'color-scale-2';
+                if (value.count < 300) return 'color-scale-3';
+                return 'color-scale-4';
+              }}
+              titleForValue={(value) => {
+                return value ? `${new Date(value.date).toDateString()}: ${value.count} words` : 'No entries';
+              }}
+              showWeekdayLabels={true}
+            />
+          </div>
+          <div className="flex items-center gap-2 mt-4 text-[10px] text-gray-400 justify-end">
+            <span>Less</span>
+            <div className="flex gap-1">
+              <div className="w-3 h-3 rounded-sm bg-gray-100" />
+              <div className="w-3 h-3 rounded-sm bg-blue-200" />
+              <div className="w-3 h-3 rounded-sm bg-blue-300" />
+              <div className="w-3 h-3 rounded-sm bg-blue-500" />
+              <div className="w-3 h-3 rounded-sm bg-blue-700" />
+            </div>
+            <span>More</span>
+          </div>
+        </div>
+
+        {/* Time of Day Pie Chart */}
+        <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm">
+          <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+            <Clock size={18} className="text-orange-500" /> Time of Day
+          </h3>
+          <div className="h-40 w-full flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={timeOfDayData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={35}
+                  outerRadius={60}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {timeOfDayData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex flex-col gap-1 ml-2">
+              {timeOfDayData.map(d => (
+                <div key={d.name} className="flex items-center gap-1.5 text-[10px] text-gray-600">
+                  <div className="w-2 h-2 rounded-full" style={{backgroundColor: d.color}} />
+                  {d.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Entries History Bar Chart */}
       <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm transition-all">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -198,7 +314,7 @@ const StatsPage = ({ entries }) => {
               {selectedYear ? `Entries in ${selectedYear}` : 'Entries History'}
             </h3>
           </div>
-          {!selectedYear && <span className="text-xs text-gray-400 font-medium bg-gray-50 px-2 py-1 rounded-md">Click a bar to see months</span>}
+          {!selectedYear && <span className="text-xs text-gray-400 font-medium bg-gray-50 px-2 py-1 rounded-md">Click bar for months</span>}
         </div>
         
         <div className="h-48 w-full">
@@ -234,7 +350,7 @@ const StatsPage = ({ entries }) => {
         </div>
       </div>
 
-      {/* Graph 2: Mood Flow (Smoothed Area Chart) */}
+      {/* Mood Flow */}
       <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm">
         <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
           <Activity size={18} className="text-blue-500" /> Mood Flow
@@ -274,7 +390,7 @@ const StatsPage = ({ entries }) => {
         </div>
       </div>
 
-      {/* Graph 3: Writing Volume */}
+      {/* Writing Volume */}
       <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm">
         <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
           <Hash size={18} className="text-purple-500" /> Writing Volume
@@ -289,10 +405,7 @@ const StatsPage = ({ entries }) => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-              <XAxis 
-                dataKey="date" 
-                hide 
-              />
+              <XAxis dataKey="date" hide />
               <Tooltip content={<CustomTooltip />} />
               <Area 
                 type="monotone" 
