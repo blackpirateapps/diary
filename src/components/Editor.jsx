@@ -141,6 +141,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [content, setContent] = useState(entry?.content || '');
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
+  // State for Coordinates (Hidden from UI but saved for Map)
+  const [locationLat, setLocationLat] = useState(entry?.locationLat || null);
+  const [locationLng, setLocationLng] = useState(entry?.locationLng || null);
+
   const [weather, setWeather] = useState(entry?.weather || '');
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
@@ -177,13 +181,19 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     onSave({
       id: entryId, 
       content,
-      mood, location, weather, tags, images,
+      mood, 
+      location, 
+      locationLat, // Persist Latitude
+      locationLng, // Persist Longitude
+      weather, 
+      tags, 
+      images,
       date: dateToSave.toISOString()
     });
 
     setTimeout(() => setSaveStatus('saved'), 500);
     setTimeout(() => setSaveStatus('idle'), 2500);
-  }, [entryId, currentDate, content, mood, location, weather, tags, images, onSave]);
+  }, [entryId, currentDate, content, mood, location, locationLat, locationLng, weather, tags, images, onSave]);
 
   // Trigger Auto-Save 2 seconds after content changes
   useEffect(() => {
@@ -212,8 +222,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     if (window.confirm('Are you sure you want to remove this image?')) {
       setImages(imgs => imgs.filter((_, i) => i !== imgIndex));
       setImgIndex(0);
-      // We will let the next auto-save handle persistence, or trigger it manually if preferred:
-      // saveData(true); 
+      saveData(true);
     }
   };
 
@@ -245,15 +254,30 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
+      
+      // Update state with raw coordinates immediately
+      setLocationLat(latitude);
+      setLocationLng(longitude);
+
       try {
+        // Reverse Geocoding
         const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
         if (locRes.ok) {
           const data = await locRes.json();
-          const city = data.address.city || data.address.town || data.address.village;
-          const country = data.address.country;
-          const newLoc = [city, country].filter(Boolean).join(', ');
+          const address = data.address;
+          
+          // Construct a detailed address string
+          // Priority: Road/Street -> City/Town -> Country
+          const street = address.road || address.pedestrian || address.building || '';
+          const city = address.city || address.town || address.village || address.suburb || address.hamlet;
+          const country = address.country;
+          
+          // Filter out empty parts and join
+          const newLoc = [street, city, country].filter(Boolean).join(', ');
           setLocation(newLoc);
         }
+        
+        // Fetch Weather
         const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
         if (weatherRes.ok) {
           const data = await weatherRes.json();
@@ -262,6 +286,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         }
       } catch (e) {
         console.error(e);
+        // Fallback if API fails but we have coords
+        if (!location) setLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
       } finally {
         setLoadingLocation(false);
       }
@@ -417,7 +443,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     value={location} 
                     onChange={e => setLocation(e.target.value)} 
                     placeholder="Add Location" 
-                    className="bg-transparent text-sm w-32 outline-none text-gray-600 placeholder-gray-400 native-input" 
+                    className="bg-transparent text-sm w-full min-w-[120px] outline-none text-gray-600 placeholder-gray-400 native-input truncate" 
                 />
                 <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-blue-500 hover:bg-blue-100 rounded-full transition-colors ml-1">
                   {loadingLocation ? <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <Plus size={14} />}

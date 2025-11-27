@@ -3,13 +3,14 @@ import Editor from './components/Editor';
 import JournalList from './components/JournalList';
 import StatsPage from './components/StatsPage';
 import MediaGallery from './components/MediaGallery';
-import FlashbackPage from './components/FlashbackPage'; // Import the new component
+import FlashbackPage from './components/FlashbackPage';
+import MapPage from './components/MapPage'; // Import the Map Page
 import { 
   Plus, Calendar, MapPin, Image as ImageIcon, 
   BarChart2, Grid, Home, X, Hash, 
   ChevronLeft, ChevronRight, Trash2,
   Smile, Frown, Meh, Heart, Sun, CloudRain,
-  Search, Clock, 
+  Search, Clock, Map, // Import Map Icon
   Download, Upload, Settings, Cloud,
   WifiOff
 } from 'lucide-react';
@@ -22,6 +23,8 @@ const INITIAL_ENTRIES = [
     date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
     mood: 8,
     location: 'Downtown, Seattle',
+    locationLat: 47.6062, // Added mock coords for demo
+    locationLng: -122.3321,
     weather: '18°C',
     tags: ['coffee', 'relaxing'],
     images: ['https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=400']
@@ -42,6 +45,8 @@ const INITIAL_ENTRIES = [
     date: new Date().toISOString(),
     mood: 10,
     location: 'Central Park',
+    locationLat: 40.785091,
+    locationLng: -73.968285,
     weather: '24°C',
     tags: ['fitness', 'health'],
     images: [
@@ -55,7 +60,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('journal');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
-  const [showFlashback, setShowFlashback] = useState(false); // New state for Flashback view
+  const [showFlashback, setShowFlashback] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [isImporting, setIsImporting] = useState(false);
 
@@ -98,8 +103,6 @@ const App = () => {
     }
   }, [entries]);
 
-  // FIX: handleSaveEntry no longer closes the editor
-  // This allows silent auto-saves while writing.
   const handleSaveEntry = (entry) => {
     setEntries(prev => {
       if (prev.some(e => e.id === entry.id)) {
@@ -107,8 +110,6 @@ const App = () => {
       }
       return [entry, ...prev];
     });
-    // Removed setIsEditorOpen(false) to support auto-save.
-    // Closing is now handled exclusively by the onClose prop from the "Done" button.
   };
 
   const handleDeleteEntry = (id) => {
@@ -187,6 +188,8 @@ const App = () => {
             date: en.date || new Date().toISOString(),
             mood: typeof en.mood === 'number' ? en.mood : 5,
             location: en.location || '',
+            locationLat: en.locationLat || null,
+            locationLng: en.locationLng || null,
             weather: en.weather || '',
             tags: Array.isArray(en.tags) ? en.tags : [],
             images: Array.isArray(en.images) ? en.images : []
@@ -221,7 +224,6 @@ const App = () => {
     <div className="min-h-screen bg-[#F3F4F6] text-gray-900">
       <div className="max-w-xl mx-auto min-h-screen relative pb-16">
         
-        {/* CONDITIONAL RENDER: Flashback vs Main Tabs */}
         {showFlashback ? (
           <FlashbackPage 
             entries={entries} 
@@ -243,9 +245,10 @@ const App = () => {
                 onExport={handleExport}
                 isOffline={isOffline}
                 isImporting={isImporting}
-                onOpenFlashback={() => setShowFlashback(true)} // Pass trigger to JournalList
+                onOpenFlashback={() => setShowFlashback(true)} 
               />
             )}
+            {activeTab === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
             {activeTab === 'stats' && <StatsPage entries={entries} />}
             {activeTab === 'media' && <MediaGallery entries={entries} />}
           </>
@@ -267,32 +270,38 @@ const App = () => {
       </div>
 
       {/* Bottom Navigation */}
-      {/* You can optionally hide this when showFlashback is true if you prefer */}
-      <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur-md z-40">
-        <div className="max-w-xl mx-auto flex justify-around py-2">
+      <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur-md z-40 pb-safe">
+        <div className="max-w-xl mx-auto flex justify-around py-3">
           <button
             onClick={() => { setActiveTab('journal'); setShowFlashback(false); }}
-            className={`flex flex-col items-center text-xs ${activeTab === 'journal' && !showFlashback ? 'text-blue-600' : 'text-gray-400'}`}
-            aria-label="Journal"
+            className={`flex flex-col items-center gap-0.5 ${activeTab === 'journal' && !showFlashback ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
           >
-            <Home size={20} />
-            <span>Journal</span>
+            <Home size={22} strokeWidth={activeTab === 'journal' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Journal</span>
           </button>
+          
+          <button
+            onClick={() => { setActiveTab('map'); setShowFlashback(false); }}
+            className={`flex flex-col items-center gap-0.5 ${activeTab === 'map' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            <Map size={22} strokeWidth={activeTab === 'map' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Atlas</span>
+          </button>
+
           <button
             onClick={() => { setActiveTab('stats'); setShowFlashback(false); }}
-            className={`flex flex-col items-center text-xs ${activeTab === 'stats' ? 'text-blue-600' : 'text-gray-400'}`}
-            aria-label="Stats"
+            className={`flex flex-col items-center gap-0.5 ${activeTab === 'stats' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
           >
-            <BarChart2 size={20} />
-            <span>Stats</span>
+            <BarChart2 size={22} strokeWidth={activeTab === 'stats' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Stats</span>
           </button>
+
           <button
             onClick={() => { setActiveTab('media'); setShowFlashback(false); }}
-            className={`flex flex-col items-center text-xs ${activeTab === 'media' ? 'text-blue-600' : 'text-gray-400'}`}
-            aria-label="Media"
+            className={`flex flex-col items-center gap-0.5 ${activeTab === 'media' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
           >
-            <Grid size={20} />
-            <span>Media</span>
+            <Grid size={22} strokeWidth={activeTab === 'media' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Media</span>
           </button>
         </div>
       </nav>
