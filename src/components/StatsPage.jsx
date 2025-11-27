@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, Sun, BarChart2, Hash, Activity } from 'lucide-react';
+import { Calendar, Sun, BarChart2, Hash, Activity, ArrowLeft } from 'lucide-react';
 import { 
   AreaChart, 
   Area, 
@@ -21,12 +21,12 @@ const calculateStreak = (entries) => {
   const lastEntryDate = new Date(sorted[0].date).setHours(0, 0, 0, 0);
   const diffTime = today - lastEntryDate;
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  if (diffDays > 1) return 0; // Streak broken
+  if (diffDays > 1) return 0; 
   let streak = 1;
   let currentDate = lastEntryDate;
   for (let i = 1; i < sorted.length; i++) {
     const entryDate = new Date(sorted[i].date).setHours(0, 0, 0, 0);
-    if (entryDate === currentDate) continue; // Multiple entries same day
+    if (entryDate === currentDate) continue; 
     const dayDiff = (currentDate - entryDate) / (1000 * 60 * 60 * 24);
     if (dayDiff >= 0.9 && dayDiff <= 1.1) {
       streak++;
@@ -59,10 +59,11 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const StatsPage = ({ entries }) => {
-  const [filter, setFilter] = useState('year'); // Default to Year for better initial graph view
+  const [filter, setFilter] = useState('year'); 
+  const [selectedYear, setSelectedYear] = useState(null); // State for graph drill-down
   const now = new Date();
 
-  // 1. Filter Data
+  // 1. Global Filter Data (For streaks, totals, area charts)
   const filteredEntries = useMemo(() => {
     return entries.filter(e => {
       const d = new Date(e.date);
@@ -72,7 +73,33 @@ const StatsPage = ({ entries }) => {
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
   }, [entries, filter, now]);
 
-  // 2. Prepare Detailed Graph Data (Mood & Words)
+  // 2. Drill-Down Graph Data Preparation
+  const chartData = useMemo(() => {
+    if (selectedYear) {
+      // MONTHLY VIEW (For Selected Year)
+      const data = new Array(12).fill(0).map((_, i) => ({ name: MONTH_NAMES[i], count: 0 }));
+      entries
+        .filter(e => new Date(e.date).getFullYear().toString() === selectedYear)
+        .forEach(e => {
+          const monthIndex = new Date(e.date).getMonth();
+          data[monthIndex].count += 1;
+        });
+      return data;
+    } else {
+      // YEARLY VIEW (All Time)
+      const counts = {};
+      entries.forEach(e => {
+        const y = new Date(e.date).getFullYear().toString();
+        counts[y] = (counts[y] || 0) + 1;
+      });
+      // Convert to array and sort by year
+      return Object.keys(counts)
+        .sort()
+        .map(year => ({ name: year, count: counts[year] }));
+    }
+  }, [entries, selectedYear]);
+
+  // 3. Area Charts Data (Mood & Words)
   const graphData = useMemo(() => {
     return filteredEntries.map(e => ({
       date: new Date(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
@@ -82,28 +109,19 @@ const StatsPage = ({ entries }) => {
     }));
   }, [filteredEntries]);
 
-  // 3. Prepare Monthly Distribution Data (New Request)
-  const monthlyData = useMemo(() => {
-    const data = new Array(12).fill(0).map((_, i) => ({ name: MONTH_NAMES[i], count: 0 }));
-    
-    // Only use entries from the current year if filter is 'year' or 'all'
-    // If filter is 'month', this graph is less useful, but we still show the breakdown
-    const targetEntries = filter === 'month' ? filteredEntries : entries.filter(e => new Date(e.date).getFullYear() === now.getFullYear());
-
-    targetEntries.forEach(e => {
-      const monthIndex = new Date(e.date).getMonth();
-      data[monthIndex].count += 1;
-    });
-
-    return data;
-  }, [entries, filteredEntries, filter, now]);
-
   // 4. Calculate Stats
   const totalEntries = filteredEntries.length;
-  const streak = calculateStreak(entries);
+  const streak = calculateStreak(entries); // Streak is usually calculated on ALL entries, not filtered
   const totalWords = filteredEntries.reduce((acc, curr) => acc + countWords(curr.content), 0);
   const avgWords = totalEntries > 0 ? Math.round(totalWords / totalEntries) : 0;
   const maxWords = filteredEntries.reduce((max, curr) => Math.max(max, countWords(curr.content)), 0);
+
+  const handleBarClick = (data) => {
+    // Only drill down if we are in "Yearly" view
+    if (!selectedYear && data && data.activePayload) {
+      setSelectedYear(data.activePayload[0].payload.name);
+    }
+  };
 
   return (
     <div className="space-y-6 pb-24 px-6 pt-6 max-w-4xl mx-auto">
@@ -162,15 +180,34 @@ const StatsPage = ({ entries }) => {
         ))}
       </div>
 
-      {/* Graph 1: Monthly Breakdown (New Request) */}
-      <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm">
-        <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
-          <BarChart2 size={18} className="text-indigo-500" /> 
-          Entries per Month <span className="text-gray-400 font-normal text-sm ml-auto">{now.getFullYear()}</span>
-        </h3>
+      {/* Graph 1: Interactive History (Year -> Month Drilldown) */}
+      <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm transition-all">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            {selectedYear && (
+              <button 
+                onClick={() => setSelectedYear(null)}
+                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+                title="Back to Year view"
+              >
+                <ArrowLeft size={18} />
+              </button>
+            )}
+            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+              <BarChart2 size={18} className="text-indigo-500" /> 
+              {selectedYear ? `Entries in ${selectedYear}` : 'Entries History'}
+            </h3>
+          </div>
+          {!selectedYear && <span className="text-xs text-gray-400 font-medium bg-gray-50 px-2 py-1 rounded-md">Click a bar to see months</span>}
+        </div>
+        
         <div className="h-48 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={monthlyData}>
+            <BarChart 
+              data={chartData} 
+              onClick={handleBarClick}
+              className={!selectedYear ? "cursor-pointer" : ""}
+            >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
               <XAxis 
                 dataKey="name" 
@@ -179,10 +216,17 @@ const StatsPage = ({ entries }) => {
                 tick={{fill: '#9CA3AF', fontSize: 10}} 
                 dy={10}
               />
-              <Tooltip cursor={{fill: '#F3F4F6', radius: 4}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+              <Tooltip 
+                cursor={{fill: '#F3F4F6', radius: 4}} 
+                contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} 
+              />
               <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {monthlyData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.count > 0 ? '#6366f1' : '#e5e7eb'} />
+                {chartData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.count > 0 ? '#6366f1' : '#e5e7eb'} 
+                    className="transition-all duration-300 hover:opacity-80"
+                  />
                 ))}
               </Bar>
             </BarChart>
@@ -212,13 +256,13 @@ const StatsPage = ({ entries }) => {
                 axisLine={false} 
                 tickLine={false} 
                 tick={{fill: '#9CA3AF', fontSize: 10}} 
-                minTickGap={30} // Prevents overcrowding of dates
+                minTickGap={30} 
                 dy={10}
               />
               <YAxis hide domain={[0, 10]} />
               <Tooltip content={<CustomTooltip />} />
               <Area 
-                type="monotone" // This makes the line smooth (curved)
+                type="monotone" 
                 dataKey="mood" 
                 stroke="#3B82F6" 
                 strokeWidth={3}
@@ -247,7 +291,7 @@ const StatsPage = ({ entries }) => {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
               <XAxis 
                 dataKey="date" 
-                hide // Hiding X axis here to keep it cleaner, simpler
+                hide 
               />
               <Tooltip content={<CustomTooltip />} />
               <Area 
