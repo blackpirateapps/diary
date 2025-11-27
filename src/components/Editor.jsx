@@ -8,55 +8,17 @@ import {
   Cloud,
   Clock,
   Image as ImageIcon,
-  X
+  Eye,
+  Type,
+  Code // Added missing import
 } from 'lucide-react';
-import MDEditor from '@uiw/react-md-editor'; // The new library
+import MDEditor from '@uiw/react-md-editor';
+// --- CRITICAL: Import Library Styles ---
+import "@uiw/react-md-editor/markdown-editor.css";
+import "@uiw/react-markdown-preview/markdown.css";
+
 import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
-
-// --- STYLES ---
-// Custom overrides to match your app's clean aesthetic
-const Styles = () => (
-  <style>{`
-    @keyframes slideUp {
-      from { transform: translateY(100%); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-    .animate-slideUp {
-      animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    /* Hide scrollbar for clean look */
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
-    .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-    
-    /* Override Editor Styles to fit the theme */
-    .w-md-editor {
-      border: 1px solid #f3f4f6 !important;
-      box-shadow: none !important;
-      border-radius: 12px !important;
-      background-color: transparent !important;
-    }
-    .w-md-editor-toolbar {
-      background-color: #f9fafb !important;
-      border-bottom: 1px solid #f3f4f6 !important;
-      border-radius: 12px 12px 0 0 !important;
-    }
-    .w-md-editor-content {
-      background-color: transparent !important;
-    }
-    /* Ensure text area font matches app */
-    .w-md-editor-text-pre, .w-md-editor-text-input {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
-      line-height: 1.6 !important;
-      font-size: 14px !important;
-    }
-  `}</style>
-);
 
 const MOODS = [
   { value: 1, icon: Cloud, color: 'text-gray-400', label: 'Awful' },
@@ -70,6 +32,46 @@ const MOODS = [
   { value: 9, icon: Cloud, color: 'text-pink-500', label: 'Loved' },
   { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' }
 ];
+
+// --- STYLES ---
+const Styles = () => (
+  <style>{`
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .animate-slideUp {
+      animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    
+    /* Clean Scrollbar */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* --- EDITOR CUSTOMIZATION --- */
+    /* Remove default border and shadow to match "clean" look */
+    .w-md-editor {
+      box-shadow: none !important;
+      border: 1px solid #e5e7eb !important; 
+      border-radius: 12px !important;
+    }
+    .w-md-editor-toolbar {
+      border-radius: 12px 12px 0 0 !important;
+      background-color: #f9fafb !important;
+      border-bottom: 1px solid #e5e7eb !important;
+    }
+    /* Hide the bottom status bar (lines/cursor info) for a cleaner mobile look */
+    .w-md-editor-bar {
+      display: none !important;
+    }
+    /* Typography fixes */
+    .w-md-editor-text-pre, .w-md-editor-text-input {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+      font-size: 14px !important;
+      line-height: 1.6 !important;
+    }
+  `}</style>
+);
 
 // --- HELPERS ---
 const getWeatherLabel = (code) => {
@@ -85,8 +87,8 @@ const getWeatherLabel = (code) => {
 
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
-    if (file.size > 10 * 1024 * 1024) {
-      reject(new Error('Image too large. Please choose a smaller image.'));
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      reject(new Error('Image too large.'));
       return;
     }
     const reader = new FileReader();
@@ -111,12 +113,7 @@ const compressImage = (file) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        try {
-          const compressed = canvas.toDataURL('image/jpeg', 0.6);
-          resolve(compressed);
-        } catch {
-          reject(new Error('Failed to compress image.'));
-        }
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
       };
       img.onerror = () => reject(new Error('Failed to load image.'));
     };
@@ -128,33 +125,36 @@ const compressImage = (file) => {
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const entryDate = entry?.date ? new Date(entry.date) : new Date();
 
+  // State
   const [content, setContent] = useState(entry?.content || '');
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
   const [weather, setWeather] = useState(entry?.weather || '');
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
+  
+  // UI State
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
+  const [mode, setMode] = useState('edit'); // 'edit', 'preview'
 
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    setImgIndex(0);
-  }, [entry?.id]);
+  useEffect(() => { setImgIndex(0); }, [entry?.id]);
 
+  // Handlers
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
       setUploading(true);
       try {
         const compressedBase64 = await compressImage(file);
-        setImages((prev) => [...prev, compressedBase64]);
+        setImages(prev => [...prev, compressedBase64]);
         setImgIndex(images.length);
       } catch (err) {
-        alert(err.message || 'Failed to process image.');
+        alert(err.message);
       } finally {
         setUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -166,152 +166,139 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     if (loadingLocation) return;
     setLoadingLocation(true);
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
+      alert("Geolocation not supported");
       setLoadingLocation(false);
       return;
     }
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          // 1. Address
-          const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-          if (locRes.ok) {
-            const locData = await locRes.json();
-            const address = locData.address;
-            const city = address.city || address.town || address.village || address.suburb;
-            const country = address.country;
-            setLocation([city, country].filter(Boolean).join(', ') || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
-          } else {
-             setLocation(`${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
-          }
-          // 2. Weather
-          const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
-          if (weatherRes.ok) {
-            const weatherData = await weatherRes.json();
-            setWeather(`${getWeatherLabel(weatherData.current_weather.weathercode)} ${Math.round(weatherData.current_weather.temperature)}°C`);
-          }
-        } catch (error) {
-          console.error("Failed to fetch location/weather", error);
-        } finally {
-          setLoadingLocation(false);
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      try {
+        // Location
+        const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+        if (locRes.ok) {
+          const data = await locRes.json();
+          const city = data.address.city || data.address.town || data.address.village;
+          setLocation([city, data.address.country].filter(Boolean).join(', '));
         }
-      },
-      (error) => {
-        alert("Unable to retrieve location.");
+        // Weather
+        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
+        if (weatherRes.ok) {
+          const data = await weatherRes.json();
+          setWeather(`${getWeatherLabel(data.current_weather.weathercode)} ${Math.round(data.current_weather.temperature)}°C`);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
         setLoadingLocation(false);
       }
-    );
+    }, () => {
+      alert("Unable to retrieve location");
+      setLoadingLocation(false);
+    });
   };
 
   const handleSave = () => {
-    if (!content.trim()) {
-      alert('Please write something before saving.');
-      return;
-    }
+    if (!content.trim()) { alert('Write something first!'); return; }
     onSave({
       id: entry?.id || Date.now().toString(),
-      content,
-      mood,
-      location,
-      weather,
-      tags,
-      images,
+      content, mood, location, weather, tags, images,
       date: entry?.date || new Date().toISOString()
     });
   };
 
   const handleDelete = () => {
-    if (!entry?.id) { onClose(); return; }
-    if (window.confirm('Are you sure you want to delete this entry completely?')) {
-      onDelete(entry.id);
-    }
+    if (entry?.id && window.confirm('Delete this entry?')) onDelete(entry.id);
+    else if (!entry?.id) onClose();
   };
 
-  const nextImage = () => images.length > 0 && setImgIndex((prev) => (prev + 1) % images.length);
-  const prevImage = () => images.length > 0 && setImgIndex((prev) => (prev - 1 + images.length) % images.length);
-  const deleteCurrentImage = () => {
-    if (window.confirm('Delete this image?')) {
-      const newImages = images.filter((_, i) => i !== imgIndex);
-      setImages(newImages);
-      setImgIndex(newImages.length > 0 ? Math.min(imgIndex, newImages.length - 1) : 0);
-    }
+  // Toggle between Edit and Preview
+  const toggleMode = () => {
+    setMode(prev => prev === 'edit' ? 'preview' : 'edit');
   };
 
-  const CurrentMoodIcon = MOODS.find((m) => m.value === mood)?.icon || Cloud;
-  const currentMoodColor = MOODS.find((m) => m.value === mood)?.color || 'text-gray-500';
+  const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Cloud;
+  const currentMoodColor = MOODS.find(m => m.value === mood)?.color || 'text-gray-500';
 
   return (
     <>
       <Styles />
-      <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" data-color-mode="light" style={{ height: '100dvh' }}>
+      {/* Force light mode to prevent library dark mode conflicts */}
+      <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" data-color-mode="light">
         
-        {/* --- TOP HEADER --- */}
-        <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md absolute top-0 left-0 right-0 z-20 border-b border-gray-100/50">
-          <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
+        {/* --- HEADER --- */}
+        <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md z-20 border-b border-gray-100 absolute top-0 left-0 right-0">
+          <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full">
             <ChevronLeft size={24} />
           </button>
           <div className="flex items-center gap-2">
             {entry?.id && (
-              <button onClick={handleDelete} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors">
+              <button onClick={handleDelete} className="p-2 text-red-500 hover:bg-red-50 rounded-full">
                 <Trash2 size={20} />
               </button>
             )}
+            
+            {/* Custom Mode Toggle */}
+            <button 
+              onClick={toggleMode}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-xs font-medium"
+            >
+              {mode === 'edit' ? <Eye size={14} /> : <Code size={14} />}
+              <span>{mode === 'edit' ? 'Preview' : 'Editor'}</span>
+            </button>
+
             <button onClick={handleSave} className="px-4 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-md shadow-blue-500/20 active:scale-95 transition-all text-sm">
               Done
             </button>
           </div>
         </div>
 
-        {/* --- MAIN CONTENT SCROLL AREA --- */}
-        <div className="flex-1 overflow-y-auto no-scrollbar pt-16 flex flex-col">
+        {/* --- SCROLLABLE CONTENT --- */}
+        <div className="flex-1 overflow-y-auto no-scrollbar pt-16 pb-6">
           
           {/* IMAGE CAROUSEL */}
           {images.length > 0 && (
-            <div className="w-full h-72 relative group bg-gray-100 mb-4 flex-shrink-0">
-              <img src={images[imgIndex]} alt="Memory" className="w-full h-full object-contain bg-gray-50/50 backdrop-blur-sm" />
-              <div className="absolute inset-0 -z-10 overflow-hidden">
+            <div className="w-full h-64 relative group bg-gray-100 mb-4">
+              <img src={images[imgIndex]} alt="Memory" className="w-full h-full object-contain" />
+              <div className="absolute inset-0 -z-10">
                 <img src={images[imgIndex]} className="w-full h-full object-cover blur-xl opacity-50" alt="" />
               </div>
+              
+              {/* Image Controls */}
               {images.length > 1 && (
-                <div className="absolute inset-0 flex items-center justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={prevImage} className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors"><ChevronLeft size={20} /></button>
-                  <button onClick={nextImage} className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors"><ChevronRight size={20} /></button>
-                </div>
+                <>
+                  <button onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/30 backdrop-blur rounded-full text-white"><ChevronLeft size={20} /></button>
+                  <button onClick={() => setImgIndex((i) => (i + 1) % images.length)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/30 backdrop-blur rounded-full text-white"><ChevronRight size={20} /></button>
+                  <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
+                    {images.map((_, i) => (
+                      <div key={i} className={`w-1.5 h-1.5 rounded-full ${i === imgIndex ? 'bg-white' : 'bg-white/50'}`} />
+                    ))}
+                  </div>
+                </>
               )}
-              <div className="absolute top-4 right-4 flex gap-2">
-                <button onClick={deleteCurrentImage} className="bg-black/30 hover:bg-red-500/80 text-white p-1.5 rounded-full backdrop-blur-md transition-colors"><Trash2 size={14} /></button>
-              </div>
-              {images.length > 1 && (
-                <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
-                  {images.map((_, i) => (
-                    <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === imgIndex ? 'bg-white w-3' : 'bg-white/50'}`} />
-                  ))}
-                </div>
-              )}
+              <button onClick={() => {
+                 setImages(imgs => imgs.filter((_, i) => i !== imgIndex));
+                 setImgIndex(0);
+              }} className="absolute top-2 right-2 p-1.5 bg-black/30 text-white rounded-full"><Trash2 size={14} /></button>
             </div>
           )}
 
-          <div className="px-6 flex-1 flex flex-col pb-6">
-            
-            {/* DATE & TIME */}
-            <div className="mb-6">
-              <h2 className="text-3xl font-extrabold text-gray-900 leading-tight">
+          <div className="px-4 flex flex-col gap-4 min-h-full">
+            {/* Header Info */}
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">
                 {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
               </h2>
-              <div className="flex items-center gap-2 text-gray-400 text-sm mt-1 font-medium">
-                <Clock size={14} />
+              <div className="flex items-center gap-2 text-gray-400 text-xs mt-1 font-medium">
+                <Clock size={12} />
                 {entryDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                <span>•</span>
-                <span>{entryDate.getFullYear()}</span>
               </div>
             </div>
 
-            {/* METADATA BAR (Mood, Loc, Tags) */}
-            <div className="flex flex-wrap gap-3 mb-6 relative z-10">
+            {/* Metadata Bar */}
+            <div className="flex flex-wrap gap-2">
               <div className="relative">
-                <button onClick={() => setIsMoodOpen(!isMoodOpen)} className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-xs font-medium transition-colors ${mood ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                  <CurrentMoodIcon size={14} className={currentMoodColor} />
+                <button onClick={() => setIsMoodOpen(!isMoodOpen)} className={`flex items-center gap-1 pl-2 pr-3 py-1 rounded-full text-xs font-medium border ${mood ? 'bg-blue-50 border-blue-100 text-blue-600' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
+                  <CurrentMoodIcon size={12} className={currentMoodColor} />
                   <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
                 </button>
                 {isMoodOpen && (
@@ -322,11 +309,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 )}
               </div>
 
-              <div className="flex items-center bg-gray-50 rounded-full pl-2 pr-1 py-0.5 border border-gray-100 max-w-[200px]">
-                <MapPin size={12} className="text-gray-400 mr-1 flex-shrink-0" />
-                <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Location" className="bg-transparent border-none p-0 text-xs text-gray-600 placeholder-gray-400 focus:ring-0 w-full truncate" />
-                <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-gray-400 hover:text-blue-500 disabled:opacity-50 flex-shrink-0">
-                  {loadingLocation ? (<div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />) : (<Plus size={10} />)}
+              <div className="flex items-center bg-gray-50 rounded-full pl-2 pr-1 py-0.5 border border-gray-200">
+                <MapPin size={12} className="text-gray-400 mr-1" />
+                <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Location" className="bg-transparent text-xs w-24 outline-none text-gray-600 placeholder-gray-400" />
+                <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-blue-500">
+                  {loadingLocation ? <div className="w-2 h-2 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <Plus size={10} />}
                 </button>
               </div>
 
@@ -336,32 +323,37 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                   {weather}
                 </div>
               )}
+              
               <TagInput tags={tags} onAdd={t => setTags([...tags, t])} onRemove={t => setTags(tags.filter(tag => tag !== t))} />
             </div>
 
-            {/* --- EDITOR LIBRARY --- */}
-            <div className="flex-1 min-h-[400px]">
+            {/* --- EDITOR COMPONENT --- */}
+            {/* We wrap it in a div that ensures it has height but doesn't overflow oddly */}
+            <div className="flex-1 w-full mt-2">
               <MDEditor
                 value={content}
                 onChange={setContent}
-                preview="edit"
-                height="100%"
-                visibleDragbar={false}
+                preview={mode} // Controlled by our custom button
+                height={400} // Fixed minimum height, but can grow
+                visibleDragbar={false} // Disable dragbar for cleaner UI
                 hideToolbar={false}
-                enableScroll={true}
+                enableScroll={false} // Let the parent container scroll
+                textareaProps={{
+                  placeholder: "Start writing..."
+                }}
               />
             </div>
 
-            {/* ATTACHMENTS BAR */}
-            <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center text-gray-400">
-              <span className="text-xs uppercase tracking-wider font-medium">Attachments</span>
-              <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors disabled:opacity-50">
-                {uploading ? (<div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />) : (<ImageIcon size={18} />)}
-                <span className="text-xs">{uploading ? 'Processing...' : 'Add Image'}</span>
+            {/* Attachments Footer */}
+            <div className="mt-auto pt-6 border-t border-gray-100 flex justify-between items-center text-gray-400">
+              <span className="text-xs font-bold uppercase tracking-wider">Attachments</span>
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors">
+                {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ImageIcon size={16} />}
+                <span className="text-xs">{uploading ? 'Uploading...' : 'Add Image'}</span>
               </button>
             </div>
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
-            
+
           </div>
         </div>
       </div>
