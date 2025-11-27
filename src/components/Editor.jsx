@@ -46,12 +46,19 @@ const Styles = () => (
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* THINGS 3 AESTHETIC TYPOGRAPHY */
+    /* NATIVE INPUTS & TYPOGRAPHY */
     .native-input {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       font-size: 17px;
       line-height: 1.5;
       color: #374151;
+    }
+    
+    /* TIME INPUT STYLING */
+    input[type="time"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      opacity: 0.6;
+      filter: invert(0.5); /* Make icon grey */
     }
 
     /* MARKDOWN PREVIEW STYLING */
@@ -121,14 +128,16 @@ const compressImage = (file) => {
 
 // --- MAIN COMPONENT ---
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
-  const entryDate = entry?.date ? new Date(entry.date) : new Date();
-  // CRITICAL: Generate ID once on mount, so it stays the same during auto-saves
+  // CRITICAL: Generate ID once on mount to prevent duplicates during auto-save
   const [entryId] = useState(entry?.id || Date.now().toString());
   
-  // Logic: Is this entry from "Today"?
-  const isToday = new Date().toDateString() === new Date().toDateString();
+  // State for Date/Time Management
+  const [currentDate, setCurrentDate] = useState(entry?.date ? new Date(entry.date) : new Date());
+  
+  // Logic: Is this entry from "Today"? (Based on the selected date)
+  const isToday = currentDate.toDateString() === new Date().toDateString();
 
-  // State
+  // Content State
   const [content, setContent] = useState(entry?.content || '');
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
@@ -136,31 +145,19 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
   
-  // Default to Preview if not today, Edit if today
+  // Mode State: Default to Preview if not today, Edit if today
   const [mode, setMode] = useState(isToday ? 'edit' : 'preview');
   
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
-  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle', 'saving', 'saved'
+  const [saveStatus, setSaveStatus] = useState('idle');
 
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
-  // Reset state when entry changes
-  useEffect(() => {
-    setContent(entry?.content || '');
-    setMood(entry?.mood || 5);
-    setLocation(entry?.location || '');
-    setWeather(entry?.weather || '');
-    setTags(entry?.tags || []);
-    setImages(entry?.images || []);
-    setImgIndex(0);
-    setMode(new Date(entry?.date).toDateString() === new Date().toDateString() ? 'edit' : 'preview');
-  }, [entry?.id]);
-
-  // Auto-Resize Textarea (The Native App Feel)
+  // Auto-Resize Textarea
   useEffect(() => {
     if (mode === 'edit' && textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -169,35 +166,57 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   }, [content, mode]);
 
   // --- AUTO SAVE LOGIC ---
-  const saveData = useCallback((isAutoSave = false) => {
+  const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
     if (isAutoSave && !content.trim() && images.length === 0) return;
 
     setSaveStatus('saving');
     
+    // Use overrideDate if provided (for immediate time updates), otherwise use state
+    const dateToSave = overrideDate || currentDate;
+
     onSave({
-      id: entryId, // <--- Use the stable state variable here
+      id: entryId, 
       content,
       mood, location, weather, tags, images,
-      date: entry?.date || new Date().toISOString()
+      date: dateToSave.toISOString()
     });
 
     setTimeout(() => setSaveStatus('saved'), 500);
     setTimeout(() => setSaveStatus('idle'), 2500);
-  }, [entryId, entry?.date, content, mood, location, weather, tags, images, onSave]);
+  }, [entryId, currentDate, content, mood, location, weather, tags, images, onSave]);
 
-  // Trigger Auto-Save 2 seconds after typing stops
+  // Trigger Auto-Save 2 seconds after content changes
   useEffect(() => {
-    // Only auto-save if something changed from initial entry
-    // (Simple check to avoid saving on load)
     if (content !== (entry?.content || '')) {
-      const timer = setTimeout(() => {
-        saveData(true);
-      }, 2000);
+      const timer = setTimeout(() => saveData(true), 2000);
       return () => clearTimeout(timer);
     }
   }, [content, saveData, entry?.content]);
 
-  // Handlers
+  // --- HANDLERS ---
+  
+  const handleTimeChange = (e) => {
+    const timeValue = e.target.value;
+    if (!timeValue) return;
+
+    const [hours, minutes] = timeValue.split(':').map(Number);
+    const newDate = new Date(currentDate);
+    newDate.setHours(hours);
+    newDate.setMinutes(minutes);
+    
+    setCurrentDate(newDate);
+    saveData(true, newDate); // Save immediately when time changes
+  };
+
+  const handleDeleteImage = () => {
+    if (window.confirm('Are you sure you want to remove this image?')) {
+      setImages(imgs => imgs.filter((_, i) => i !== imgIndex));
+      setImgIndex(0);
+      // We will let the next auto-save handle persistence, or trigger it manually if preferred:
+      // saveData(true); 
+    }
+  };
+
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -206,7 +225,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         const compressedBase64 = await compressImage(file);
         setImages(prev => [...prev, compressedBase64]);
         setImgIndex(images.length);
-        saveData(true); // Auto-save after image upload
+        saveData(true);
       } catch (err) {
         alert(err.message);
       } finally {
@@ -257,17 +276,18 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     onClose(); 
   };
 
-  const handleDelete = () => {
+  const handleDeleteEntry = () => {
     if (entry?.id && window.confirm('Delete this entry?')) onDelete(entry.id);
     else if (!entry?.id) onClose();
   };
 
-  const toggleMode = () => {
-    setMode(prev => prev === 'edit' ? 'preview' : 'edit');
-  };
+  const toggleMode = () => setMode(prev => prev === 'edit' ? 'preview' : 'edit');
 
   const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Cloud;
   const currentMoodColor = MOODS.find(m => m.value === mood)?.color || 'text-gray-500';
+
+  // Format time for input (HH:mm)
+  const timeString = currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
   return (
     <>
@@ -281,7 +301,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               <ChevronLeft size={24} />
               <span className="text-base font-medium">Back</span>
             </button>
-            {/* Save Status Indicator */}
             <div className="text-xs font-medium text-gray-400 flex items-center gap-1 transition-opacity duration-300">
                {saveStatus === 'saving' && <span>Saving...</span>}
                {saveStatus === 'saved' && <span className="text-green-500 flex items-center gap-1"><CheckCircle2 size={12}/> Saved</span>}
@@ -290,12 +309,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
           <div className="flex items-center gap-2">
             {entry?.id && (
-              <button onClick={handleDelete} className="p-2 text-red-400 hover:bg-red-50 rounded-full transition-colors">
+              <button onClick={handleDeleteEntry} className="p-2 text-red-400 hover:bg-red-50 rounded-full transition-colors">
                 <Trash2 size={20} />
               </button>
             )}
             
-            {/* MODE TOGGLE */}
             <button 
               onClick={toggleMode}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-xs font-medium"
@@ -310,8 +328,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           </div>
         </div>
 
-        {/* --- SCROLLABLE CONTAINER --- */}
-        {/* This container handles the scroll for the whole app */}
+        {/* --- MAIN SCROLL AREA --- */}
         <div className="flex-1 overflow-y-auto no-scrollbar pt-16 flex flex-col bg-white">
           
           {/* IMAGE CAROUSEL */}
@@ -321,22 +338,38 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               <div className="absolute inset-0 -z-10">
                 <img src={images[imgIndex]} className="w-full h-full object-cover blur-2xl opacity-30" alt="" />
               </div>
+              
+              {/* Navigation Controls - Visible on Hover/Touch */}
               {images.length > 1 && (
                 <>
-                  <button onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/20 backdrop-blur-lg rounded-full text-white hover:bg-white/30 transition-colors"><ChevronLeft size={20} /></button>
-                  <button onClick={() => setImgIndex((i) => (i + 1) % images.length)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/20 backdrop-blur-lg rounded-full text-white hover:bg-white/30 transition-colors"><ChevronLeft size={20} className="rotate-180" /></button>
+                  <button 
+                    onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} 
+                    className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-black/70 shadow-lg"
+                  >
+                    <ChevronLeft size={24} />
+                  </button>
+                  <button 
+                    onClick={() => setImgIndex((i) => (i + 1) % images.length)} 
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-black/70 shadow-lg"
+                  >
+                    <ChevronLeft size={24} className="rotate-180" />
+                  </button>
+                  {/* Dots */}
                   <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
                     {images.map((_, i) => (
-                      <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === imgIndex ? 'bg-white w-3' : 'bg-white/50'}`} />
+                      <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all shadow-sm ${i === imgIndex ? 'bg-white w-3' : 'bg-white/50'}`} />
                     ))}
                   </div>
                 </>
               )}
-              <button onClick={() => {
-                 setImages(imgs => imgs.filter((_, i) => i !== imgIndex));
-                 setImgIndex(0);
-                 saveData(true);
-              }} className="absolute top-4 right-4 p-2 bg-black/20 backdrop-blur-md text-white rounded-full hover:bg-red-500/80 transition-colors"><Trash2 size={16} /></button>
+              
+              {/* Delete Image Button */}
+              <button 
+                onClick={handleDeleteImage} 
+                className="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur-md text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-500 shadow-lg"
+              >
+                <Trash2 size={16} />
+              </button>
             </div>
           )}
 
@@ -344,13 +377,20 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             {/* Header Info */}
             <div className="pt-8 border-b border-gray-100 pb-6">
               <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight leading-tight">
-                {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+                {currentDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
               </h2>
               <div className="flex items-center gap-3 text-gray-400 text-sm mt-2 font-medium">
-                <div className="flex items-center gap-1.5">
-                    <Clock size={14} />
-                    {entryDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                {/* Editable Time Input */}
+                <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors cursor-pointer group">
+                    <Clock size={14} className="text-gray-400 group-hover:text-blue-500 transition-colors" />
+                    <input 
+                      type="time" 
+                      value={timeString} 
+                      onChange={handleTimeChange}
+                      className="bg-transparent border-none outline-none text-gray-500 font-medium text-xs font-mono cursor-pointer w-[60px]"
+                    />
                 </div>
+                
                 {!isToday && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wide font-bold">Past Entry</span>}
               </div>
             </div>
@@ -397,7 +437,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             {/* --- EDITOR AREA --- */}
             <div className="flex-1 w-full min-h-[300px]">
               {mode === 'edit' ? (
-                /* Native Textarea for Edit Mode */
                 <textarea
                   ref={textareaRef}
                   value={content}
@@ -407,7 +446,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                   spellCheck={false}
                 />
               ) : (
-                /* Library for Preview Mode */
                 <div className="native-input text-gray-800">
                     <MDEditor.Markdown source={content} />
                 </div>
