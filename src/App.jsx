@@ -104,8 +104,6 @@ const App = () => {
       }
       return [entry, ...prev];
     });
-    setIsEditorOpen(false);
-    setEditingEntry(null);
   };
 
   const handleDeleteEntry = (id) => {

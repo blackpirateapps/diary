@@ -122,6 +122,8 @@ const compressImage = (file) => {
 // --- MAIN COMPONENT ---
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const entryDate = entry?.date ? new Date(entry.date) : new Date();
+  // CRITICAL: Generate ID once on mount, so it stays the same during auto-saves
+  const [entryId] = useState(entry?.id || Date.now().toString());
   
   // Logic: Is this entry from "Today"?
   const isToday = new Date().toDateString() === new Date().toDateString();
@@ -172,10 +174,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
     setSaveStatus('saving');
     
-    // Call the parent onSave. 
-    // NOTE: This assumes parent onSave does NOT close the modal automatically.
     onSave({
-      id: entry?.id || Date.now().toString(),
+      id: entryId, // <--- Use the stable state variable here
       content,
       mood, location, weather, tags, images,
       date: entry?.date || new Date().toISOString()
@@ -183,7 +183,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
     setTimeout(() => setSaveStatus('saved'), 500);
     setTimeout(() => setSaveStatus('idle'), 2500);
-  }, [entry?.id, entry?.date, content, mood, location, weather, tags, images, onSave]);
+  }, [entryId, entry?.date, content, mood, location, weather, tags, images, onSave]);
 
   // Trigger Auto-Save 2 seconds after typing stops
   useEffect(() => {
