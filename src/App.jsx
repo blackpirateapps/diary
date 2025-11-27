@@ -5,13 +5,12 @@ import StatsPage from './components/StatsPage';
 import MediaGallery from './components/MediaGallery';
 import FlashbackPage from './components/FlashbackPage';
 import MapPage from './components/MapPage';
-import { 
-  BarChart2, Grid, Home, Map, 
-  Plus, Calendar, MapPin, Image as ImageIcon, 
-  X, Hash, ChevronLeft, ChevronRight, Trash2,
-  Smile, Frown, Meh, Heart, Sun, CloudRain,
-  Search, Clock, Download, Upload, Settings, Cloud,
-  WifiOff
+import {
+  BarChart2,
+  Grid,
+  Home,
+  Map,
+  Trash2,
 } from 'lucide-react';
 
 const INITIAL_ENTRIES = [
@@ -61,7 +60,7 @@ const App = () => {
   const [showFlashback, setShowFlashback] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [isImporting, setIsImporting] = useState(false);
-  const [importError, setImportError] = useState(null); // New State for tracking errors
+  const [importError, setImportError] = useState(null);
 
   // Load from localStorage
   const [entries, setEntries] = useState(() => {
@@ -75,6 +74,7 @@ const App = () => {
   });
 
   const dateInputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // --- PERSISTENCE ---
   useEffect(() => {
@@ -147,14 +147,13 @@ const App = () => {
     e.target.value = '';
   };
 
-  // --- IMPORT / EXPORT LOGIC ---
-
+  // --- EXPORT LOGIC ---
   const handleExport = () => {
     try {
       const backupData = {
         version: 1,
         timestamp: new Date().toISOString(),
-        entries: entries 
+        entries: entries
       };
 
       const dataStr = JSON.stringify(backupData, null, 2);
@@ -173,8 +172,9 @@ const App = () => {
     }
   };
 
-  const handleImport = (e) => {
-    const file = e.target.files?.[0];
+  // --- IMPORT LOGIC ---
+  const handleImport = (event) => {
+    const file = event.target.files && event.target.files[0];
     if (!file) return;
 
     setIsImporting(true);
@@ -184,7 +184,11 @@ const App = () => {
 
     reader.onload = (ev) => {
       try {
-        const text = ev.target.result;
+        const text = ev.target && ev.target.result;
+        if (typeof text !== 'string') {
+          throw new Error("Could not read file contents.");
+        }
+
         let parsed;
         try {
           parsed = JSON.parse(text);
@@ -193,9 +197,10 @@ const App = () => {
         }
         
         let incomingEntries = [];
+        // Support both old backups (plain array) and new backups ({ entries: [...] })
         if (Array.isArray(parsed)) {
           incomingEntries = parsed;
-        } else if (parsed.entries && Array.isArray(parsed.entries)) {
+        } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.entries)) {
           incomingEntries = parsed.entries;
         } else {
           throw new Error("Could not find 'entries' array in the file.");
@@ -216,11 +221,11 @@ const App = () => {
           return {
             id,
             content: entry.content || '',
-            date: date, // Guaranteed valid ISO string
+            date: date,
             mood: typeof entry.mood === 'number' ? entry.mood : 5,
             location: entry.location || '',
-            locationLat: entry.locationLat || null,
-            locationLng: entry.locationLng || null,
+            locationLat: entry.locationLat != null ? entry.locationLat : null,
+            locationLng: entry.locationLng != null ? entry.locationLng : null,
             weather: entry.weather || '',
             tags: Array.isArray(entry.tags) ? entry.tags : [],
             images: Array.isArray(entry.images) ? entry.images : []
@@ -231,22 +236,27 @@ const App = () => {
           throw new Error("No valid entries found to import.");
         }
 
-        // Force a re-render by creating a completely new array reference
+        // Merge and sort entries
         setEntries(prev => {
           const entryMap = new Map(prev.map(e => [e.id, e]));
           validEntries.forEach(e => entryMap.set(e.id, e));
-          const newEntries = Array.from(entryMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
-          return [...newEntries]; // Spread to ensure new reference
+          const newEntries = Array.from(entryMap.values()).sort(
+            (a, b) => new Date(b.date) - new Date(a.date)
+          );
+          return [...newEntries];
         });
 
         alert(`Success! Imported ${validEntries.length} entries.`);
 
       } catch (err) {
         console.error("Import Error:", err);
-        setImportError(err.message); // Show error in UI
+        setImportError(err.message || "Unknown import error.");
       } finally {
         setIsImporting(false);
-        if (e.target) e.target.value = ''; 
+        // Clear the file input so the same file can be selected again
+        if (event.target) {
+          event.target.value = '';
+        }
       }
     };
 
@@ -308,8 +318,8 @@ const App = () => {
                 entries={entries}
                 onEdit={openEditEditor}
                 onCreate={() => openNewEditor()}
-                onAddOld={() => dateInputRef.current?.showPicker()}
-                onImport={handleImport}
+                onAddOld={() => dateInputRef.current && dateInputRef.current.showPicker && dateInputRef.current.showPicker()}
+                onImport={() => fileInputRef.current && fileInputRef.current.click()}
                 onExport={handleExport}
                 isOffline={isOffline}
                 isImporting={isImporting}
@@ -323,7 +333,20 @@ const App = () => {
         )}
 
         {/* HIDDEN INPUTS & MODALS */}
-        <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
+        <input
+          type="date"
+          ref={dateInputRef}
+          onChange={handleDateSelect}
+          className="hidden"
+        />
+
+        <input
+          type="file"
+          accept="application/json,.json"
+          ref={fileInputRef}
+          onChange={handleImport}
+          className="hidden"
+        />
         
         {isEditorOpen && (
           <Editor
