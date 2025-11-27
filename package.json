@@ -18,8 +18,8 @@
     "react-calendar-heatmap": "latest", 
     "@uiw/react-md-editor": "latest", 
     "leaflet": "latest",
-    "react-leaflet": "latest", 
-    "react-quill": "latest", 
+    "leaflet": "^1.9.4",
+    "react-leaflet": "^4.2.1", 
     "dompurify": "latest"
   },
   "devDependencies": {
