@@ -8,18 +8,15 @@ import {
   Cloud,
   Clock,
   Image as ImageIcon,
-  Eye,
-  Type,
-  Code // Added missing import
+  X
 } from 'lucide-react';
-import MDEditor from '@uiw/react-md-editor';
-// --- CRITICAL: Import Library Styles ---
-import "@uiw/react-md-editor/markdown-editor.css";
-import "@uiw/react-markdown-preview/markdown.css";
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css'; // Import Quill styles
 
 import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
 
+// --- CONFIGURATION ---
 const MOODS = [
   { value: 1, icon: Cloud, color: 'text-gray-400', label: 'Awful' },
   { value: 2, icon: Cloud, color: 'text-blue-400', label: 'Bad' },
@@ -33,6 +30,21 @@ const MOODS = [
   { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' }
 ];
 
+// Simplified Toolbar for Mobile
+const MODULES = {
+  toolbar: [
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    ['blockquote'],
+    ['clean']
+  ],
+};
+
+const FORMATS = [
+  'bold', 'italic', 'underline', 'strike',
+  'list', 'bullet', 'blockquote'
+];
+
 // --- STYLES ---
 const Styles = () => (
   <style>{`
@@ -44,31 +56,39 @@ const Styles = () => (
       animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
     
-    /* Clean Scrollbar */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* --- EDITOR CUSTOMIZATION --- */
-    /* Remove default border and shadow to match "clean" look */
-    .w-md-editor {
-      box-shadow: none !important;
-      border: 1px solid #e5e7eb !important; 
-      border-radius: 12px !important;
+    /* --- QUILL OVERRIDES FOR MOBILE --- */
+    .quill {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
     }
-    .w-md-editor-toolbar {
-      border-radius: 12px 12px 0 0 !important;
-      background-color: #f9fafb !important;
-      border-bottom: 1px solid #e5e7eb !important;
+    .ql-container {
+      flex: 1;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px; /* Larger font for mobile readability */
+      border: none !important;
     }
-    /* Hide the bottom status bar (lines/cursor info) for a cleaner mobile look */
-    .w-md-editor-bar {
-      display: none !important;
+    .ql-toolbar {
+      border: none !important;
+      border-bottom: 1px solid #f3f4f6 !important;
+      background: #f9fafb;
+      border-radius: 12px 12px 0 0;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
-    /* Typography fixes */
-    .w-md-editor-text-pre, .w-md-editor-text-input {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-      font-size: 14px !important;
-      line-height: 1.6 !important;
+    .ql-editor {
+      padding: 16px;
+      line-height: 1.6;
+      color: #374151;
+    }
+    .ql-editor.ql-blank::before {
+      font-style: normal;
+      color: #9ca3af;
+      font-size: 16px;
     }
   `}</style>
 );
@@ -87,7 +107,7 @@ const getWeatherLabel = (code) => {
 
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+    if (file.size > 10 * 1024 * 1024) {
       reject(new Error('Image too large.'));
       return;
     }
@@ -126,6 +146,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const entryDate = entry?.date ? new Date(entry.date) : new Date();
 
   // State
+  // Note: Content will now be HTML string, not Markdown
   const [content, setContent] = useState(entry?.content || '');
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
@@ -138,9 +159,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
-  const [mode, setMode] = useState('edit'); // 'edit', 'preview'
 
   const fileInputRef = useRef(null);
+  const editorRef = useRef(null);
 
   useEffect(() => { setImgIndex(0); }, [entry?.id]);
 
@@ -173,14 +194,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
       try {
-        // Location
         const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
         if (locRes.ok) {
           const data = await locRes.json();
           const city = data.address.city || data.address.town || data.address.village;
           setLocation([city, data.address.country].filter(Boolean).join(', '));
         }
-        // Weather
         const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
         if (weatherRes.ok) {
           const data = await weatherRes.json();
@@ -198,10 +217,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   };
 
   const handleSave = () => {
-    if (!content.trim()) { alert('Write something first!'); return; }
+    // Check if empty (Quill leaves <p><br></p> even when empty)
+    if (content.replace(/<(.|\n)*?>/g, '').trim().length === 0 && images.length === 0) {
+      alert('Please write something or add an image.');
+      return;
+    }
     onSave({
       id: entry?.id || Date.now().toString(),
-      content, mood, location, weather, tags, images,
+      content, // This is now HTML
+      mood, location, weather, tags, images,
       date: entry?.date || new Date().toISOString()
     });
   };
@@ -211,22 +235,16 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     else if (!entry?.id) onClose();
   };
 
-  // Toggle between Edit and Preview
-  const toggleMode = () => {
-    setMode(prev => prev === 'edit' ? 'preview' : 'edit');
-  };
-
   const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Cloud;
   const currentMoodColor = MOODS.find(m => m.value === mood)?.color || 'text-gray-500';
 
   return (
     <>
       <Styles />
-      {/* Force light mode to prevent library dark mode conflicts */}
-      <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" data-color-mode="light">
+      <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden">
         
         {/* --- HEADER --- */}
-        <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md z-20 border-b border-gray-100 absolute top-0 left-0 right-0">
+        <div className="px-4 py-3 flex justify-between items-center bg-white/90 backdrop-blur-md z-30 border-b border-gray-100 absolute top-0 left-0 right-0">
           <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full">
             <ChevronLeft size={24} />
           </button>
@@ -236,16 +254,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 <Trash2 size={20} />
               </button>
             )}
-            
-            {/* Custom Mode Toggle */}
-            <button 
-              onClick={toggleMode}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-xs font-medium"
-            >
-              {mode === 'edit' ? <Eye size={14} /> : <Code size={14} />}
-              <span>{mode === 'edit' ? 'Preview' : 'Editor'}</span>
-            </button>
-
             <button onClick={handleSave} className="px-4 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-md shadow-blue-500/20 active:scale-95 transition-all text-sm">
               Done
             </button>
@@ -253,11 +261,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         </div>
 
         {/* --- SCROLLABLE CONTENT --- */}
-        <div className="flex-1 overflow-y-auto no-scrollbar pt-16 pb-6">
+        <div className="flex-1 overflow-y-auto no-scrollbar pt-16 pb-0 flex flex-col">
           
           {/* IMAGE CAROUSEL */}
           {images.length > 0 && (
-            <div className="w-full h-64 relative group bg-gray-100 mb-4">
+            <div className="w-full h-64 relative group bg-gray-100 flex-shrink-0">
               <img src={images[imgIndex]} alt="Memory" className="w-full h-full object-contain" />
               <div className="absolute inset-0 -z-10">
                 <img src={images[imgIndex]} className="w-full h-full object-cover blur-xl opacity-50" alt="" />
@@ -282,9 +290,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             </div>
           )}
 
-          <div className="px-4 flex flex-col gap-4 min-h-full">
+          <div className="px-4 flex flex-col gap-4 flex-1">
             {/* Header Info */}
-            <div>
+            <div className="pt-4">
               <h2 className="text-2xl font-bold text-gray-900">
                 {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
               </h2>
@@ -327,35 +335,33 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               <TagInput tags={tags} onAdd={t => setTags([...tags, t])} onRemove={t => setTags(tags.filter(tag => tag !== t))} />
             </div>
 
-            {/* --- EDITOR COMPONENT --- */}
-            {/* We wrap it in a div that ensures it has height but doesn't overflow oddly */}
-            <div className="flex-1 w-full mt-2">
-              <MDEditor
+            {/* --- EDITOR COMPONENT (QUILL) --- */}
+            {/* The container grows to fill remaining space */}
+            <div className="flex-1 -mx-4 mt-2 border-t border-gray-100">
+               <ReactQuill 
+                ref={editorRef}
+                theme="snow"
                 value={content}
                 onChange={setContent}
-                preview={mode} // Controlled by our custom button
-                height={400} // Fixed minimum height, but can grow
-                visibleDragbar={false} // Disable dragbar for cleaner UI
-                hideToolbar={false}
-                enableScroll={false} // Let the parent container scroll
-                textareaProps={{
-                  placeholder: "Start writing..."
-                }}
+                modules={MODULES}
+                formats={FORMATS}
+                placeholder="Write your thoughts..."
               />
             </div>
 
-            {/* Attachments Footer */}
-            <div className="mt-auto pt-6 border-t border-gray-100 flex justify-between items-center text-gray-400">
-              <span className="text-xs font-bold uppercase tracking-wider">Attachments</span>
-              <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors">
-                {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ImageIcon size={16} />}
-                <span className="text-xs">{uploading ? 'Uploading...' : 'Add Image'}</span>
-              </button>
-            </div>
-            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
-
           </div>
         </div>
+
+        {/* Attachments Footer (Fixed at Bottom) */}
+        <div className="px-4 py-3 border-t border-gray-100 bg-white flex justify-between items-center text-gray-400 z-20 safe-area-bottom">
+          <span className="text-xs font-bold uppercase tracking-wider">Attachments</span>
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors">
+            {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ImageIcon size={16} />}
+            <span className="text-xs">{uploading ? 'Uploading...' : 'Add Image'}</span>
+          </button>
+          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+        </div>
+
       </div>
     </>
   );
