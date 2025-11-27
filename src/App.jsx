@@ -58,23 +58,27 @@ const App = () => {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [showFlashback, setShowFlashback] = useState(false);
-  const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const [isOffline, setIsOffline] = useState(
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState(null);
 
   // Load from localStorage
   const [entries, setEntries] = useState(() => {
     try {
-      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('journal_entries') : null;
+      const saved =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('journal_entries')
+          : null;
       return saved ? JSON.parse(saved) : INITIAL_ENTRIES;
     } catch (e) {
-      console.error("Failed to load entries:", e);
+      console.error('Failed to load entries:', e);
       return INITIAL_ENTRIES;
     }
   });
 
   const dateInputRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   // --- PERSISTENCE ---
   useEffect(() => {
@@ -125,7 +129,9 @@ const App = () => {
   // --- NAVIGATION & EDITOR ---
   const openNewEditor = (date = new Date()) => {
     const dateStr = date.toDateString();
-    const existing = entries.find(e => new Date(e.date).toDateString() === dateStr);
+    const existing = entries.find(
+      e => new Date(e.date).toDateString() === dateStr
+    );
     if (existing) {
       setEditingEntry(existing);
     } else {
@@ -147,141 +153,138 @@ const App = () => {
     e.target.value = '';
   };
 
-  // --- EXPORT LOGIC ---
+  // --- EXPORT (rewritten but same behavior) ---
   const handleExport = () => {
     try {
       const backupData = {
         version: 1,
         timestamp: new Date().toISOString(),
-        entries: entries
+        entries,
       };
 
       const dataStr = JSON.stringify(backupData, null, 2);
-      const blob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob); [web:35]
+
       const a = document.createElement('a');
       a.href = url;
-      a.download = `blackpirates_journal_${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `blackpirates_journal_${new Date()
+        .toISOString()
+        .split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 100);
     } catch (e) {
-      alert("Export failed: " + e.message);
+      alert('Export failed: ' + e.message);
     }
   };
 
-  // --- IMPORT LOGIC (FIXED) ---
-  const handleImport = (event) => {
-    const file = event.target.files && event.target.files[0];
+  // --- IMPORT (completely rewritten, using Blob.text) ---
+  // This is meant to be passed to a <input type="file" onChange={onImport}> inside JournalList.
+  const handleImport = async (event) => {
+    const input = event.target; // keep a direct reference to the DOM node
+    const file = input.files && input.files[0];
     if (!file) return;
 
     setIsImporting(true);
     setImportError(null);
 
-    const reader = new FileReader();
+    try {
+      // Modern way to read file text without FileReader constructors. [web:32][web:34]
+      const text = await file.text();
 
-    reader.onload = (ev) => {
+      let parsed;
       try {
-        const text = ev.target && ev.target.result;
-        if (typeof text !== 'string') {
-          throw new Error("Could not read file contents.");
-        }
-
-        let parsed;
-        try {
-          parsed = JSON.parse(text);
-        } catch (jsonErr) {
-          throw new Error("Invalid JSON format. The file might be corrupted.");
-        }
-        
-        let incomingEntries = [];
-        // Support both old backups (plain array) and new backups ({ entries: [...] })
-        if (Array.isArray(parsed)) {
-          incomingEntries = parsed;
-        } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.entries)) {
-          incomingEntries = parsed.entries;
-        } else {
-          throw new Error("Could not find 'entries' array in the file.");
-        }
-
-        const validEntries = incomingEntries
-          // FILTER: Ensure entry is an object before accessing properties
-          .filter(entry => entry && typeof entry === 'object')
-          .map((entry, index) => {
-            // Normalize ID
-            const id = entry.id || `imported_${Date.now()}_${index}`;
-            
-            // STRICT DATE VALIDATION
-            let date = entry.date;
-            const parsedDate = new Date(date);
-            // If date is missing or invalid, default to NOW to prevent app crashes
-            if (!date || isNaN(parsedDate.getTime())) {
-              console.warn(`Entry ${id} has invalid date: ${date}. Defaulting to NOW.`);
-              date = new Date().toISOString();
-            }
-
-            return {
-              id,
-              content: entry.content || '',
-              date: date,
-              mood: typeof entry.mood === 'number' ? entry.mood : 5,
-              location: entry.location || '',
-              locationLat: entry.locationLat != null ? entry.locationLat : null,
-              locationLng: entry.locationLng != null ? entry.locationLng : null,
-              weather: entry.weather || '',
-              tags: Array.isArray(entry.tags) ? entry.tags : [],
-              images: Array.isArray(entry.images) ? entry.images : []
-            };
-          });
-
-        if (validEntries.length === 0) {
-          throw new Error("No valid entries found to import.");
-        }
-
-        // Merge and sort entries
-        setEntries(prev => {
-          const entryMap = new Map(prev.map(e => [e.id, e]));
-          validEntries.forEach(e => entryMap.set(e.id, e));
-          const newEntries = Array.from(entryMap.values()).sort(
-            (a, b) => new Date(b.date) - new Date(a.date)
-          );
-          return [...newEntries];
-        });
-
-        alert(`Success! Imported ${validEntries.length} entries.`);
-
-      } catch (err) {
-        console.error("Import Error:", err);
-        setImportError(err.message || "Unknown import error.");
-      } finally {
-        setIsImporting(false);
-        // Clear the file input so the same file can be selected again
-        if (event.target) {
-          event.target.value = '';
-        }
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error('Invalid JSON format. The file might be corrupted.');
       }
-    };
 
-    reader.onerror = () => {
-      setImportError("Failed to read the file from disk.");
+      let incomingEntries = [];
+      // Old format: plain array
+      if (Array.isArray(parsed)) {
+        incomingEntries = parsed;
+      }
+      // New format: { entries: [...] }
+      else if (
+        parsed &&
+        typeof parsed === 'object' &&
+        Array.isArray(parsed.entries)
+      ) {
+        incomingEntries = parsed.entries;
+      } else {
+        throw new Error("Could not find 'entries' array in the file.");
+      }
+
+      const validEntries = incomingEntries.map((entry, index) => {
+        const id = entry.id || `imported_${Date.now()}_${index}`;
+
+        let date = entry.date;
+        const parsedDate = new Date(date);
+        if (!date || isNaN(parsedDate.getTime())) {
+          console.warn(
+            `Entry ${id} has invalid date: ${date}. Defaulting to NOW.`
+          );
+          date = new Date().toISOString();
+        }
+
+        return {
+          id,
+          content: entry.content || '',
+          date,
+          mood: typeof entry.mood === 'number' ? entry.mood : 5,
+          location: entry.location || '',
+          locationLat:
+            entry.locationLat !== undefined && entry.locationLat !== null
+              ? entry.locationLat
+              : null,
+          locationLng:
+            entry.locationLng !== undefined && entry.locationLng !== null
+              ? entry.locationLng
+              : null,
+          weather: entry.weather || '',
+          tags: Array.isArray(entry.tags) ? entry.tags : [],
+          images: Array.isArray(entry.images) ? entry.images : [],
+        };
+      });
+
+      if (validEntries.length === 0) {
+        throw new Error('No valid entries found to import.');
+      }
+
+      setEntries(prev => {
+        const entryMap = new Map(prev.map(e => [e.id, e]));
+        validEntries.forEach(e => entryMap.set(e.id, e));
+        const newEntries = Array.from(entryMap.values()).sort(
+          (a, b) =>
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        return [...newEntries];
+      });
+
+      alert(`Success! Imported ${validEntries.length} entries.`);
+    } catch (err) {
+      console.error('Import Error:', err);
+      setImportError(err.message || 'Unknown import error.');
+    } finally {
       setIsImporting(false);
-    };
-
-    reader.readAsText(file);
+      // Clear the input so the same file can be chosen again
+      input.value = '';
+    }
   };
 
   return (
     <div className="min-h-screen bg-[#F3F4F6] text-gray-900">
       <div className="max-w-xl mx-auto min-h-screen relative pb-16">
-        
         {/* IMPORT LOADING OVERLAY */}
         {isImporting && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-slideUp">
               <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="font-semibold text-gray-700">Processing backup file...</p>
+              <p className="font-semibold text-gray-700">
+                Processing backup file...
+              </p>
             </div>
           </div>
         )}
@@ -295,7 +298,7 @@ const App = () => {
                 <h3 className="font-bold text-lg">Import Failed</h3>
               </div>
               <p className="text-gray-600 text-sm mb-4">{importError}</p>
-              <button 
+              <button
                 onClick={() => setImportError(null)}
                 className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-xl transition-colors"
               >
@@ -307,9 +310,9 @@ const App = () => {
 
         {/* CONDITIONAL ROUTING */}
         {showFlashback ? (
-          <FlashbackPage 
-            entries={entries} 
-            onBack={() => setShowFlashback(false)} 
+          <FlashbackPage
+            entries={entries}
+            onBack={() => setShowFlashback(false)}
             onEdit={(entry) => {
               setShowFlashback(false);
               openEditEditor(entry);
@@ -322,18 +325,22 @@ const App = () => {
                 entries={entries}
                 onEdit={openEditEditor}
                 onCreate={() => openNewEditor()}
-                onAddOld={() => dateInputRef.current && dateInputRef.current.showPicker && dateInputRef.current.showPicker()}
-                
-                // --- FIX: Pass handleImport directly ---
+                onAddOld={() =>
+                  dateInputRef.current &&
+                  dateInputRef.current.showPicker &&
+                  dateInputRef.current.showPicker()
+                }
+                // SAME prop name & usage as before: JournalList owns the file input.
                 onImport={handleImport}
-                
                 onExport={handleExport}
                 isOffline={isOffline}
                 isImporting={isImporting}
-                onOpenFlashback={() => setShowFlashback(true)} 
+                onOpenFlashback={() => setShowFlashback(true)}
               />
             )}
-            {activeTab === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
+            {activeTab === 'map' && (
+              <MapPage entries={entries} onEdit={openEditEditor} />
+            )}
             {activeTab === 'stats' && <StatsPage entries={entries} />}
             {activeTab === 'media' && <MediaGallery entries={entries} />}
           </>
@@ -347,16 +354,6 @@ const App = () => {
           className="hidden"
         />
 
-        {/* This input is used if you trigger import from App.jsx, 
-            but JournalList has its own input which now correctly calls handleImport */}
-        <input
-          type="file"
-          accept="application/json,.json"
-          ref={fileInputRef}
-          onChange={handleImport}
-          className="hidden"
-        />
-        
         {isEditorOpen && (
           <Editor
             entry={editingEntry}
@@ -374,34 +371,74 @@ const App = () => {
       <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur-md z-40 pb-safe">
         <div className="max-w-xl mx-auto flex justify-around py-3">
           <button
-            onClick={() => { setActiveTab('journal'); setShowFlashback(false); }}
-            className={`flex flex-col items-center gap-0.5 ${activeTab === 'journal' && !showFlashback ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+            onClick={() => {
+              setActiveTab('journal');
+              setShowFlashback(false);
+            }}
+            className={`flex flex-col items-center gap-0.5 ${
+              activeTab === 'journal' && !showFlashback
+                ? 'text-blue-600'
+                : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
-            <Home size={22} strokeWidth={activeTab === 'journal' ? 2.5 : 2} />
+            <Home
+              size={22}
+              strokeWidth={activeTab === 'journal' ? 2.5 : 2}
+            />
             <span className="text-[10px] font-medium">Journal</span>
           </button>
-          
+
           <button
-            onClick={() => { setActiveTab('map'); setShowFlashback(false); }}
-            className={`flex flex-col items-center gap-0.5 ${activeTab === 'map' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+            onClick={() => {
+              setActiveTab('map');
+              setShowFlashback(false);
+            }}
+            className={`flex flex-col items-center gap-0.5 ${
+              activeTab === 'map'
+                ? 'text-blue-600'
+                : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
-            <Map size={22} strokeWidth={activeTab === 'map' ? 2.5 : 2} />
+            <Map
+              size={22}
+              strokeWidth={activeTab === 'map' ? 2.5 : 2}
+            />
             <span className="text-[10px] font-medium">Atlas</span>
           </button>
 
           <button
-            onClick={() => { setActiveTab('stats'); setShowFlashback(false); }}
-            className={`flex flex-col items-center gap-0.5 ${activeTab === 'stats' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+            onClick={() => {
+              setActiveTab('stats');
+              setShowFlashback(false);
+            }}
+            className={`flex flex-col items-center gap-0.5 ${
+              activeTab === 'stats'
+                ? 'text-blue-600'
+                : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
-            <BarChart2 size={22} strokeWidth={activeTab === 'stats' ? 2.5 : 2} />
+            <BarChart2
+              size={22}
+              strokeWidth={activeTab === 'stats' ? 2.5 : 2}
+            />
             <span className="text-[10px] font-medium">Stats</span>
           </button>
 
           <button
-            onClick={() => { setActiveTab('media'); setShowFlashback(false); }}
-            className={`flex flex-col items-center gap-0.5 ${activeTab === 'media' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+            onClick={() => {
+              setActiveTab('media');
+              setShowFlashback(false);
+            }}
+            className={`flex flex-col items-center gap-0.5 ${
+              activeTab === 'media'
+                ? 'text-blue-600'
+                : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
-            <Grid size={22} strokeWidth={activeTab === 'media' ? 2.5 : 2} />
+            <Grid
+              size={22}
+              strokeWidth={activeTab === 'media' ? 2.5 : 2}
+            />
             <span className="text-[10px] font-medium">Media</span>
           </button>
         </div>
