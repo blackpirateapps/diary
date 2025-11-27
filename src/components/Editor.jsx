@@ -8,10 +8,12 @@ import {
   Cloud,
   Clock,
   Image as ImageIcon,
-  X
+  Eye,
+  PenLine // Icon for returning to Edit mode
 } from 'lucide-react';
 import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css'; // Import Quill styles
+import 'react-quill/dist/quill.snow.css';
+import DOMPurify from 'dompurify'; // Required for safe Preview
 
 import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
@@ -30,7 +32,6 @@ const MOODS = [
   { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' }
 ];
 
-// Simplified Toolbar for Mobile
 const MODULES = {
   toolbar: [
     ['bold', 'italic', 'underline', 'strike'],
@@ -59,7 +60,7 @@ const Styles = () => (
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* --- QUILL OVERRIDES FOR MOBILE --- */
+    /* --- QUILL CUSTOMIZATION --- */
     .quill {
       display: flex;
       flex-direction: column;
@@ -68,7 +69,7 @@ const Styles = () => (
     .ql-container {
       flex: 1;
       font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 16px; /* Larger font for mobile readability */
+      font-size: 16px;
       border: none !important;
     }
     .ql-toolbar {
@@ -90,6 +91,18 @@ const Styles = () => (
       color: #9ca3af;
       font-size: 16px;
     }
+    /* FIX: Ensure paragraphs have spacing */
+    .ql-editor p {
+      margin-bottom: 1em;
+    }
+
+    /* --- PREVIEW MODE TYPOGRAPHY --- */
+    .prose { color: #374151; line-height: 1.6; font-size: 16px; }
+    .prose p { margin-bottom: 1em; }
+    .prose ul, .prose ol { margin-left: 1.5em; margin-bottom: 1em; }
+    .prose ul { list-style-type: disc; }
+    .prose ol { list-style-type: decimal; }
+    .prose blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #6b7280; font-style: italic; }
   `}</style>
 );
 
@@ -145,9 +158,13 @@ const compressImage = (file) => {
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const entryDate = entry?.date ? new Date(entry.date) : new Date();
 
-  // State
-  // Note: Content will now be HTML string, not Markdown
-  const [content, setContent] = useState(entry?.content || '');
+  // Initialize content: Convert \n to <br> if it's old plain text data
+  // This fixes the "linebreaks not respected" issue for old entries
+  const initialContent = entry?.content 
+    ? (entry.content.includes('<') ? entry.content : entry.content.replace(/\n/g, '<br>')) 
+    : '';
+
+  const [content, setContent] = useState(initialContent);
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
   const [weather, setWeather] = useState(entry?.weather || '');
@@ -155,6 +172,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [images, setImages] = useState(entry?.images || []);
   
   // UI State
+  const [mode, setMode] = useState('edit'); // 'edit' | 'preview'
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -217,14 +235,13 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   };
 
   const handleSave = () => {
-    // Check if empty (Quill leaves <p><br></p> even when empty)
     if (content.replace(/<(.|\n)*?>/g, '').trim().length === 0 && images.length === 0) {
       alert('Please write something or add an image.');
       return;
     }
     onSave({
       id: entry?.id || Date.now().toString(),
-      content, // This is now HTML
+      content,
       mood, location, weather, tags, images,
       date: entry?.date || new Date().toISOString()
     });
@@ -233,6 +250,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const handleDelete = () => {
     if (entry?.id && window.confirm('Delete this entry?')) onDelete(entry.id);
     else if (!entry?.id) onClose();
+  };
+
+  const toggleMode = () => {
+    setMode(prev => prev === 'edit' ? 'preview' : 'edit');
   };
 
   const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Cloud;
@@ -254,6 +275,16 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 <Trash2 size={20} />
               </button>
             )}
+            
+            {/* PREVIEW BUTTON */}
+            <button 
+              onClick={toggleMode}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-xs font-medium"
+            >
+              {mode === 'edit' ? <Eye size={14} /> : <PenLine size={14} />}
+              <span>{mode === 'edit' ? 'Preview' : 'Editor'}</span>
+            </button>
+
             <button onClick={handleSave} className="px-4 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-md shadow-blue-500/20 active:scale-95 transition-all text-sm">
               Done
             </button>
@@ -270,8 +301,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               <div className="absolute inset-0 -z-10">
                 <img src={images[imgIndex]} className="w-full h-full object-cover blur-xl opacity-50" alt="" />
               </div>
-              
-              {/* Image Controls */}
               {images.length > 1 && (
                 <>
                   <button onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/30 backdrop-blur rounded-full text-white"><ChevronLeft size={20} /></button>
@@ -335,32 +364,40 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               <TagInput tags={tags} onAdd={t => setTags([...tags, t])} onRemove={t => setTags(tags.filter(tag => tag !== t))} />
             </div>
 
-            {/* --- EDITOR COMPONENT (QUILL) --- */}
-            {/* The container grows to fill remaining space */}
-            <div className="flex-1 -mx-4 mt-2 border-t border-gray-100">
-               <ReactQuill 
-                ref={editorRef}
-                theme="snow"
-                value={content}
-                onChange={setContent}
-                modules={MODULES}
-                formats={FORMATS}
-                placeholder="Write your thoughts..."
+            {/* --- EDITOR vs PREVIEW SWITCHER --- */}
+            {mode === 'edit' ? (
+              <div className="flex-1 -mx-4 mt-2 border-t border-gray-100">
+                 <ReactQuill 
+                  ref={editorRef}
+                  theme="snow"
+                  value={content}
+                  onChange={setContent}
+                  modules={MODULES}
+                  formats={FORMATS}
+                  placeholder="Write your thoughts..."
+                />
+              </div>
+            ) : (
+              <div 
+                className="flex-1 mt-4 prose max-w-none pb-20"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} 
               />
-            </div>
+            )}
 
           </div>
         </div>
 
-        {/* Attachments Footer (Fixed at Bottom) */}
-        <div className="px-4 py-3 border-t border-gray-100 bg-white flex justify-between items-center text-gray-400 z-20 safe-area-bottom">
-          <span className="text-xs font-bold uppercase tracking-wider">Attachments</span>
-          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors">
-            {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ImageIcon size={16} />}
-            <span className="text-xs">{uploading ? 'Uploading...' : 'Add Image'}</span>
-          </button>
-          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
-        </div>
+        {/* Attachments Footer (Only in Edit Mode) */}
+        {mode === 'edit' && (
+          <div className="px-4 py-3 border-t border-gray-100 bg-white flex justify-between items-center text-gray-400 z-20 safe-area-bottom">
+            <span className="text-xs font-bold uppercase tracking-wider">Attachments</span>
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors">
+              {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ImageIcon size={16} />}
+              <span className="text-xs">{uploading ? 'Uploading...' : 'Add Image'}</span>
+            </button>
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+          </div>
+        )}
 
       </div>
     </>
