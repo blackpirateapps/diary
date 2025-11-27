@@ -33,7 +33,7 @@ const MOODS = [
   { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' }
 ];
 
-// --- STYLES (Cleaned up, only Markdown overrides remain) ---
+// --- STYLES ---
 const Styles = () => (
   <style>{`
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -119,18 +119,16 @@ const compressImage = (file) => {
   });
 };
 
-// --- ANIMATION VARIANTS ---
+// --- UPDATED ANIMATION VARIANTS (Simple Fade) ---
 const containerVariants = {
-  hidden: { opacity: 0, y: "100%" },
+  hidden: { opacity: 0 },
   visible: { 
     opacity: 1, 
-    y: 0,
-    transition: { type: "spring", damping: 25, stiffness: 200 }
+    transition: { duration: 0.2, ease: "easeOut" } // Simple fade, very fast
   },
   exit: { 
     opacity: 0, 
-    y: "100%", 
-    transition: { duration: 0.3, ease: "easeInOut" } 
+    transition: { duration: 0.15, ease: "easeIn" } 
   }
 };
 
@@ -138,12 +136,16 @@ const contentStagger = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.1, delayChildren: 0.2 }
+    transition: { 
+        duration: 0.3,
+        delayChildren: 0.05, // Reduced delay for snappiness
+        staggerChildren: 0.05 
+    }
   }
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 10 },
+  hidden: { opacity: 0, y: 5 }, // Reduced movement range
   visible: { opacity: 1, y: 0 }
 };
 
@@ -521,47 +523,48 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               
               <TagInput tags={tags} onAdd={t => { setTags([...tags, t]); saveData(true); }} onRemove={t => { setTags(tags.filter(tag => tag !== t)); saveData(true); }} />
             </motion.div>
-
+            
             {/* --- EDITOR AREA --- */}
-            <motion.div variants={itemVariants} className="flex-1 w-full min-h-[300px]">
+            <motion.div variants={itemVariants} className="min-h-[200px] flex flex-col gap-4">
               {mode === 'edit' ? (
-                <textarea
-                  ref={textareaRef}
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="What's on your mind?"
-                  className="w-full h-full resize-none outline-none border-none bg-transparent native-input placeholder-gray-300"
-                  spellCheck={false}
-                />
+                <>
+                  <textarea
+                    ref={textareaRef}
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Write your thoughts..."
+                    className="w-full resize-none outline-none text-lg text-gray-700 placeholder-gray-300 native-input bg-transparent leading-relaxed"
+                    style={{ minHeight: '150px' }}
+                  />
+                  
+                  {/* Image Upload Button */}
+                  <div className="flex gap-4 border-t border-gray-100 pt-4 mt-auto">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleImageUpload} 
+                      className="hidden" 
+                      ref={fileInputRef}
+                    />
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="flex items-center gap-2 text-gray-400 hover:text-blue-500 transition-colors text-sm font-medium"
+                    >
+                      <ImageIcon size={18} />
+                      {uploading ? 'Compressing...' : 'Add Photo'}
+                    </button>
+                  </div>
+                </>
               ) : (
-                <div className="native-input text-gray-800">
-                    <MDEditor.Markdown source={content} />
+                <div className="prose prose-gray max-w-none">
+                  <MDEditor.Markdown source={content || '*No content yet...*'} className="wmde-markdown" />
                 </div>
               )}
             </motion.div>
 
           </div>
         </motion.div>
-
-        {/* Attachments Footer */}
-        <motion.div 
-          initial={{ y: "100%" }}
-          animate={{ y: 0 }}
-          className="px-4 py-3 border-t border-gray-100 bg-white/90 backdrop-blur-md flex justify-between items-center text-gray-400 z-20 safe-area-bottom absolute bottom-0 left-0 right-0"
-        >
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">Attachments</span>
-          <motion.button 
-            whileTap={{ scale: 0.95 }}
-            onClick={() => fileInputRef.current?.click()} 
-            disabled={uploading} 
-            className="flex items-center gap-2 px-4 py-2 rounded-full hover:bg-gray-50 text-sm transition-colors text-gray-600 font-medium"
-          >
-            {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ImageIcon size={18} />}
-            <span>{uploading ? 'Uploading...' : 'Add Photo'}</span>
-          </motion.button>
-          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
-        </motion.div>
-
       </motion.div>
     </>
   );
