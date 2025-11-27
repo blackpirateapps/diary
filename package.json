@@ -17,6 +17,8 @@
     "recharts": "^2.12.0",
     "react-calendar-heatmap": "latest", 
     "@uiw/react-md-editor": "latest", 
+    "leaflet": "latest",
+    "react-leaflet": "latest", 
     "react-quill": "latest", 
     "dompurify": "latest"
   },
