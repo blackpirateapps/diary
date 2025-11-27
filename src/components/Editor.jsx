@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ChevronLeft,
   Trash2,
@@ -9,11 +9,12 @@ import {
   Clock,
   Image as ImageIcon,
   Eye,
-  PenLine // Icon for returning to Edit mode
+  PenLine,
+  CheckCircle2
 } from 'lucide-react';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
-import DOMPurify from 'dompurify'; // Required for safe Preview
+import MDEditor from '@uiw/react-md-editor';
+import "@uiw/react-md-editor/markdown-editor.css";
+import "@uiw/react-markdown-preview/markdown.css";
 
 import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
@@ -32,20 +33,6 @@ const MOODS = [
   { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' }
 ];
 
-const MODULES = {
-  toolbar: [
-    ['bold', 'italic', 'underline', 'strike'],
-    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-    ['blockquote'],
-    ['clean']
-  ],
-};
-
-const FORMATS = [
-  'bold', 'italic', 'underline', 'strike',
-  'list', 'bullet', 'blockquote'
-];
-
 // --- STYLES ---
 const Styles = () => (
   <style>{`
@@ -60,49 +47,47 @@ const Styles = () => (
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* --- QUILL CUSTOMIZATION --- */
-    .quill {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-    .ql-container {
-      flex: 1;
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 16px;
-      border: none !important;
-    }
-    .ql-toolbar {
-      border: none !important;
-      border-bottom: 1px solid #f3f4f6 !important;
-      background: #f9fafb;
-      border-radius: 12px 12px 0 0;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    .ql-editor {
-      padding: 16px;
-      line-height: 1.6;
-      color: #374151;
-    }
-    .ql-editor.ql-blank::before {
-      font-style: normal;
-      color: #9ca3af;
-      font-size: 16px;
-    }
-    /* FIX: Ensure paragraphs have spacing */
-    .ql-editor p {
-      margin-bottom: 1em;
+    /* --- THINGS 3 AESTHETIC OVERRIDES --- */
+    
+    /* 1. Typography: Use System Fonts (San Francisco/Segoe UI) instead of Monospace */
+    .w-md-editor-text-pre, 
+    .w-md-editor-text-input, 
+    .w-md-editor-text {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+      font-size: 17px !important; 
+      line-height: 1.6 !important;
+      color: #374151 !important; /* Gray-700 */
     }
 
-    /* --- PREVIEW MODE TYPOGRAPHY --- */
-    .prose { color: #374151; line-height: 1.6; font-size: 16px; }
-    .prose p { margin-bottom: 1em; }
-    .prose ul, .prose ol { margin-left: 1.5em; margin-bottom: 1em; }
-    .prose ul { list-style-type: disc; }
-    .prose ol { list-style-type: decimal; }
-    .prose blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #6b7280; font-style: italic; }
+    /* 2. Editor Container: Clean, no heavy borders */
+    .w-md-editor {
+      background-color: transparent !important;
+      box-shadow: none !important;
+      border: none !important;
+      color: #374151 !important;
+    }
+    
+    /* 3. Hide the default markdown toolbar (we built our own minimal one) */
+    .w-md-editor-toolbar {
+      display: none !important;
+    }
+    
+    /* 4. Preview Area Styling */
+    .wmde-markdown {
+      background-color: transparent !important;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+      font-size: 17px !important;
+      color: #374151 !important;
+    }
+    
+    /* Markdown Element Styling for Preview */
+    .wmde-markdown h1 { border-bottom: none !important; font-weight: 800; font-size: 1.8em; margin-top: 1em; }
+    .wmde-markdown h2 { border-bottom: none !important; font-weight: 700; font-size: 1.5em; margin-top: 1em; }
+    .wmde-markdown p { margin-bottom: 1em; }
+    .wmde-markdown ul { list-style-type: disc !important; padding-left: 1.5em !important; }
+    .wmde-markdown ol { list-style-type: decimal !important; padding-left: 1.5em !important; }
+    .wmde-markdown blockquote { border-left: 4px solid #e5e7eb !important; color: #6b7280 !important; }
+    .wmde-markdown a { color: #2563eb !important; text-decoration: none !important; }
   `}</style>
 );
 
@@ -157,31 +142,59 @@ const compressImage = (file) => {
 // --- MAIN COMPONENT ---
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const entryDate = entry?.date ? new Date(entry.date) : new Date();
+  
+  // Logic: Is this entry from "Today"?
+  const isToday = new Date().toDateString() === entryDate.toDateString();
 
-  // Initialize content: Convert \n to <br> if it's old plain text data
-  // This fixes the "linebreaks not respected" issue for old entries
-  const initialContent = entry?.content 
-    ? (entry.content.includes('<') ? entry.content : entry.content.replace(/\n/g, '<br>')) 
-    : '';
-
-  const [content, setContent] = useState(initialContent);
+  // State
+  const [content, setContent] = useState(entry?.content || '');
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
   const [weather, setWeather] = useState(entry?.weather || '');
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
   
-  // UI State
-  const [mode, setMode] = useState('edit'); // 'edit' | 'preview'
+  // Mode State: If not today, default to Preview
+  const [mode, setMode] = useState(isToday ? 'edit' : 'preview');
+  
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle', 'saving', 'saved'
 
   const fileInputRef = useRef(null);
-  const editorRef = useRef(null);
 
   useEffect(() => { setImgIndex(0); }, [entry?.id]);
+
+  // --- AUTO SAVE LOGIC ---
+  // We use useCallback to create a stable function for the effect
+  const saveData = useCallback((isAutoSave = false) => {
+    // Don't save empty entries on auto-save
+    if (isAutoSave && !content.trim() && images.length === 0) return;
+
+    setSaveStatus('saving');
+    
+    onSave({
+      id: entry?.id || Date.now().toString(),
+      content,
+      mood, location, weather, tags, images,
+      date: entry?.date || new Date().toISOString()
+    });
+
+    // Show "Saved" tick briefly
+    setTimeout(() => setSaveStatus('saved'), 500);
+    setTimeout(() => setSaveStatus('idle'), 2000);
+  }, [entry?.id, entry?.date, content, mood, location, weather, tags, images, onSave]);
+
+  // Trigger Auto-Save when data changes (Debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveData(true);
+    }, 2000); // Wait 2 seconds after last change
+
+    return () => clearTimeout(timer);
+  }, [content, mood, location, weather, tags, images, saveData]);
 
   // Handlers
   const handleImageUpload = async (e) => {
@@ -234,17 +247,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     });
   };
 
-  const handleSave = () => {
-    if (content.replace(/<(.|\n)*?>/g, '').trim().length === 0 && images.length === 0) {
-      alert('Please write something or add an image.');
-      return;
-    }
-    onSave({
-      id: entry?.id || Date.now().toString(),
-      content,
-      mood, location, weather, tags, images,
-      date: entry?.date || new Date().toISOString()
-    });
+  const handleManualSave = () => {
+    saveData(false);
+    onClose(); // Close on manual "Done"
   };
 
   const handleDelete = () => {
@@ -262,13 +267,21 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   return (
     <>
       <Styles />
-      <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden">
+      <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" data-color-mode="light">
         
         {/* --- HEADER --- */}
         <div className="px-4 py-3 flex justify-between items-center bg-white/90 backdrop-blur-md z-30 border-b border-gray-100 absolute top-0 left-0 right-0">
-          <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full">
-            <ChevronLeft size={24} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full">
+              <ChevronLeft size={24} />
+            </button>
+            {/* Auto-Save Indicator */}
+            <div className="text-xs font-medium text-gray-400 flex items-center gap-1 transition-opacity duration-300">
+               {saveStatus === 'saving' && <span>Saving...</span>}
+               {saveStatus === 'saved' && <span className="text-green-500 flex items-center gap-1"><CheckCircle2 size={12}/> Saved</span>}
+            </div>
+          </div>
+
           <div className="flex items-center gap-2">
             {entry?.id && (
               <button onClick={handleDelete} className="p-2 text-red-500 hover:bg-red-50 rounded-full">
@@ -285,7 +298,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               <span>{mode === 'edit' ? 'Preview' : 'Editor'}</span>
             </button>
 
-            <button onClick={handleSave} className="px-4 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-md shadow-blue-500/20 active:scale-95 transition-all text-sm">
+            <button onClick={handleManualSave} className="px-4 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-md shadow-blue-500/20 active:scale-95 transition-all text-sm">
               Done
             </button>
           </div>
@@ -319,15 +332,16 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             </div>
           )}
 
-          <div className="px-4 flex flex-col gap-4 flex-1">
+          <div className="px-4 flex flex-col gap-4 flex-1 pb-20">
             {/* Header Info */}
             <div className="pt-4">
-              <h2 className="text-2xl font-bold text-gray-900">
+              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
                 {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
               </h2>
               <div className="flex items-center gap-2 text-gray-400 text-xs mt-1 font-medium">
                 <Clock size={12} />
                 {entryDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                {!isToday && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide">Past Entry</span>}
               </div>
             </div>
 
@@ -364,40 +378,34 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               <TagInput tags={tags} onAdd={t => setTags([...tags, t])} onRemove={t => setTags(tags.filter(tag => tag !== t))} />
             </div>
 
-            {/* --- EDITOR vs PREVIEW SWITCHER --- */}
-            {mode === 'edit' ? (
-              <div className="flex-1 -mx-4 mt-2 border-t border-gray-100">
-                 <ReactQuill 
-                  ref={editorRef}
-                  theme="snow"
-                  value={content}
-                  onChange={setContent}
-                  modules={MODULES}
-                  formats={FORMATS}
-                  placeholder="Write your thoughts..."
-                />
-              </div>
-            ) : (
-              <div 
-                className="flex-1 mt-4 prose max-w-none pb-20"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} 
+            {/* --- EDITOR vs PREVIEW --- */}
+            <div className="flex-1 w-full mt-2">
+              <MDEditor
+                value={content}
+                onChange={setContent}
+                preview={mode} // 'edit' shows textarea, 'preview' shows rendered HTML
+                height="100%"
+                visibleDragbar={false}
+                hideToolbar={true} // Hidden via CSS, but this prop ensures internal state matches
+                enableScroll={false}
+                textareaProps={{
+                  placeholder: isToday ? "What's on your mind today?" : "Entry for this day..."
+                }}
               />
-            )}
+            </div>
 
           </div>
         </div>
 
-        {/* Attachments Footer (Only in Edit Mode) */}
-        {mode === 'edit' && (
-          <div className="px-4 py-3 border-t border-gray-100 bg-white flex justify-between items-center text-gray-400 z-20 safe-area-bottom">
-            <span className="text-xs font-bold uppercase tracking-wider">Attachments</span>
-            <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors">
-              {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ImageIcon size={16} />}
-              <span className="text-xs">{uploading ? 'Uploading...' : 'Add Image'}</span>
-            </button>
-            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
-          </div>
-        )}
+        {/* Attachments Footer */}
+        <div className="px-4 py-3 border-t border-gray-100 bg-white flex justify-between items-center text-gray-400 z-20 safe-area-bottom">
+          <span className="text-xs font-bold uppercase tracking-wider">Attachments</span>
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors">
+            {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ImageIcon size={16} />}
+            <span className="text-xs">{uploading ? 'Uploading...' : 'Add Image'}</span>
+          </button>
+          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+        </div>
 
       </div>
     </>
