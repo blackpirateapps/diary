@@ -20,6 +20,7 @@
     "leaflet": "latest",
     "leaflet": "^1.9.4",
     "react-leaflet": "^4.2.1", 
+    "framer-motion": "latest", 
     "dompurify": "latest"
   },
   "devDependencies": {
