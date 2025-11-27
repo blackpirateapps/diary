@@ -3,6 +3,7 @@ import Editor from './components/Editor';
 import JournalList from './components/JournalList';
 import StatsPage from './components/StatsPage';
 import MediaGallery from './components/MediaGallery';
+import FlashbackPage from './components/FlashbackPage'; // Import the new component
 import { 
   Plus, Calendar, MapPin, Image as ImageIcon, 
   BarChart2, Grid, Home, X, Hash, 
@@ -14,7 +15,6 @@ import {
 } from 'lucide-react';
 
 
-// You can move INITIAL_ENTRIES to its own file if desired
 const INITIAL_ENTRIES = [
   {
     id: '1',
@@ -55,6 +55,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('journal');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
+  const [showFlashback, setShowFlashback] = useState(false); // New state for Flashback view
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [isImporting, setIsImporting] = useState(false);
 
@@ -97,6 +98,8 @@ const App = () => {
     }
   }, [entries]);
 
+  // FIX: handleSaveEntry no longer closes the editor
+  // This allows silent auto-saves while writing.
   const handleSaveEntry = (entry) => {
     setEntries(prev => {
       if (prev.some(e => e.id === entry.id)) {
@@ -104,6 +107,8 @@ const App = () => {
       }
       return [entry, ...prev];
     });
+    // Removed setIsEditorOpen(false) to support auto-save.
+    // Closing is now handled exclusively by the onClose prop from the "Done" button.
   };
 
   const handleDeleteEntry = (id) => {
@@ -215,21 +220,39 @@ const App = () => {
   return (
     <div className="min-h-screen bg-[#F3F4F6] text-gray-900">
       <div className="max-w-xl mx-auto min-h-screen relative pb-16">
-        {activeTab === 'journal' && (
-          <JournalList
-            entries={entries}
-            onEdit={openEditEditor}
-            onCreate={() => openNewEditor()}
-            onAddOld={handleAddOldEntry}
-            onImport={handleImport}
-            onExport={handleExport}
-            isOffline={isOffline}
-            isImporting={isImporting}
+        
+        {/* CONDITIONAL RENDER: Flashback vs Main Tabs */}
+        {showFlashback ? (
+          <FlashbackPage 
+            entries={entries} 
+            onBack={() => setShowFlashback(false)} 
+            onEdit={(entry) => {
+              setShowFlashback(false);
+              openEditEditor(entry);
+            }}
           />
+        ) : (
+          <>
+            {activeTab === 'journal' && (
+              <JournalList
+                entries={entries}
+                onEdit={openEditEditor}
+                onCreate={() => openNewEditor()}
+                onAddOld={handleAddOldEntry}
+                onImport={handleImport}
+                onExport={handleExport}
+                isOffline={isOffline}
+                isImporting={isImporting}
+                onOpenFlashback={() => setShowFlashback(true)} // Pass trigger to JournalList
+              />
+            )}
+            {activeTab === 'stats' && <StatsPage entries={entries} />}
+            {activeTab === 'media' && <MediaGallery entries={entries} />}
+          </>
         )}
-        {activeTab === 'stats' && <StatsPage entries={entries} />}
-        {activeTab === 'media' && <MediaGallery entries={entries} />}
+
         <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
+        
         {isEditorOpen && (
           <Editor
             entry={editingEntry}
@@ -242,35 +265,37 @@ const App = () => {
           />
         )}
       </div>
+
       {/* Bottom Navigation */}
+      {/* You can optionally hide this when showFlashback is true if you prefer */}
       <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur-md z-40">
-  <div className="max-w-xl mx-auto flex justify-around py-2">
-    <button
-      onClick={() => setActiveTab('journal')}
-      className={`flex flex-col items-center text-xs ${activeTab === 'journal' ? 'text-blue-600' : 'text-gray-400'}`}
-      aria-label="Journal"
-    >
-      <Home size={20} />
-      <span>Journal</span>
-    </button>
-    <button
-      onClick={() => setActiveTab('stats')}
-      className={`flex flex-col items-center text-xs ${activeTab === 'stats' ? 'text-blue-600' : 'text-gray-400'}`}
-      aria-label="Stats"
-    >
-      <BarChart2 size={20} />
-      <span>Stats</span>
-    </button>
-    <button
-      onClick={() => setActiveTab('media')}
-      className={`flex flex-col items-center text-xs ${activeTab === 'media' ? 'text-blue-600' : 'text-gray-400'}`}
-      aria-label="Media"
-    >
-      <Grid size={20} />
-      <span>Media</span>
-    </button>
-  </div>
-</nav>
+        <div className="max-w-xl mx-auto flex justify-around py-2">
+          <button
+            onClick={() => { setActiveTab('journal'); setShowFlashback(false); }}
+            className={`flex flex-col items-center text-xs ${activeTab === 'journal' && !showFlashback ? 'text-blue-600' : 'text-gray-400'}`}
+            aria-label="Journal"
+          >
+            <Home size={20} />
+            <span>Journal</span>
+          </button>
+          <button
+            onClick={() => { setActiveTab('stats'); setShowFlashback(false); }}
+            className={`flex flex-col items-center text-xs ${activeTab === 'stats' ? 'text-blue-600' : 'text-gray-400'}`}
+            aria-label="Stats"
+          >
+            <BarChart2 size={20} />
+            <span>Stats</span>
+          </button>
+          <button
+            onClick={() => { setActiveTab('media'); setShowFlashback(false); }}
+            className={`flex flex-col items-center text-xs ${activeTab === 'media' ? 'text-blue-600' : 'text-gray-400'}`}
+            aria-label="Media"
+          >
+            <Grid size={20} />
+            <span>Media</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 };
