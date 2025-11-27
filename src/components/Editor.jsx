@@ -8,24 +8,14 @@ import {
   Cloud,
   Clock,
   Image as ImageIcon,
-  Eye,
-  Code,
-  X,
-  PenTool,
-  Type
+  X
 } from 'lucide-react';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import MDEditor from '@uiw/react-md-editor'; // The new library
 import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
 
-// --- MARKDOWN CONFIGURATION ---
-marked.use({
-  gfm: true,
-  breaks: true
-});
-
 // --- STYLES ---
+// Custom overrides to match your app's clean aesthetic
 const Styles = () => (
   <style>{`
     @keyframes slideUp {
@@ -35,6 +25,7 @@ const Styles = () => (
     .animate-slideUp {
       animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
+    /* Hide scrollbar for clean look */
     .no-scrollbar::-webkit-scrollbar {
       display: none;
     }
@@ -42,31 +33,28 @@ const Styles = () => (
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
-
-    /* --- MARKDOWN PREVIEW TYPOGRAPHY --- */
-    .prose { color: #374151; line-height: 1.6; }
-    .prose h1 { font-size: 2em; font-weight: 800; margin-top: 1em; margin-bottom: 0.6em; line-height: 1.2; color: #111827; }
-    .prose h2 { font-size: 1.5em; font-weight: 700; margin-top: 1.2em; margin-bottom: 0.6em; line-height: 1.3; color: #1f2937; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.3em; }
-    .prose h3 { font-size: 1.25em; font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; line-height: 1.4; color: #374151; }
-    .prose h4 { font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; }
-    .prose p { margin-bottom: 1em; }
-    .prose ul { list-style-type: disc; padding-left: 1.6em; margin-bottom: 1em; }
-    .prose ol { list-style-type: decimal; padding-left: 1.6em; margin-bottom: 1em; }
-    .prose li { margin-bottom: 0.3em; }
-    .prose li p { margin: 0; }
-    .prose strong, .prose b { font-weight: 700; color: #111827; }
-    .prose em, .prose i { font-style: italic; }
-    .prose u { text-decoration: underline; text-underline-offset: 2px; }
-    .prose blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #4b5563; font-style: italic; margin: 1.5em 0; background: #f9fafb; padding: 0.5em 1em; border-radius: 0 0.375em 0.375em 0; }
-    .prose a { color: #2563eb; text-decoration: underline; font-weight: 500; cursor: pointer; }
-    .prose pre { background-color: #1f2937; color: #e5e7eb; padding: 1em; border-radius: 0.5em; overflow-x: auto; margin: 1em 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.9em; }
-    .prose code { background-color: #f3f4f6; padding: 0.2em 0.4em; border-radius: 0.25em; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.85em; color: #be185d; }
-    .prose pre code { background-color: transparent; padding: 0; color: inherit; font-size: inherit; }
-    .prose img { max-width: 100%; height: auto; border-radius: 0.5em; margin: 1.5em 0; border: 1px solid #e5e7eb; }
-    .prose hr { margin: 2em 0; border: 0; border-top: 1px solid #e5e7eb; }
-    .prose table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.9em; }
-    .prose th { text-align: left; padding: 0.75em; border-bottom: 2px solid #e5e7eb; font-weight: 600; background: #f9fafb; }
-    .prose td { padding: 0.75em; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+    
+    /* Override Editor Styles to fit the theme */
+    .w-md-editor {
+      border: 1px solid #f3f4f6 !important;
+      box-shadow: none !important;
+      border-radius: 12px !important;
+      background-color: transparent !important;
+    }
+    .w-md-editor-toolbar {
+      background-color: #f9fafb !important;
+      border-bottom: 1px solid #f3f4f6 !important;
+      border-radius: 12px 12px 0 0 !important;
+    }
+    .w-md-editor-content {
+      background-color: transparent !important;
+    }
+    /* Ensure text area font matches app */
+    .w-md-editor-text-pre, .w-md-editor-text-input {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+      line-height: 1.6 !important;
+      font-size: 14px !important;
+    }
   `}</style>
 );
 
@@ -84,20 +72,13 @@ const MOODS = [
 ];
 
 // --- HELPERS ---
-
-// Map WMO weather codes to human readable labels
 const getWeatherLabel = (code) => {
   const codes = {
-    0: 'Clear Sky',
-    1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
-    45: 'Fog', 48: 'Fog',
-    51: 'Drizzle', 53: 'Drizzle', 55: 'Drizzle',
-    61: 'Rain', 63: 'Rain', 65: 'Heavy Rain',
-    71: 'Snow', 73: 'Snow', 75: 'Heavy Snow',
-    77: 'Snow Grains',
-    80: 'Rain Showers', 81: 'Rain Showers', 82: 'Rain Showers',
-    85: 'Snow Showers', 86: 'Snow Showers',
-    95: 'Thunderstorm', 96: 'Thunderstorm', 99: 'Thunderstorm'
+    0: 'Clear Sky', 1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
+    45: 'Fog', 48: 'Fog', 51: 'Drizzle', 53: 'Drizzle', 55: 'Drizzle',
+    61: 'Rain', 63: 'Rain', 65: 'Heavy Rain', 71: 'Snow', 73: 'Snow', 75: 'Heavy Snow',
+    77: 'Snow Grains', 80: 'Rain Showers', 81: 'Rain Showers', 82: 'Rain Showers',
+    85: 'Snow Showers', 86: 'Snow Showers', 95: 'Thunderstorm', 96: 'Thunderstorm', 99: 'Thunderstorm'
   };
   return codes[code] || 'Unknown';
 };
@@ -157,44 +138,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
-  
-  // MODES: 'live' (Sans Serif), 'preview' (Read Only), 'source' (Markdown Code)
-  const [mode, setMode] = useState('live'); 
 
   const fileInputRef = useRef(null);
-  const textareaRef = useRef(null);
-  const scrollContainerRef = useRef(null);
 
   useEffect(() => {
     setImgIndex(0);
   }, [entry?.id]);
-
-  // Auto-resize textarea and keep caret visible
-  useEffect(() => {
-    if (!textareaRef.current || (mode !== 'live' && mode !== 'source')) return;
-
-    const el = textareaRef.current;
-    const prevScrollTop = el.scrollTop;
-
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-    el.scrollTop = prevScrollTop;
-
-    // If user is actively editing, ensure textarea stays in view
-    if (document.activeElement === el) {
-      requestAnimationFrame(() => {
-        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        
-        // Nudge scroll container to bottom when content grows
-        if (scrollContainerRef.current) {
-          const sc = scrollContainerRef.current;
-          if (sc.scrollHeight > sc.clientHeight) {
-            sc.scrollTop = sc.scrollHeight;
-          }
-        }
-      });
-    }
-  }, [content, mode]);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -215,62 +164,41 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const handleLocation = async () => {
     if (loadingLocation) return;
-    
     setLoadingLocation(true);
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your browser");
       setLoadingLocation(false);
       return;
     }
-
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        
         try {
-          // 1. Fetch Location Address (Reverse Geocoding)
-          // Using OpenStreetMap Nominatim API (Free, no key)
-          const locRes = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
-          );
+          // 1. Address
+          const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
           if (locRes.ok) {
             const locData = await locRes.json();
             const address = locData.address;
-            // Construct a simple location string: e.g., "City, Country"
-            const city = address.city || address.town || address.village || address.hamlet || address.suburb;
+            const city = address.city || address.town || address.village || address.suburb;
             const country = address.country;
-            const locationStr = [city, country].filter(Boolean).join(', ');
-            setLocation(locationStr || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
+            setLocation([city, country].filter(Boolean).join(', ') || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
           } else {
-             // Fallback to coords if API fails
              setLocation(`${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
           }
-
-          // 2. Fetch Weather
-          // Using Open-Meteo API (Free, no key)
-          const weatherRes = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
-          );
-          
+          // 2. Weather
+          const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
           if (weatherRes.ok) {
             const weatherData = await weatherRes.json();
-            const temp = Math.round(weatherData.current_weather.temperature);
-            const code = weatherData.current_weather.weathercode;
-            const condition = getWeatherLabel(code);
-            setWeather(`${condition} ${temp}°C`);
-          } else {
-            setWeather('');
+            setWeather(`${getWeatherLabel(weatherData.current_weather.weathercode)} ${Math.round(weatherData.current_weather.temperature)}°C`);
           }
-
         } catch (error) {
           console.error("Failed to fetch location/weather", error);
-          alert("Could not fetch details. Check your connection.");
         } finally {
           setLoadingLocation(false);
         }
       },
       (error) => {
-        alert("Unable to retrieve your location. Please allow access.");
+        alert("Unable to retrieve location.");
         setLoadingLocation(false);
       }
     );
@@ -294,27 +222,14 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   };
 
   const handleDelete = () => {
-    if (!entry?.id) {
-      onClose();
-      return;
-    }
+    if (!entry?.id) { onClose(); return; }
     if (window.confirm('Are you sure you want to delete this entry completely?')) {
       onDelete(entry.id);
     }
   };
 
-  const nextImage = () => {
-    if (images.length > 0) {
-      setImgIndex((prev) => (prev + 1) % images.length);
-    }
-  };
-
-  const prevImage = () => {
-    if (images.length > 0) {
-      setImgIndex((prev) => (prev - 1 + images.length) % images.length);
-    }
-  };
-
+  const nextImage = () => images.length > 0 && setImgIndex((prev) => (prev + 1) % images.length);
+  const prevImage = () => images.length > 0 && setImgIndex((prev) => (prev - 1 + images.length) % images.length);
   const deleteCurrentImage = () => {
     if (window.confirm('Delete this image?')) {
       const newImages = images.filter((_, i) => i !== imgIndex);
@@ -323,44 +238,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   };
 
-  // --- CYCLE BUTTON LOGIC ---
-  const toggleMode = () => {
-    setMode(current => {
-      if (current === 'live') return 'preview';
-      if (current === 'preview') return 'source';
-      return 'live';
-    });
-  };
-
-  const getModeIcon = () => {
-    switch (mode) {
-      case 'live': return Type;
-      case 'preview': return Eye;
-      case 'source': return Code;
-      default: return Type;
-    }
-  };
-
-  const getModeLabel = () => {
-    switch (mode) {
-      case 'live': return 'Editor';
-      case 'preview': return 'Preview';
-      case 'source': return 'Source';
-      default: return 'Editor';
-    }
-  };
-
-  const ModeIcon = getModeIcon();
   const CurrentMoodIcon = MOODS.find((m) => m.value === mood)?.icon || Cloud;
   const currentMoodColor = MOODS.find((m) => m.value === mood)?.color || 'text-gray-500';
-
-  const renderedMarkdown = content ? DOMPurify.sanitize(marked.parse(content)) : '';
 
   return (
     <>
       <Styles />
-      <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" style={{ height: '100dvh' }}>
-        {/* Header - Absolute positioned */}
+      <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" data-color-mode="light" style={{ height: '100dvh' }}>
+        
+        {/* --- TOP HEADER --- */}
         <div className="px-4 py-3 flex justify-between items-center bg-white/80 backdrop-blur-md absolute top-0 left-0 right-0 z-20 border-b border-gray-100/50">
           <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
             <ChevronLeft size={24} />
@@ -371,47 +257,30 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 <Trash2 size={20} />
               </button>
             )}
-            
-            <button 
-              onClick={toggleMode}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-xs font-medium"
-              title={`Current mode: ${getModeLabel()}`}
-            >
-              <ModeIcon size={14} />
-              <span>{getModeLabel()}</span>
-            </button>
-
             <button onClick={handleSave} className="px-4 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-md shadow-blue-500/20 active:scale-95 transition-all text-sm">
               Done
             </button>
           </div>
         </div>
 
-        {/* Main Scroll Container with pt-16 for header spacing */}
-        <div 
-          ref={scrollContainerRef} 
-          className="flex-1 overflow-y-auto no-scrollbar pt-16"
-        >
+        {/* --- MAIN CONTENT SCROLL AREA --- */}
+        <div className="flex-1 overflow-y-auto no-scrollbar pt-16 flex flex-col">
+          
+          {/* IMAGE CAROUSEL */}
           {images.length > 0 && (
-            <div className="w-full h-72 relative group bg-gray-100 mb-4">
+            <div className="w-full h-72 relative group bg-gray-100 mb-4 flex-shrink-0">
               <img src={images[imgIndex]} alt="Memory" className="w-full h-full object-contain bg-gray-50/50 backdrop-blur-sm" />
               <div className="absolute inset-0 -z-10 overflow-hidden">
                 <img src={images[imgIndex]} className="w-full h-full object-cover blur-xl opacity-50" alt="" />
               </div>
               {images.length > 1 && (
                 <div className="absolute inset-0 flex items-center justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={prevImage} className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors">
-                    <ChevronLeft size={20} />
-                  </button>
-                  <button onClick={nextImage} className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors">
-                    <ChevronRight size={20} />
-                  </button>
+                  <button onClick={prevImage} className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors"><ChevronLeft size={20} /></button>
+                  <button onClick={nextImage} className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors"><ChevronRight size={20} /></button>
                 </div>
               )}
               <div className="absolute top-4 right-4 flex gap-2">
-                <button onClick={deleteCurrentImage} className="bg-black/30 hover:bg-red-500/80 text-white p-1.5 rounded-full backdrop-blur-md transition-colors">
-                  <Trash2 size={14} />
-                </button>
+                <button onClick={deleteCurrentImage} className="bg-black/30 hover:bg-red-500/80 text-white p-1.5 rounded-full backdrop-blur-md transition-colors"><Trash2 size={14} /></button>
               </div>
               {images.length > 1 && (
                 <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
@@ -423,8 +292,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             </div>
           )}
 
-          <div className="px-6 pb-12">
-            {/* Meta info section */}
+          <div className="px-6 flex-1 flex flex-col pb-6">
+            
+            {/* DATE & TIME */}
             <div className="mb-6">
               <h2 className="text-3xl font-extrabold text-gray-900 leading-tight">
                 {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
@@ -437,6 +307,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               </div>
             </div>
 
+            {/* METADATA BAR (Mood, Loc, Tags) */}
             <div className="flex flex-wrap gap-3 mb-6 relative z-10">
               <div className="relative">
                 <button onClick={() => setIsMoodOpen(!isMoodOpen)} className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-xs font-medium transition-colors ${mood ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -465,51 +336,32 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                   {weather}
                 </div>
               )}
-
               <TagInput tags={tags} onAdd={t => setTags([...tags, t])} onRemove={t => setTags(tags.filter(tag => tag !== t))} />
             </div>
 
-            {/* LIVE MODE - Sans Serif Editor */}
-            {mode === 'live' && (
-              <textarea
-                ref={textareaRef}
+            {/* --- EDITOR LIBRARY --- */}
+            <div className="flex-1 min-h-[400px]">
+              <MDEditor
                 value={content}
-                onChange={e => setContent(e.target.value)}
-                placeholder="Start writing..."
-                className="w-full min-h-[300px] resize-none text-xl text-gray-800 placeholder-gray-300 border-none outline-none focus:ring-0 font-sans leading-relaxed pb-20 overflow-hidden"
+                onChange={setContent}
+                preview="edit"
+                height="100%"
+                visibleDragbar={false}
+                hideToolbar={false}
+                enableScroll={true}
               />
-            )}
+            </div>
 
-            {/* SOURCE MODE - Markdown Code */}
-            {mode === 'source' && (
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={e => setContent(e.target.value)}
-                placeholder="Edit markdown source..."
-                spellCheck={false}
-                className="w-full min-h-[300px] resize-none text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg p-4 font-mono leading-relaxed bg-gray-50 pb-20 overflow-hidden"
-              />
-            )}
-
-            {/* PREVIEW MODE - Read Only */}
-            {mode === 'preview' && (
-              <div
-                className="w-full min-h-[300px] prose prose-blue max-w-none pb-20"
-                dangerouslySetInnerHTML={{ __html: renderedMarkdown }}
-              />
-            )}
-
-            <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center text-gray-400">
+            {/* ATTACHMENTS BAR */}
+            <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center text-gray-400">
               <span className="text-xs uppercase tracking-wider font-medium">Attachments</span>
-              <div className="flex gap-2">
-                <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors disabled:opacity-50">
-                  {uploading ? (<div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />) : (<ImageIcon size={18} />)}
-                  <span className="text-xs">{uploading ? 'Processing...' : 'Add Image'}</span>
-                </button>
-              </div>
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm transition-colors disabled:opacity-50">
+                {uploading ? (<div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />) : (<ImageIcon size={18} />)}
+                <span className="text-xs">{uploading ? 'Processing...' : 'Add Image'}</span>
+              </button>
             </div>
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+            
           </div>
         </div>
       </div>
