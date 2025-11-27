@@ -14,6 +14,7 @@ import {
 import MDEditor from '@uiw/react-md-editor';
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
+import { motion, AnimatePresence } from 'framer-motion';
 
 import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
@@ -32,17 +33,9 @@ const MOODS = [
   { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' }
 ];
 
-// --- STYLES ---
+// --- STYLES (Cleaned up, only Markdown overrides remain) ---
 const Styles = () => (
   <style>{`
-    @keyframes slideUp {
-      from { transform: translateY(100%); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-    .animate-slideUp {
-      animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
@@ -58,7 +51,7 @@ const Styles = () => (
     input[type="time"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
       opacity: 0.6;
-      filter: invert(0.5); /* Make icon grey */
+      filter: invert(0.5);
     }
 
     /* MARKDOWN PREVIEW STYLING */
@@ -126,22 +119,43 @@ const compressImage = (file) => {
   });
 };
 
+// --- ANIMATION VARIANTS ---
+const containerVariants = {
+  hidden: { opacity: 0, y: "100%" },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { type: "spring", damping: 25, stiffness: 200 }
+  },
+  exit: { 
+    opacity: 0, 
+    y: "100%", 
+    transition: { duration: 0.3, ease: "easeInOut" } 
+  }
+};
+
+const contentStagger = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1, delayChildren: 0.2 }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0 }
+};
+
 // --- MAIN COMPONENT ---
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
-  // CRITICAL: Generate ID once on mount to prevent duplicates during auto-save
   const [entryId] = useState(entry?.id || Date.now().toString());
-  
-  // State for Date/Time Management
   const [currentDate, setCurrentDate] = useState(entry?.date ? new Date(entry.date) : new Date());
-  
-  // Logic: Is this entry from "Today"? (Based on the selected date)
   const isToday = currentDate.toDateString() === new Date().toDateString();
 
-  // Content State
   const [content, setContent] = useState(entry?.content || '');
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
-  // State for Coordinates (Hidden from UI but saved for Map)
   const [locationLat, setLocationLat] = useState(entry?.locationLat || null);
   const [locationLng, setLocationLng] = useState(entry?.locationLng || null);
 
@@ -149,7 +163,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
   
-  // Mode State: Default to Preview if not today, Edit if today
   const [mode, setMode] = useState(isToday ? 'edit' : 'preview');
   
   const [isMoodOpen, setIsMoodOpen] = useState(false);
@@ -161,7 +174,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
-  // Auto-Resize Textarea
   useEffect(() => {
     if (mode === 'edit' && textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -169,13 +181,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   }, [content, mode]);
 
-  // --- AUTO SAVE LOGIC ---
   const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
     if (isAutoSave && !content.trim() && images.length === 0) return;
-
     setSaveStatus('saving');
-    
-    // Use overrideDate if provided (for immediate time updates), otherwise use state
     const dateToSave = overrideDate || currentDate;
 
     onSave({
@@ -183,8 +191,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       content,
       mood, 
       location, 
-      locationLat, // Persist Latitude
-      locationLng, // Persist Longitude
+      locationLat, 
+      locationLng, 
       weather, 
       tags, 
       images,
@@ -195,7 +203,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     setTimeout(() => setSaveStatus('idle'), 2500);
   }, [entryId, currentDate, content, mood, location, locationLat, locationLng, weather, tags, images, onSave]);
 
-  // Trigger Auto-Save 2 seconds after content changes
   useEffect(() => {
     if (content !== (entry?.content || '')) {
       const timer = setTimeout(() => saveData(true), 2000);
@@ -203,19 +210,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   }, [content, saveData, entry?.content]);
 
-  // --- HANDLERS ---
-  
   const handleTimeChange = (e) => {
     const timeValue = e.target.value;
     if (!timeValue) return;
-
     const [hours, minutes] = timeValue.split(':').map(Number);
     const newDate = new Date(currentDate);
     newDate.setHours(hours);
     newDate.setMinutes(minutes);
-    
     setCurrentDate(newDate);
-    saveData(true, newDate); // Save immediately when time changes
+    saveData(true, newDate);
   };
 
   const handleDeleteImage = () => {
@@ -254,30 +257,19 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
-      
-      // Update state with raw coordinates immediately
       setLocationLat(latitude);
       setLocationLng(longitude);
-
       try {
-        // Reverse Geocoding
         const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
         if (locRes.ok) {
           const data = await locRes.json();
           const address = data.address;
-          
-          // Construct a detailed address string
-          // Priority: Road/Street -> City/Town -> Country
           const street = address.road || address.pedestrian || address.building || '';
           const city = address.city || address.town || address.village || address.suburb || address.hamlet;
           const country = address.country;
-          
-          // Filter out empty parts and join
           const newLoc = [street, city, country].filter(Boolean).join(', ');
           setLocation(newLoc);
         }
-        
-        // Fetch Weather
         const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
         if (weatherRes.ok) {
           const data = await weatherRes.json();
@@ -286,7 +278,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         }
       } catch (e) {
         console.error(e);
-        // Fallback if API fails but we have coords
         if (!location) setLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
       } finally {
         setLoadingLocation(false);
@@ -311,102 +302,154 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Cloud;
   const currentMoodColor = MOODS.find(m => m.value === mood)?.color || 'text-gray-500';
-
-  // Format time for input (HH:mm)
   const timeString = currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
   return (
     <>
       <Styles />
-      <div className="fixed inset-0 bg-white z-50 flex flex-col animate-slideUp overflow-hidden" data-color-mode="light">
+      <motion.div 
+        className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden" 
+        data-color-mode="light"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+      >
         
         {/* --- HEADER --- */}
         <div className="px-4 py-3 flex justify-between items-center bg-white/95 backdrop-blur-xl z-30 border-b border-gray-100 absolute top-0 left-0 right-0 h-16">
           <div className="flex items-center gap-3">
-            <button onClick={onClose} className="p-2 -ml-2 text-blue-500 hover:bg-blue-50 rounded-full transition-colors flex items-center gap-1">
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
+              onClick={onClose} 
+              className="p-2 -ml-2 text-blue-500 hover:bg-blue-50 rounded-full transition-colors flex items-center gap-1"
+            >
               <ChevronLeft size={24} />
               <span className="text-base font-medium">Back</span>
-            </button>
-            <div className="text-xs font-medium text-gray-400 flex items-center gap-1 transition-opacity duration-300">
-               {saveStatus === 'saving' && <span>Saving...</span>}
-               {saveStatus === 'saved' && <span className="text-green-500 flex items-center gap-1"><CheckCircle2 size={12}/> Saved</span>}
-            </div>
+            </motion.button>
+            <AnimatePresence mode="wait">
+              {saveStatus !== 'idle' && (
+                 <motion.div 
+                   initial={{ opacity: 0, x: -10 }} 
+                   animate={{ opacity: 1, x: 0 }} 
+                   exit={{ opacity: 0 }}
+                   className="text-xs font-medium text-gray-400 flex items-center gap-1"
+                 >
+                    {saveStatus === 'saving' && <span>Saving...</span>}
+                    {saveStatus === 'saved' && <span className="text-green-500 flex items-center gap-1"><CheckCircle2 size={12}/> Saved</span>}
+                 </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="flex items-center gap-2">
             {entry?.id && (
-              <button onClick={handleDeleteEntry} className="p-2 text-red-400 hover:bg-red-50 rounded-full transition-colors">
+              <motion.button 
+                whileTap={{ scale: 0.9 }}
+                onClick={handleDeleteEntry} 
+                className="p-2 text-red-400 hover:bg-red-50 rounded-full transition-colors"
+              >
                 <Trash2 size={20} />
-              </button>
+              </motion.button>
             )}
             
-            <button 
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
               onClick={toggleMode}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-xs font-medium"
             >
               {mode === 'edit' ? <Eye size={14} /> : <PenLine size={14} />}
               <span>{mode === 'edit' ? 'Preview' : 'Edit'}</span>
-            </button>
+            </motion.button>
 
-            <button onClick={handleManualDone} className="px-5 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-lg shadow-blue-500/30 active:scale-95 transition-all text-sm">
+            <motion.button 
+              whileTap={{ scale: 0.95 }}
+              onClick={handleManualDone} 
+              className="px-5 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-lg shadow-blue-500/30 transition-all text-sm"
+            >
               Done
-            </button>
+            </motion.button>
           </div>
         </div>
 
         {/* --- MAIN SCROLL AREA --- */}
-        <div className="flex-1 overflow-y-auto no-scrollbar pt-16 flex flex-col bg-white">
+        <motion.div 
+          className="flex-1 overflow-y-auto no-scrollbar pt-16 flex flex-col bg-white"
+          variants={contentStagger}
+        >
           
           {/* IMAGE CAROUSEL */}
-          {images.length > 0 && (
-            <div className="w-full h-72 relative group bg-gray-50 flex-shrink-0">
-              <img src={images[imgIndex]} alt="Memory" className="w-full h-full object-contain" />
-              <div className="absolute inset-0 -z-10">
-                <img src={images[imgIndex]} className="w-full h-full object-cover blur-2xl opacity-30" alt="" />
-              </div>
-              
-              {/* Navigation Controls - Visible on Hover/Touch */}
-              {images.length > 1 && (
-                <>
-                  <button 
-                    onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} 
-                    className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-black/70 shadow-lg"
-                  >
-                    <ChevronLeft size={24} />
-                  </button>
-                  <button 
-                    onClick={() => setImgIndex((i) => (i + 1) % images.length)} 
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-black/70 shadow-lg"
-                  >
-                    <ChevronLeft size={24} className="rotate-180" />
-                  </button>
-                  {/* Dots */}
-                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
-                    {images.map((_, i) => (
-                      <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all shadow-sm ${i === imgIndex ? 'bg-white w-3' : 'bg-white/50'}`} />
-                    ))}
-                  </div>
-                </>
-              )}
-              
-              {/* Delete Image Button */}
-              <button 
-                onClick={handleDeleteImage} 
-                className="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur-md text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-500 shadow-lg"
+          <AnimatePresence>
+            {images.length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "18rem" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="w-full relative group bg-gray-50 flex-shrink-0"
               >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          )}
+                <motion.img 
+                  key={imgIndex}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                  src={images[imgIndex]} 
+                  alt="Memory" 
+                  className="w-full h-full object-contain" 
+                />
+                
+                <div className="absolute inset-0 -z-10">
+                   {/* Blur Background */}
+                  <img src={images[imgIndex]} className="w-full h-full object-cover blur-2xl opacity-30" alt="" />
+                </div>
+                
+                {/* Navigation Controls */}
+                {images.length > 1 && (
+                  <>
+                    <motion.button 
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} 
+                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 shadow-lg"
+                    >
+                      <ChevronLeft size={24} />
+                    </motion.button>
+                    <motion.button 
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setImgIndex((i) => (i + 1) % images.length)} 
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 shadow-lg"
+                    >
+                      <ChevronLeft size={24} className="rotate-180" />
+                    </motion.button>
+                    
+                    <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                      {images.map((_, i) => (
+                        <motion.div 
+                          key={i} 
+                          layout
+                          className={`h-1.5 rounded-full shadow-sm ${i === imgIndex ? 'bg-white w-3' : 'bg-white/50 w-1.5'}`} 
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+                
+                <motion.button 
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleDeleteImage} 
+                  className="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur-md text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 shadow-lg"
+                >
+                  <Trash2 size={16} />
+                </motion.button>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="px-6 flex flex-col gap-6 flex-1 pb-32 max-w-2xl mx-auto w-full">
             {/* Header Info */}
-            <div className="pt-8 border-b border-gray-100 pb-6">
+            <motion.div variants={itemVariants} className="pt-8 border-b border-gray-100 pb-6">
               <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight leading-tight">
                 {currentDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
               </h2>
               <div className="flex items-center gap-3 text-gray-400 text-sm mt-2 font-medium">
-                {/* Editable Time Input */}
                 <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors cursor-pointer group">
                     <Clock size={14} className="text-gray-400 group-hover:text-blue-500 transition-colors" />
                     <input 
@@ -419,21 +462,35 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 
                 {!isToday && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wide font-bold">Past Entry</span>}
               </div>
-            </div>
+            </motion.div>
 
             {/* Metadata Bar */}
-            <div className="flex flex-wrap gap-2">
+            <motion.div variants={itemVariants} className="flex flex-wrap gap-2">
               <div className="relative">
-                <button onClick={() => setIsMoodOpen(!isMoodOpen)} className={`flex items-center gap-1.5 pl-3 pr-4 py-1.5 rounded-full text-sm font-medium transition-colors ${mood ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                <motion.button 
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setIsMoodOpen(!isMoodOpen)} 
+                  className={`flex items-center gap-1.5 pl-3 pr-4 py-1.5 rounded-full text-sm font-medium transition-colors ${mood ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}
+                >
                   <CurrentMoodIcon size={16} className={currentMoodColor} />
                   <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
-                </button>
-                {isMoodOpen && (
-                  <>
-                    <div className="fixed inset-0 z-20" onClick={() => setIsMoodOpen(false)} />
-                    <MoodPopup currentMood={mood} onChange={(m) => { setMood(m); saveData(true); }} onClose={() => setIsMoodOpen(false)} />
-                  </>
-                )}
+                </motion.button>
+                
+                <AnimatePresence>
+                  {isMoodOpen && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setIsMoodOpen(false)} />
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                        className="absolute z-30 top-full mt-2"
+                      >
+                         <MoodPopup currentMood={mood} onChange={(m) => { setMood(m); saveData(true); }} onClose={() => setIsMoodOpen(false)} />
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
 
               <div className="flex items-center bg-gray-50 rounded-full pl-3 pr-2 py-1.5 hover:bg-gray-100 transition-colors">
@@ -445,9 +502,14 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     placeholder="Add Location" 
                     className="bg-transparent text-sm w-full min-w-[120px] outline-none text-gray-600 placeholder-gray-400 native-input truncate" 
                 />
-                <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-blue-500 hover:bg-blue-100 rounded-full transition-colors ml-1">
+                <motion.button 
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleLocation} 
+                  disabled={loadingLocation} 
+                  className="p-1 text-blue-500 hover:bg-blue-100 rounded-full transition-colors ml-1"
+                >
                   {loadingLocation ? <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <Plus size={14} />}
-                </button>
+                </motion.button>
               </div>
 
               {weather && (
@@ -458,10 +520,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               )}
               
               <TagInput tags={tags} onAdd={t => { setTags([...tags, t]); saveData(true); }} onRemove={t => { setTags(tags.filter(tag => tag !== t)); saveData(true); }} />
-            </div>
+            </motion.div>
 
             {/* --- EDITOR AREA --- */}
-            <div className="flex-1 w-full min-h-[300px]">
+            <motion.div variants={itemVariants} className="flex-1 w-full min-h-[300px]">
               {mode === 'edit' ? (
                 <textarea
                   ref={textareaRef}
@@ -476,22 +538,31 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     <MDEditor.Markdown source={content} />
                 </div>
               )}
-            </div>
+            </motion.div>
 
           </div>
-        </div>
+        </motion.div>
 
         {/* Attachments Footer */}
-        <div className="px-4 py-3 border-t border-gray-100 bg-white/90 backdrop-blur-md flex justify-between items-center text-gray-400 z-20 safe-area-bottom absolute bottom-0 left-0 right-0">
+        <motion.div 
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          className="px-4 py-3 border-t border-gray-100 bg-white/90 backdrop-blur-md flex justify-between items-center text-gray-400 z-20 safe-area-bottom absolute bottom-0 left-0 right-0"
+        >
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">Attachments</span>
-          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-4 py-2 rounded-full hover:bg-gray-50 text-sm transition-colors text-gray-600 font-medium">
+          <motion.button 
+            whileTap={{ scale: 0.95 }}
+            onClick={() => fileInputRef.current?.click()} 
+            disabled={uploading} 
+            className="flex items-center gap-2 px-4 py-2 rounded-full hover:bg-gray-50 text-sm transition-colors text-gray-600 font-medium"
+          >
             {uploading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ImageIcon size={18} />}
             <span>{uploading ? 'Uploading...' : 'Add Photo'}</span>
-          </button>
+          </motion.button>
           <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
-        </div>
+        </motion.div>
 
-      </div>
+      </motion.div>
     </>
   );
 };
