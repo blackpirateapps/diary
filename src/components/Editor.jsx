@@ -84,6 +84,24 @@ const MOODS = [
 ];
 
 // --- HELPERS ---
+
+// Map WMO weather codes to human readable labels
+const getWeatherLabel = (code) => {
+  const codes = {
+    0: 'Clear Sky',
+    1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
+    45: 'Fog', 48: 'Fog',
+    51: 'Drizzle', 53: 'Drizzle', 55: 'Drizzle',
+    61: 'Rain', 63: 'Rain', 65: 'Heavy Rain',
+    71: 'Snow', 73: 'Snow', 75: 'Heavy Snow',
+    77: 'Snow Grains',
+    80: 'Rain Showers', 81: 'Rain Showers', 82: 'Rain Showers',
+    85: 'Snow Showers', 86: 'Snow Showers',
+    95: 'Thunderstorm', 96: 'Thunderstorm', 99: 'Thunderstorm'
+  };
+  return codes[code] || 'Unknown';
+};
+
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     if (file.size > 10 * 1024 * 1024) {
@@ -151,7 +169,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     setImgIndex(0);
   }, [entry?.id]);
 
-  // Auto-resize textarea and keep caret visible - THE KEY FIX
+  // Auto-resize textarea and keep caret visible
   useEffect(() => {
     if (!textareaRef.current || (mode !== 'live' && mode !== 'source')) return;
 
@@ -206,15 +224,53 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setTimeout(() => {
-          setLocation(`${position.coords.latitude.toFixed(2)}, ${position.coords.longitude.toFixed(2)}`);
-          setWeather("Sunny 24°C"); 
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        try {
+          // 1. Fetch Location Address (Reverse Geocoding)
+          // Using OpenStreetMap Nominatim API (Free, no key)
+          const locRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          );
+          if (locRes.ok) {
+            const locData = await locRes.json();
+            const address = locData.address;
+            // Construct a simple location string: e.g., "City, Country"
+            const city = address.city || address.town || address.village || address.hamlet || address.suburb;
+            const country = address.country;
+            const locationStr = [city, country].filter(Boolean).join(', ');
+            setLocation(locationStr || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
+          } else {
+             // Fallback to coords if API fails
+             setLocation(`${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
+          }
+
+          // 2. Fetch Weather
+          // Using Open-Meteo API (Free, no key)
+          const weatherRes = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+          );
+          
+          if (weatherRes.ok) {
+            const weatherData = await weatherRes.json();
+            const temp = Math.round(weatherData.current_weather.temperature);
+            const code = weatherData.current_weather.weathercode;
+            const condition = getWeatherLabel(code);
+            setWeather(`${condition} ${temp}°C`);
+          } else {
+            setWeather('');
+          }
+
+        } catch (error) {
+          console.error("Failed to fetch location/weather", error);
+          alert("Could not fetch details. Check your connection.");
+        } finally {
           setLoadingLocation(false);
-        }, 1000);
+        }
       },
-      () => {
-        alert("Unable to retrieve your location");
+      (error) => {
+        alert("Unable to retrieve your location. Please allow access.");
         setLoadingLocation(false);
       }
     );
