@@ -1,12 +1,12 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Image, Svg, Path, Rect, Line, G } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Image, Svg, Path, Rect, Line } from '@react-pdf/renderer';
 
 // --- STYLES ---
 const styles = StyleSheet.create({
   page: {
     padding: 40,
     backgroundColor: '#ffffff',
-    fontFamily: 'Times-Roman', // Changed to Serif for print look
+    fontFamily: 'Times-Roman',
     fontSize: 11,
     lineHeight: 1.4,
     color: '#1f2937'
@@ -58,14 +58,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'justify'
   },
-  // Markdown Styles (Tighter spacing)
+  // Markdown Styles
   h1: { fontSize: 16, fontFamily: 'Times-Bold', marginTop: 10, marginBottom: 4, color: '#111827' },
   h2: { fontSize: 13, fontFamily: 'Times-Bold', marginTop: 8, marginBottom: 2, color: '#374151' },
-  paragraph: { marginBottom: 4 }, // Decreased spacing
+  paragraph: { marginBottom: 4 },
   bold: { fontFamily: 'Times-Bold' },
   italic: { fontFamily: 'Times-Italic' },
   
-  // Gallery (Full Width)
+  // Gallery (Grid Style)
   sectionTitle: {
     fontSize: 12,
     fontFamily: 'Times-Bold',
@@ -78,16 +78,24 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
+  galleryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10
+  },
   imageWrapper: {
-    width: '100%', // Full width
-    height: 300,   // Fixed height, or allow auto if aspect ratio permits
-    marginBottom: 15,
+    width: '30%',        // 3 Columns (approx 30% each + gap)
+    height: 150,         // Fixed height grid cells
+    marginBottom: 10,
     borderRadius: 2,
+    backgroundColor: '#f9fafb', // Light grey background for letterboxing
+    alignItems: 'center',       // Center horizontally
+    justifyContent: 'center'    // Center vertically
   },
   image: {
     width: '100%',
     height: '100%',
-    objectFit: 'contain' // Ensures whole image is seen
+    objectFit: 'contain' // Key change: Ensures image is scaled to fit WITHOUT cropping
   },
 
   // Sleep Graphs
@@ -138,32 +146,27 @@ const SleepGraphPdf = ({ session }) => {
   const width = 500;
   const height = 80;
   const actHeight = 40;
-  const padding = 20;
 
   // 1. Prepare Hypnogram Data
   const hypnoData = session.hypnogram || [];
   const maxTime = hypnoData.length > 0 ? hypnoData[hypnoData.length - 1].time : (session.duration * 60);
   
-  // Y-Positions for stages: Deep(0) -> Bottom, Awake(3) -> Top
-  // We flip mapping for SVG: Top=0.
   const getStageY = (stage) => {
-      // 0:Deep, 1:REM, 2:Light, 3:Awake
-      // Map to: Deep=80, REM=60, Light=40, Awake=20
       switch(stage) {
-          case 3: return 20;
-          case 2: return 40;
-          case 1: return 60;
-          case 0: return 80;
+          case 3: return 20; // Awake
+          case 2: return 40; // Light
+          case 1: return 60; // REM
+          case 0: return 80; // Deep
           default: return 40;
       }
   };
 
   const getStageColor = (stage) => {
       switch(stage) {
-          case 0: return "#4c1d95"; // Deep (Dark Purple)
-          case 1: return "#8b5cf6"; // REM (Purple)
-          case 2: return "#c4b5fd"; // Light (Light Purple)
-          case 3: return "#fbbf24"; // Awake (Yellow)
+          case 0: return "#4c1d95"; 
+          case 1: return "#8b5cf6"; 
+          case 2: return "#c4b5fd"; 
+          case 3: return "#fbbf24"; 
           default: return "#e5e7eb";
       }
   };
@@ -172,7 +175,6 @@ const SleepGraphPdf = ({ session }) => {
   const moveData = session.movementData || [];
   const maxVal = Math.max(...moveData.map(d => d.value), 10);
   
-  // Generate Path for Actigraphy
   let actPath = `M 0 ${actHeight}`;
   moveData.forEach((pt, i) => {
       const x = (i / moveData.length) * width;
@@ -200,7 +202,7 @@ const SleepGraphPdf = ({ session }) => {
                const x2 = (pt.time / maxTime) * width;
                const w = x2 - x1;
                const y = getStageY(prev.stage);
-               const h = height - y; // Fill to bottom approach for Area chart look
+               const h = height - y; 
                
                return (
                    <Rect 
@@ -215,7 +217,6 @@ const SleepGraphPdf = ({ session }) => {
                );
            })}
            
-           {/* Labels */}
            <Text x={5} y={15} fontSize={8} fill="#9ca3af">Awake</Text>
            <Text x={5} y={75} fontSize={8} fill="#9ca3af">Deep</Text>
         </Svg>
@@ -224,7 +225,7 @@ const SleepGraphPdf = ({ session }) => {
       {/* 2. Actigraphy Graph */}
       {moveData.length > 0 && (
           <View style={styles.graphContainer}>
-            <Text style={styles.graphLabel}>Actigraphy (Movement)</Text>
+            <Text style={styles.graphLabel}>Actigraphy</Text>
             <Svg width={width} height={actHeight}>
                 <Path d={actPath} fill="#3b82f6" fillOpacity={0.3} stroke="#2563eb" strokeWidth={1} />
             </Svg>
@@ -258,7 +259,7 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
           )}
         </View>
 
-        {/* META (Text Only) */}
+        {/* META */}
         <View style={styles.metaContainer}>
           <View style={styles.metaItem}>
             <Text style={{ fontFamily: 'Times-Bold' }}>Mood: </Text>
@@ -272,12 +273,12 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
           )}
         </View>
 
-        {/* BODY CONTENT */}
+        {/* BODY */}
         <View style={styles.body}>
           <MarkdownText text={entry.content} />
         </View>
 
-        {/* SLEEP DATA SECTION */}
+        {/* SLEEP DATA */}
         {sleepSessions && sleepSessions.length > 0 && (
             <View wrap={false} style={{ marginTop: 10 }}>
                 <Text style={styles.sectionTitle}>Sleep Insights</Text>
@@ -292,15 +293,18 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
             </View>
         )}
 
-        {/* IMAGE GALLERY (Full Size Stack) */}
+        {/* IMAGE GALLERY (GRID) */}
         {entry.images && entry.images.length > 0 && (
           <View wrap={false}>
             <Text style={styles.sectionTitle}>Attachments</Text>
-            {entry.images.map((imgSrc, index) => (
+            <View style={styles.galleryGrid}>
+              {entry.images.map((imgSrc, index) => (
                 <View key={index} style={styles.imageWrapper}>
+                  {/* objectFit: 'contain' ensures NO cropping */}
                   <Image src={imgSrc} style={styles.image} />
                 </View>
-            ))}
+              ))}
+            </View>
           </View>
         )}
 
