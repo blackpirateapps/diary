@@ -1,25 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  ChevronLeft,
-  Trash2,
-  Plus,
-  MapPin,
-  Cloud,
-  Clock,
-  Image as ImageIcon,
-  Eye,
-  PenLine,
-  CheckCircle2
+  ChevronLeft, Trash2, Plus, MapPin, Cloud, Clock, Image as ImageIcon,
+  Eye, PenLine, CheckCircle2, Moon, Activity
 } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import { motion, AnimatePresence } from 'framer-motion';
+// --- NEW IMPORTS FOR CHART & DB ---
+import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db, useBlobUrl } from '../db'; 
 
 import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
-// --- IMPORT FROM DB (Ensure db.js exists as per previous steps) ---
-import { useBlobUrl } from '../db'; 
 
 // --- CONFIGURATION ---
 const MOODS = [
@@ -40,40 +34,61 @@ const Styles = () => (
   <style>{`
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-    /* NATIVE INPUTS & TYPOGRAPHY */
     .native-input {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       font-size: 17px;
       line-height: 1.5;
       color: #374151;
     }
-    
-    /* TIME INPUT STYLING */
-    input[type="time"]::-webkit-calendar-picker-indicator {
-      cursor: pointer;
-      opacity: 0.6;
-      filter: invert(0.5);
-    }
-
-    /* MARKDOWN PREVIEW STYLING */
-    .wmde-markdown {
-      background-color: transparent !important;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-      font-size: 17px !important;
-      color: #374151 !important;
-    }
+    input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; filter: invert(0.5); }
+    .wmde-markdown { background-color: transparent !important; color: #374151 !important; font-family: inherit !important; }
     .wmde-markdown h1 { border-bottom: none !important; font-weight: 800; font-size: 1.8em; margin-top: 1em; color: #111827 !important; }
     .wmde-markdown h2 { border-bottom: none !important; font-weight: 700; font-size: 1.5em; margin-top: 1em; color: #1f2937 !important; }
-    .wmde-markdown p { margin-bottom: 0.8em; }
-    .wmde-markdown ul { list-style-type: disc !important; padding-left: 1.5em !important; margin-bottom: 1em !important; }
-    .wmde-markdown ol { list-style-type: decimal !important; padding-left: 1.5em !important; margin-bottom: 1em !important; }
-    .wmde-markdown blockquote { border-left: 4px solid #e5e7eb !important; color: #6b7280 !important; padding-left: 1em !important; margin: 1em 0 !important; }
-    .wmde-markdown a { color: #2563eb !important; text-decoration: none !important; }
   `}</style>
 );
 
-// --- HELPERS ---
+// --- COMPRESSOR ---
+const compressImage = (file) => {
+  return new Promise((resolve, reject) => {
+    if (file.size > 50 * 1024 * 1024) {
+      reject(new Error('Image too large (Max 50MB).'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 2560; 
+        const MAX_HEIGHT = 2560;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        } else if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Compression failed.'));
+        }, 'image/webp', 0.95);
+      };
+      img.onerror = () => reject(new Error('Failed to load image.'));
+    };
+    reader.onerror = () => reject(new Error('Failed to read file.'));
+  });
+};
+
 const getWeatherLabel = (code) => {
   const codes = {
     0: 'Clear Sky', 1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
@@ -85,76 +100,66 @@ const getWeatherLabel = (code) => {
   return codes[code] || 'Unknown';
 };
 
-// --- UPDATED: HIGH QUALITY / LOW SIZE COMPRESSION ---
-const compressImage = (file) => {
-  return new Promise((resolve, reject) => {
-    // 1. Check strict file size limit (IndexedDB handles large files well, but we keep a sanity check of 50MB)
-    if (file.size > 50 * 1024 * 1024) {
-      reject(new Error('Image too large (Max 50MB).'));
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    
-    reader.onload = (event) => {
-      const img = new window.Image();
-      img.src = event.target.result;
-      
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        
-        // 2. INCREASED RESOLUTION LIMIT
-        // 2560px is standard 2K resolution. It preserves high detail for large screens
-        // while still reducing the massive pixel count of raw 48MP camera photos.
-        const MAX_WIDTH = 2560; 
-        const MAX_HEIGHT = 2560;
-        
-        let width = img.width;
-        let height = img.height;
-
-        // Calculate new dimensions
-        if (width > height && width > MAX_WIDTH) {
-          height *= MAX_WIDTH / width;
-          width = MAX_WIDTH;
-        } else if (height > MAX_HEIGHT) {
-          width *= MAX_HEIGHT / height;
-          height = MAX_HEIGHT;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        
-        const ctx = canvas.getContext('2d');
-        // High quality scaling
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        // 3. SWITCH TO WEBP @ HIGH QUALITY
-        // 'image/webp' is far more efficient than JPEG. 
-        // Quality 0.95 is "visually lossless" - indistinguishable from original to the human eye,
-        // but creates much smaller files than PNG or 100% JPEG.
-        canvas.toBlob((blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Compression failed.'));
-          }
-        }, 'image/webp', 0.95);
-      };
-      
-      img.onerror = () => reject(new Error('Failed to load image.'));
-    };
-    
-    reader.onerror = () => reject(new Error('Failed to read file.'));
-  });
-};
-
 // --- HELPER COMPONENT FOR IMAGES ---
 const BlobImage = ({ src, ...props }) => {
   const url = useBlobUrl(src);
   return <motion.img src={url} {...props} />;
+};
+
+// --- NEW SLEEP WIDGET COMPONENT ---
+const SleepWidget = ({ session }) => {
+  // Prepare data for the graph (Hypnogram preferred, fallback to movement)
+  const chartData = session.hypnogram && session.hypnogram.length > 0 
+      ? session.hypnogram 
+      : session.movementData?.map((m, i) => ({ time: i, stage: 2 })) || [];
+
+  return (
+    <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex flex-col gap-3">
+      <div className="flex justify-between items-start">
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg">
+            <Moon size={16} />
+          </div>
+          <div>
+             <h4 className="text-sm font-bold text-gray-900">Sleep Session</h4>
+             <p className="text-[10px] text-gray-500 font-medium">{session.dateString}</p>
+          </div>
+        </div>
+        <div className="flex gap-3 text-right">
+           <div>
+              <span className="block text-xs font-bold text-gray-900">{session.duration.toFixed(1)}h</span>
+              <span className="text-[10px] text-gray-400">Duration</span>
+           </div>
+           <div>
+              <span className="block text-xs font-bold text-gray-900">{(session.deepSleepPerc * 100).toFixed(0)}%</span>
+              <span className="text-[10px] text-gray-400">Deep</span>
+           </div>
+        </div>
+      </div>
+
+      {/* Mini Graph */}
+      <div className="h-16 w-full bg-white/50 rounded-xl overflow-hidden border border-indigo-50">
+        <ResponsiveContainer width="100%" height="100%">
+           <AreaChart data={chartData}>
+              <defs>
+                  <linearGradient id="sleepGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4}/>
+                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0.05}/>
+                  </linearGradient>
+              </defs>
+              <YAxis hide domain={[0, 3]} />
+              <Area 
+                  type="stepAfter" 
+                  dataKey="stage" 
+                  stroke="#6366f1" 
+                  strokeWidth={1.5} 
+                  fill="url(#sleepGradient)" 
+              />
+           </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
 };
 
 // --- ANIMATION VARIANTS ---
@@ -211,6 +216,19 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [saveStatus, setSaveStatus] = useState('idle');
 
+  // --- FETCH SLEEP DATA ---
+  const sleepSessions = useLiveQuery(
+    () => db.sleep_sessions.toArray(),
+    []
+  );
+
+  // Filter sessions for the currently selected date
+  const todaysSleepSessions = (sleepSessions || []).filter(session => {
+    // We match sessions that started on this day
+    const sessionDate = new Date(session.startTime);
+    return sessionDate.toDateString() === currentDate.toDateString();
+  });
+
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -235,7 +253,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       locationLng, 
       weather, 
       tags, 
-      images, // Contains efficient WebP Blobs
+      images, 
       date: dateToSave.toISOString()
     });
 
@@ -276,7 +294,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       try {
         const compressedBlob = await compressImage(file);
         setImages(prev => [...prev, compressedBlob]);
-        setImgIndex(images.length); // Update index to show new image
+        setImgIndex(images.length);
         saveData(true);
       } catch (err) {
         alert(err.message);
@@ -418,7 +436,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           variants={contentStagger}
         >
           
-          {/* IMAGE CAROUSEL (UPDATED) */}
+          {/* IMAGE CAROUSEL */}
           <AnimatePresence>
             {images.length > 0 && (
               <motion.div 
@@ -427,7 +445,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 exit={{ opacity: 0, height: 0 }}
                 className="w-full relative group bg-gray-50 flex-shrink-0"
               >
-                {/* Main Image (Using Blob Helper) */}
                 <BlobImage 
                   key={imgIndex}
                   initial={{ opacity: 0 }}
@@ -439,11 +456,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 />
                 
                 <div className="absolute inset-0 -z-10 overflow-hidden">
-                   {/* Blur Background (Using Blob Helper) */}
                   <BlobImage src={images[imgIndex]} className="w-full h-full object-cover blur-2xl opacity-30" alt="" />
                 </div>
                 
-                {/* Navigation Controls */}
                 {images.length > 1 && (
                   <>
                     <motion.button 
@@ -500,7 +515,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                       className="bg-transparent border-none outline-none text-gray-500 font-medium text-xs font-mono cursor-pointer w-[60px]"
                     />
                 </div>
-                
                 {!isToday && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wide font-bold">Past Entry</span>}
               </div>
             </motion.div>
@@ -576,6 +590,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     style={{ minHeight: '150px' }}
                   />
                   
+                  {/* SLEEP DATA IN EDIT MODE */}
+                  {todaysSleepSessions.length > 0 && (
+                     <div className="space-y-2">
+                         {todaysSleepSessions.map(session => (
+                             <SleepWidget key={session.id} session={session} />
+                         ))}
+                     </div>
+                  )}
+
                   {/* Image Upload Button */}
                   <div className="flex gap-4 border-t border-gray-100 pt-4 mt-auto">
                     <input 
@@ -596,8 +619,19 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                   </div>
                 </>
               ) : (
-                <div className="prose prose-gray max-w-none">
-                  <MDEditor.Markdown source={content || '*No content yet...*'} className="wmde-markdown" />
+                <div className="flex flex-col gap-6">
+                    <div className="prose prose-gray max-w-none">
+                      <MDEditor.Markdown source={content || '*No content yet...*'} className="wmde-markdown" />
+                    </div>
+
+                    {/* SLEEP DATA IN PREVIEW MODE */}
+                    {todaysSleepSessions.length > 0 && (
+                        <div className="space-y-2 pt-4 border-t border-gray-100">
+                             {todaysSleepSessions.map(session => (
+                                 <SleepWidget key={session.id} session={session} />
+                             ))}
+                        </div>
+                    )}
                 </div>
               )}
             </motion.div>
