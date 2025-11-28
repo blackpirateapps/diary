@@ -1,7 +1,8 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { 
   Upload, ChevronLeft, MessageCircle, BarChart2, Calendar, 
-  User, MessageSquare, Zap, Trash2, Sliders, Hash, Smile
+  User, MessageSquare, Zap, Trash2, Sliders, Hash, Smile,
+  Image as ImageIcon, Clock, AlertCircle
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -50,81 +51,147 @@ const parseWhatsAppChat = (text) => {
 const analyzeChat = (messages, chatName) => {
   if (!messages.length) return null;
 
+  // Sort messages by time to be safe
+  messages.sort((a, b) => a.timestamp - b.timestamp);
+
+  const startDate = messages[0].date;
+  const endDate = messages[messages.length - 1].date;
+  
+  // Normalize dates to midnight for accurate day diffs
+  const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+  
+  // Calculate total span in days
+  const totalDurationDays = Math.round((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1;
+
   const stats = {
     id: Date.now().toString(),
     name: chatName.replace('.txt', '').replace('WhatsApp Chat with ', ''),
     totalMessages: messages.length,
     startDate: messages[0].timestamp,
     endDate: messages[messages.length - 1].timestamp,
+    totalDurationDays,
     participants: {},
-    streaks: { current: 0, max: 0, gapMax: 0, totalActiveDays: 0 },
+    streaks: { 
+        max: { count: 0, start: null, end: null }, 
+        current: 0, 
+        activeDays: 0,
+        emptyDays: 0,
+        maxGap: { count: 0, start: null, end: null }
+    },
     topWords: [],
     topEmojis: [],
-    // We store minimal metadata to allow re-calculating initiations dynamically
     messageLog: messages.map(m => ({ t: m.timestamp, s: m.sender })) 
   };
 
-  const dates = new Set();
-  let lastDate = null;
-  let currentStreak = 0;
-  let maxGap = 0;
-  
+  const activeDateSet = new Set();
   const wordCounts = {};
   const emojiCounts = {};
-  // Regex for Emoji (Simple Range)
   const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
+  
+  // Detect Media (Android & iOS variants)
+  const mediaRegex = /(<Media omitted>|image omitted|video omitted|GIF omitted|sticker omitted)/i;
 
+  // 1. Process Messages (Counts, Words, Active Dates)
   messages.forEach((msg) => {
-    // 1. Participant Stats
     if (!stats.participants[msg.sender]) {
-      stats.participants[msg.sender] = { count: 0, words: 0 };
+      stats.participants[msg.sender] = { count: 0, words: 0, media: 0 };
     }
     stats.participants[msg.sender].count++;
     
-    // 2. Word & Emoji Mining
-    const cleanText = msg.content.toLowerCase();
-    const words = cleanText.split(/[\s,.;!?"]+/);
-    
-    words.forEach(w => {
-        if (w.length > 2 && !STOP_WORDS.has(w) && !w.match(/^\d+$/)) {
-            wordCounts[w] = (wordCounts[w] || 0) + 1;
-        }
-        stats.participants[msg.sender].words++;
-    });
+    const isMedia = mediaRegex.test(msg.content);
 
-    const emojis = msg.content.match(emojiRegex);
-    if (emojis) {
-        emojis.forEach(e => {
-            emojiCounts[e] = (emojiCounts[e] || 0) + 1;
+    if (isMedia) {
+        stats.participants[msg.sender].media++;
+    } else {
+        // Only count words if NOT media
+        const cleanText = msg.content.toLowerCase();
+        const words = cleanText.split(/[\s,.;!?"]+/);
+        
+        words.forEach(w => {
+            if (w.length > 2 && !STOP_WORDS.has(w) && !w.match(/^\d+$/)) {
+                wordCounts[w] = (wordCounts[w] || 0) + 1;
+            }
+            stats.participants[msg.sender].words++;
         });
+
+        const emojis = msg.content.match(emojiRegex);
+        if (emojis) {
+            emojis.forEach(e => {
+                emojiCounts[e] = (emojiCounts[e] || 0) + 1;
+            });
+        }
     }
 
-    // 3. Dates & Streaks
-    const dateStr = msg.date.toDateString();
-    if (!dates.has(dateStr)) {
-      dates.add(dateStr);
-      
-      if (lastDate) {
-        const diffDays = Math.round((msg.date - lastDate) / (1000 * 60 * 60 * 24));
-        if (diffDays === 1) {
-          currentStreak++;
-        } else {
-          stats.streaks.max = Math.max(stats.streaks.max, currentStreak);
-          currentStreak = 1;
-          if (diffDays > 1) maxGap = Math.max(maxGap, diffDays - 1);
-        }
-      } else {
-        currentStreak = 1;
-      }
-      lastDate = msg.date;
-    }
+    // Store Normalized Date string
+    activeDateSet.add(new Date(msg.date.getFullYear(), msg.date.getMonth(), msg.date.getDate()).toDateString());
   });
 
-  stats.streaks.max = Math.max(stats.streaks.max, currentStreak);
-  stats.streaks.gapMax = maxGap;
-  stats.streaks.totalActiveDays = dates.size;
+  // 2. Timeline Traversal (Streaks & Gaps)
+  // We loop through every single day from start to end
+  let currentStreak = 0;
+  let currentGap = 0;
+  let streakStart = null;
+  let gapStart = null;
 
-  // Sort and Top lists
+  for (let i = 0; i < totalDurationDays; i++) {
+      const current = new Date(startDay);
+      current.setDate(current.getDate() + i);
+      const dateStr = current.toDateString();
+      const isActive = activeDateSet.has(dateStr);
+
+      if (isActive) {
+          // --- HANDLING STREAK ---
+          if (currentStreak === 0) streakStart = dateStr;
+          currentStreak++;
+          
+          // Check Max Streak
+          if (currentStreak > stats.streaks.max.count) {
+              stats.streaks.max = {
+                  count: currentStreak,
+                  start: streakStart,
+                  end: dateStr
+              };
+          }
+
+          // --- HANDLING GAP RESET ---
+          if (currentGap > 0) {
+              // Gap just ended yesterday
+              if (currentGap > stats.streaks.maxGap.count) {
+                  const gapEnd = new Date(current);
+                  gapEnd.setDate(gapEnd.getDate() - 1);
+                  stats.streaks.maxGap = {
+                      count: currentGap,
+                      start: gapStart,
+                      end: gapEnd.toDateString()
+                  };
+              }
+              currentGap = 0;
+          }
+      } else {
+          // --- HANDLING GAP ---
+          if (currentGap === 0) gapStart = dateStr;
+          currentGap++;
+
+          // --- HANDLING STREAK RESET ---
+          currentStreak = 0;
+      }
+  }
+
+  // Final Gap Check (if chat ends on a silence)
+  if (currentGap > 0 && currentGap > stats.streaks.maxGap.count) {
+      const gapEnd = new Date(endDay); // Last day checked
+      stats.streaks.maxGap = {
+          count: currentGap,
+          start: gapStart,
+          end: gapEnd.toDateString()
+      };
+  }
+
+  stats.streaks.activeDays = activeDateSet.size;
+  stats.streaks.emptyDays = totalDurationDays - activeDateSet.size;
+
+  // 3. Finalize Lists
   stats.topWords = Object.entries(wordCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
@@ -135,11 +202,11 @@ const analyzeChat = (messages, chatName) => {
     .slice(0, 8)
     .map(([char, count]) => ({ char, count }));
 
-  // Basic Chart Data (Init counts will be calc'd dynamically)
   stats.baseChartData = Object.keys(stats.participants).map(p => ({
     name: p,
     messages: stats.participants[p].count,
-    words: stats.participants[p].words
+    words: stats.participants[p].words,
+    media: stats.participants[p].media
   }));
 
   return stats;
@@ -147,26 +214,24 @@ const analyzeChat = (messages, chatName) => {
 
 // --- COMPONENTS ---
 
-const StatCard = ({ icon: Icon, label, value, color = "green" }) => (
-    <div className={`bg-${color}-50 p-4 rounded-2xl border border-${color}-100 flex flex-col items-center text-center flex-1`}>
+const StatCard = ({ icon: Icon, label, value, subLabel, color = "green" }) => (
+    <div className={`bg-${color}-50 p-4 rounded-2xl border border-${color}-100 flex flex-col items-center text-center`}>
         <div className={`p-2 bg-${color}-100 text-${color}-600 rounded-full mb-2`}>
             <Icon size={20} />
         </div>
         <span className="text-xl font-bold text-gray-800">{value}</span>
         <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mt-1">{label}</span>
+        {subLabel && <span className="text-[9px] text-gray-400 mt-1 block max-w-[120px] leading-tight">{subLabel}</span>}
     </div>
 );
 
 const ChatDetail = ({ data, onBack }) => {
-  const [initiationThreshold, setInitiationThreshold] = useState(6); // Hours
+  const [initiationThreshold, setInitiationThreshold] = useState(6);
 
-  // Dynamic Calculation of Conversation Starters
   const chartData = useMemo(() => {
       if (!data.messageLog) return data.baseChartData;
-
       const initiations = {};
       Object.keys(data.participants).forEach(p => initiations[p] = 0);
-
       const THRESHOLD_MS = initiationThreshold * 60 * 60 * 1000;
 
       data.messageLog.forEach((msg, i) => {
@@ -176,7 +241,6 @@ const ChatDetail = ({ data, onBack }) => {
                   initiations[msg.s] = (initiations[msg.s] || 0) + 1;
               }
           } else {
-              // First message ever starts a convo
               initiations[msg.s] = 1; 
           }
       });
@@ -185,8 +249,13 @@ const ChatDetail = ({ data, onBack }) => {
           ...d,
           initiations: initiations[d.name] || 0
       }));
-
   }, [data, initiationThreshold]);
+
+  const formatDateShort = (dateStr) => {
+      if(!dateStr) return '';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' });
+  };
 
   return (
     <div className="pb-24 animate-slideUp">
@@ -204,22 +273,37 @@ const ChatDetail = ({ data, onBack }) => {
 
       <div className="p-4 space-y-6">
         
-        {/* 1. KEY STATS */}
-        <div className="grid grid-cols-2 gap-3">
-            <StatCard icon={MessageSquare} label="Total Msgs" value={data.totalMessages.toLocaleString()} color="green" />
-            <StatCard icon={Calendar} label="Days Talked" value={data.streaks.totalActiveDays} color="blue" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-            <StatCard icon={Zap} label="Longest Streak" value={`${data.streaks.max} Days`} color="yellow" />
-            <StatCard icon={User} label="Longest Gap" value={`${data.streaks.gapMax} Days`} color="red" />
+        {/* 1. DURATION STATS */}
+        <div className="grid grid-cols-3 gap-3">
+            <StatCard icon={Calendar} label="Total Days" value={data.totalDurationDays} color="indigo" />
+            <StatCard icon={MessageSquare} label="Active Days" value={data.streaks.activeDays} color="green" />
+            <StatCard icon={AlertCircle} label="Empty Days" value={data.streaks.emptyDays} color="gray" />
         </div>
 
-        {/* 2. ACTIVITY COMPARISON (BAR CHART) */}
+        {/* 2. STREAKS & GAPS */}
+        <div className="grid grid-cols-2 gap-3">
+            <StatCard 
+                icon={Zap} 
+                label="Longest Streak" 
+                value={`${data.streaks.max.count} Days`} 
+                subLabel={data.streaks.max.start ? `${formatDateShort(data.streaks.max.start)} - ${formatDateShort(data.streaks.max.end)}` : 'N/A'}
+                color="yellow" 
+            />
+            <StatCard 
+                icon={User} 
+                label="Longest Gap" 
+                value={`${data.streaks.maxGap.count} Days`} 
+                subLabel={data.streaks.maxGap.start ? `${formatDateShort(data.streaks.maxGap.start)} - ${formatDateShort(data.streaks.maxGap.end)}` : 'No gaps'}
+                color="red" 
+            />
+        </div>
+
+        {/* 3. ACTIVITY COMPARISON (INCL. MEDIA) */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <BarChart2 size={18} className="text-green-600" /> Activity Comparison
             </h3>
-            <div className="h-64 w-full -ml-2">
+            <div className="h-80 w-full -ml-2">
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 30, top: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
@@ -227,29 +311,33 @@ const ChatDetail = ({ data, onBack }) => {
                         <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 10}} />
                         <Tooltip cursor={{fill: 'transparent'}} />
                         
-                        <Bar dataKey="messages" name="Messages" fill="#25D366" radius={[0, 4, 4, 0]} barSize={20}>
+                        <Bar dataKey="messages" name="Messages" fill="#25D366" radius={[0, 4, 4, 0]} barSize={16}>
                             <LabelList dataKey="messages" position="right" style={{fontSize: 10, fill: '#666'}} />
                         </Bar>
                         
-                        <Bar dataKey="words" name="Words" fill="#34B7F1" radius={[0, 4, 4, 0]} barSize={20}>
+                        <Bar dataKey="words" name="Words" fill="#34B7F1" radius={[0, 4, 4, 0]} barSize={16}>
                             <LabelList dataKey="words" position="right" style={{fontSize: 10, fill: '#666'}} />
+                        </Bar>
+
+                        <Bar dataKey="media" name="Media" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={16}>
+                            <LabelList dataKey="media" position="right" style={{fontSize: 10, fill: '#666'}} />
                         </Bar>
                     </BarChart>
                 </ResponsiveContainer>
             </div>
-            <div className="flex justify-center gap-4 mt-2">
-                <div className="flex items-center gap-1 text-xs text-gray-500"><div className="w-3 h-3 bg-[#25D366] rounded-sm"></div> Messages</div>
-                <div className="flex items-center gap-1 text-xs text-gray-500"><div className="w-3 h-3 bg-[#34B7F1] rounded-sm"></div> Words</div>
+            <div className="flex justify-center gap-3 mt-2 flex-wrap">
+                <div className="flex items-center gap-1 text-xs text-gray-500"><div className="w-2 h-2 bg-[#25D366] rounded-sm"></div> Msgs</div>
+                <div className="flex items-center gap-1 text-xs text-gray-500"><div className="w-2 h-2 bg-[#34B7F1] rounded-sm"></div> Words</div>
+                <div className="flex items-center gap-1 text-xs text-gray-500"><div className="w-2 h-2 bg-[#8b5cf6] rounded-sm"></div> Media</div>
             </div>
         </div>
 
-        {/* 3. WHO STARTS? (PIE CHART) */}
+        {/* 4. STARTERS */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                    <Zap size={18} className="text-orange-500" /> Starters
+                    <Clock size={18} className="text-orange-500" /> Starters
                 </h3>
-                {/* Config Slider */}
                 <div className="flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-lg">
                     <Sliders size={12} className="text-gray-400" />
                     <span className="text-xs font-bold text-gray-600">{initiationThreshold}h Silence</span>
@@ -261,7 +349,6 @@ const ChatDetail = ({ data, onBack }) => {
                     />
                 </div>
             </div>
-
             <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -293,10 +380,8 @@ const ChatDetail = ({ data, onBack }) => {
             </div>
         </div>
 
-        {/* 4. TOP WORDS & EMOJIS */}
+        {/* 5. TOP WORDS & EMOJIS */}
         <div className="grid grid-cols-1 gap-4">
-            
-            {/* Top Words */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                 <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                     <Hash size={18} className="text-purple-500" /> Top Words
@@ -311,7 +396,6 @@ const ChatDetail = ({ data, onBack }) => {
                 </div>
             </div>
 
-            {/* Top Emojis */}
             {data.topEmojis.length > 0 && (
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
