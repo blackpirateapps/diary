@@ -1,5 +1,5 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Image, Svg, Path, Rect, Line } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 
 // --- STYLES ---
 const styles = StyleSheet.create({
@@ -8,14 +8,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     fontFamily: 'Times-Roman',
     fontSize: 11,
-    lineHeight: 1.4,
+    lineHeight: 1.3, // Reduced from 1.4 for tighter lines
     color: '#1f2937'
   },
   header: {
-    marginBottom: 15,
+    marginBottom: 10, // Reduced
     borderBottomWidth: 0.5,
     borderBottomColor: '#9ca3af',
-    paddingBottom: 10,
+    paddingBottom: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start'
@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontFamily: 'Times-Bold',
     color: '#111827',
-    marginBottom: 4,
+    marginBottom: 2,
     lineHeight: 1
   },
   time: {
@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
   metaContainer: {
     flexDirection: 'row',
     gap: 15,
-    marginBottom: 15,
+    marginBottom: 10, // Reduced
     fontSize: 10,
     color: '#4b5563',
     paddingBottom: 5
@@ -55,63 +55,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   body: {
-    marginBottom: 20,
+    marginBottom: 15,
     textAlign: 'justify'
   },
-  // Markdown Styles
-  h1: { fontSize: 16, fontFamily: 'Times-Bold', marginTop: 10, marginBottom: 4, color: '#111827' },
-  h2: { fontSize: 13, fontFamily: 'Times-Bold', marginTop: 8, marginBottom: 2, color: '#374151' },
-  paragraph: { marginBottom: 4 },
+  // Markdown Styles (Tightened)
+  h1: { fontSize: 16, fontFamily: 'Times-Bold', marginTop: 8, marginBottom: 2, color: '#111827' },
+  h2: { fontSize: 13, fontFamily: 'Times-Bold', marginTop: 6, marginBottom: 2, color: '#374151' },
+  paragraph: { marginBottom: 2 }, // Reduced from 4 to 2
   bold: { fontFamily: 'Times-Bold' },
   italic: { fontFamily: 'Times-Italic' },
   
-  // Gallery (Grid Style)
+  // Section Headers
   sectionTitle: {
     fontSize: 12,
     fontFamily: 'Times-Bold',
     color: '#111827',
-    marginTop: 20,
-    marginBottom: 10,
+    marginTop: 15,
+    marginBottom: 8,
     borderBottomWidth: 0.5,
     borderBottomColor: '#e5e7eb',
     paddingBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
+
+  // Sleep Text Layout
+  sleepContainer: {
+    marginBottom: 8,
+    padding: 8,
+    backgroundColor: '#f9fafb',
+    borderRadius: 4,
+    borderLeftWidth: 2,
+    borderLeftColor: '#6b7280'
+  },
+  sleepRow: {
+    flexDirection: 'row',
+    marginBottom: 1, // Tighter rows
+    fontSize: 10
+  },
+  sleepLabel: {
+    fontFamily: 'Times-Bold',
+    width: 80,
+    color: '#374151'
+  },
+  sleepValue: {
+    fontFamily: 'Times-Roman',
+    color: '#111827'
+  },
+
+  // Gallery (Grid)
   galleryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10
   },
   imageWrapper: {
-    width: '30%',        // 3 Columns (approx 30% each + gap)
-    height: 150,         // Fixed height grid cells
+    width: '30%',
+    height: 150,
     marginBottom: 10,
     borderRadius: 2,
-    backgroundColor: '#f9fafb', // Light grey background for letterboxing
-    alignItems: 'center',       // Center horizontally
-    justifyContent: 'center'    // Center vertically
+    backgroundColor: '#f9fafb',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   image: {
     width: '100%',
     height: '100%',
-    objectFit: 'contain' // Key change: Ensures image is scaled to fit WITHOUT cropping
-  },
-
-  // Sleep Graphs
-  graphContainer: {
-    marginBottom: 15,
-    marginTop: 5,
-    padding: 5,
-    backgroundColor: '#f9fafb',
-    borderRadius: 4
-  },
-  graphLabel: {
-    fontSize: 8,
-    color: '#6b7280',
-    marginBottom: 2,
-    fontFamily: 'Times-Bold',
-    textTransform: 'uppercase'
+    objectFit: 'contain'
   }
 });
 
@@ -133,106 +143,15 @@ const MarkdownText = ({ text }) => {
           if (part.startsWith('*') && part.endsWith('*')) return <Text key={partIdx} style={styles.italic}>{part.slice(1, -1)}</Text>;
           return <Text key={partIdx}>{part}</Text>;
         })}
-        {'\n'} 
+        {/* Removed extra newline char to reduce space */}
       </Text>
     );
   });
 };
 
-// --- HELPER: SLEEP GRAPH RENDERER ---
-const SleepGraphPdf = ({ session }) => {
-  if (!session) return null;
-
-  const width = 500;
-  const height = 80;
-  const actHeight = 40;
-
-  // 1. Prepare Hypnogram Data
-  const hypnoData = session.hypnogram || [];
-  const maxTime = hypnoData.length > 0 ? hypnoData[hypnoData.length - 1].time : (session.duration * 60);
-  
-  const getStageY = (stage) => {
-      switch(stage) {
-          case 3: return 20; // Awake
-          case 2: return 40; // Light
-          case 1: return 60; // REM
-          case 0: return 80; // Deep
-          default: return 40;
-      }
-  };
-
-  const getStageColor = (stage) => {
-      switch(stage) {
-          case 0: return "#4c1d95"; 
-          case 1: return "#8b5cf6"; 
-          case 2: return "#c4b5fd"; 
-          case 3: return "#fbbf24"; 
-          default: return "#e5e7eb";
-      }
-  };
-
-  // 2. Prepare Actigraphy Data
-  const moveData = session.movementData || [];
-  const maxVal = Math.max(...moveData.map(d => d.value), 10);
-  
-  let actPath = `M 0 ${actHeight}`;
-  moveData.forEach((pt, i) => {
-      const x = (i / moveData.length) * width;
-      const y = actHeight - ((pt.value / maxVal) * actHeight);
-      actPath += ` L ${x} ${y}`;
-  });
-  actPath += ` L ${width} ${actHeight} Z`;
-
-  return (
-    <View wrap={false}>
-      {/* 1. Hypnogram Graph */}
-      <View style={styles.graphContainer}>
-        <Text style={styles.graphLabel}>Sleep Stages</Text>
-        <Svg width={width} height={height + 10}>
-           {/* Grid Lines */}
-           <Line x1="0" y1="20" x2={width} y2="20" stroke="#e5e7eb" strokeWidth={0.5} strokeDasharray="2 2" />
-           <Line x1="0" y1="40" x2={width} y2="40" stroke="#e5e7eb" strokeWidth={0.5} strokeDasharray="2 2" />
-           <Line x1="0" y1="60" x2={width} y2="60" stroke="#e5e7eb" strokeWidth={0.5} strokeDasharray="2 2" />
-           
-           {/* Steps */}
-           {hypnoData.map((pt, i) => {
-               if (i === 0) return null;
-               const prev = hypnoData[i-1];
-               const x1 = (prev.time / maxTime) * width;
-               const x2 = (pt.time / maxTime) * width;
-               const w = x2 - x1;
-               const y = getStageY(prev.stage);
-               const h = height - y; 
-               
-               return (
-                   <Rect 
-                    key={i} 
-                    x={x1} 
-                    y={y} 
-                    width={w} 
-                    height={h} 
-                    fill={getStageColor(prev.stage)} 
-                    opacity={0.6}
-                   />
-               );
-           })}
-           
-           <Text x={5} y={15} fontSize={8} fill="#9ca3af">Awake</Text>
-           <Text x={5} y={75} fontSize={8} fill="#9ca3af">Deep</Text>
-        </Svg>
-      </View>
-
-      {/* 2. Actigraphy Graph */}
-      {moveData.length > 0 && (
-          <View style={styles.graphContainer}>
-            <Text style={styles.graphLabel}>Actigraphy</Text>
-            <Svg width={width} height={actHeight}>
-                <Path d={actPath} fill="#3b82f6" fillOpacity={0.3} stroke="#2563eb" strokeWidth={1} />
-            </Svg>
-          </View>
-      )}
-    </View>
-  );
+// --- HELPER: FORMAT TIME ---
+const formatTime = (dateObj) => {
+  return dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 };
 
 // --- MAIN PDF DOCUMENT COMPONENT ---
@@ -273,23 +192,42 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
           )}
         </View>
 
-        {/* BODY */}
+        {/* BODY CONTENT */}
         <View style={styles.body}>
           <MarkdownText text={entry.content} />
         </View>
 
-        {/* SLEEP DATA */}
+        {/* SLEEP DATA SECTION (TEXT ONLY) */}
         {sleepSessions && sleepSessions.length > 0 && (
-            <View wrap={false} style={{ marginTop: 10 }}>
+            <View wrap={false} style={{ marginTop: 5 }}>
                 <Text style={styles.sectionTitle}>Sleep Insights</Text>
-                {sleepSessions.map((session, index) => (
-                    <View key={index} style={{ marginBottom: 10 }}>
-                        <Text style={{ fontSize: 10, fontFamily: 'Times-Bold', color: '#4b5563' }}>
-                            Session {index + 1}: {session.duration.toFixed(1)}h Duration • {(session.deepSleepPerc * 100).toFixed(0)}% Deep Sleep
-                        </Text>
-                        <SleepGraphPdf session={session} />
-                    </View>
-                ))}
+                {sleepSessions.map((session, index) => {
+                    const start = new Date(session.startTime);
+                    const end = new Date(session.startTime + (session.duration * 60 * 60 * 1000));
+                    
+                    return (
+                        <View key={index} style={styles.sleepContainer}>
+                            <View style={styles.sleepRow}>
+                                <Text style={styles.sleepLabel}>Sleep Time:</Text>
+                                <Text style={styles.sleepValue}>{formatTime(start)} — {formatTime(end)}</Text>
+                            </View>
+                            <View style={styles.sleepRow}>
+                                <Text style={styles.sleepLabel}>Duration:</Text>
+                                <Text style={styles.sleepValue}>{session.duration.toFixed(1)} hours</Text>
+                            </View>
+                            <View style={styles.sleepRow}>
+                                <Text style={styles.sleepLabel}>Deep Sleep:</Text>
+                                <Text style={styles.sleepValue}>{(session.deepSleepPerc * 100).toFixed(0)}%</Text>
+                            </View>
+                            {session.rating > 0 && (
+                                <View style={styles.sleepRow}>
+                                    <Text style={styles.sleepLabel}>Efficiency:</Text>
+                                    <Text style={styles.sleepValue}>{session.rating.toFixed(1)} / 5.0</Text>
+                                </View>
+                            )}
+                        </View>
+                    );
+                })}
             </View>
         )}
 
@@ -300,7 +238,6 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
             <View style={styles.galleryGrid}>
               {entry.images.map((imgSrc, index) => (
                 <View key={index} style={styles.imageWrapper}>
-                  {/* objectFit: 'contain' ensures NO cropping */}
                   <Image src={imgSrc} style={styles.image} />
                 </View>
               ))}
