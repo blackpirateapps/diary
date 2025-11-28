@@ -21,16 +21,16 @@ import TagInput from './TagInput';
 
 // --- CONFIGURATION ---
 const MOODS = [
-  { value: 1, icon: Cloud, color: 'text-gray-400', hex: '#9ca3af', label: 'Awful' },
-  { value: 2, icon: Cloud, color: 'text-blue-400', hex: '#60a5fa', label: 'Bad' },
-  { value: 3, icon: Cloud, color: 'text-blue-500', hex: '#3b82f6', label: 'Sad' },
-  { value: 4, icon: Cloud, color: 'text-indigo-400', hex: '#818cf8', label: 'Meh' },
-  { value: 5, icon: Cloud, color: 'text-indigo-500', hex: '#6366f1', label: 'Okay' },
-  { value: 6, icon: Cloud, color: 'text-yellow-500', hex: '#eab308', label: 'Good' },
-  { value: 7, icon: Cloud, color: 'text-orange-500', hex: '#f97316', label: 'Great' },
-  { value: 8, icon: Cloud, color: 'text-orange-600', hex: '#ea580c', label: 'Happy' },
-  { value: 9, icon: Cloud, color: 'text-pink-500', hex: '#ec4899', label: 'Loved' },
-  { value: 10, icon: Cloud, color: 'text-red-500', hex: '#ef4444', label: 'Amazing' }
+  { value: 1, icon: Cloud, color: 'text-gray-400', label: 'Awful' },
+  { value: 2, icon: Cloud, color: 'text-blue-400', label: 'Bad' },
+  { value: 3, icon: Cloud, color: 'text-blue-500', label: 'Sad' },
+  { value: 4, icon: Cloud, color: 'text-indigo-400', label: 'Meh' },
+  { value: 5, icon: Cloud, color: 'text-indigo-500', label: 'Okay' },
+  { value: 6, icon: Cloud, color: 'text-yellow-500', label: 'Good' },
+  { value: 7, icon: Cloud, color: 'text-orange-500', label: 'Great' },
+  { value: 8, icon: Cloud, color: 'text-orange-600', label: 'Happy' },
+  { value: 9, icon: Cloud, color: 'text-pink-500', label: 'Loved' },
+  { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' }
 ];
 
 // --- STYLES ---
@@ -108,9 +108,37 @@ const formatSleepRange = (startTime, durationHours) => {
   if (!startTime) return '';
   const start = new Date(startTime);
   const end = new Date(startTime + (durationHours * 60 * 60 * 1000));
-  
   const fmt = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   return `${fmt(start)} - ${fmt(end)}`;
+};
+
+// --- PDF HELPER: CONVERT WEBP BLOB TO JPEG DATA URI ---
+// PDFs don't support WebP. This converts them to JPEG on the fly.
+const blobToJpeg = (blob) => {
+  return new Promise((resolve) => {
+    if (!(blob instanceof Blob)) {
+        // If it's already a string (URL or Base64), return as is (legacy support)
+        resolve(blob);
+        return;
+    }
+    const img = new window.Image();
+    const url = URL.createObjectURL(blob);
+    img.src = url;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      // Convert to JPEG
+      const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      URL.revokeObjectURL(url);
+      resolve(jpegDataUrl);
+    };
+    img.onerror = () => {
+        resolve(null); // Fail gracefully
+    };
+  });
 };
 
 // --- COMPONENTS ---
@@ -219,7 +247,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [images, setImages] = useState(entry?.images || []);
   
   const [mode, setMode] = useState(isToday ? 'edit' : 'preview');
-  
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -371,8 +398,20 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const handleExportPdf = async () => {
     setIsExporting(true);
     try {
+      // 1. Prepare images: Convert WebP blobs to JPEG Base64
+      const pdfImages = await Promise.all(
+        images.map(img => blobToJpeg(img))
+      );
+
+      // 2. Prepare entry data with compatible images
       const currentEntryData = {
-        id: entryId, content, mood, location, weather, tags, images,
+        id: entryId, 
+        content, 
+        mood, 
+        location, 
+        weather, 
+        tags, 
+        images: pdfImages.filter(Boolean), // Remove any failed conversions
         date: currentDate.toISOString()
       };
       
@@ -382,7 +421,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         <EntryPdfDocument 
           entry={currentEntryData} 
           moodLabel={moodMeta?.label} 
-          moodColorHex={moodMeta?.hex} 
         />
       );
       
@@ -439,7 +477,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* PDF EXPORT BUTTON */}
+            {/* PDF BUTTON */}
             {entry?.id && (
               <motion.button 
                 whileTap={{ scale: 0.9 }}

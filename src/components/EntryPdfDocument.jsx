@@ -1,5 +1,5 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 
 // --- STYLES ---
 const styles = StyleSheet.create({
@@ -15,33 +15,46 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
-    paddingBottom: 10,
+    paddingBottom: 12, // Increased padding
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end'
+    alignItems: 'flex-start' // Changed from flex-end to handle multi-line better
+  },
+  headerLeft: {
+    flexDirection: 'column',
+    maxWidth: '70%'
+  },
+  headerRight: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    maxWidth: '30%',
+    marginTop: 4
   },
   date: {
     fontSize: 24,
     fontFamily: 'Helvetica-Bold',
     color: '#111827',
+    marginBottom: 4, // Added spacing between Date and Time
+    lineHeight: 1.2
+  },
+  time: {
+    color: '#9ca3af',
+    fontSize: 10,
+    fontFamily: 'Helvetica',
   },
   metaContainer: {
     flexDirection: 'row',
     gap: 15,
     marginBottom: 20,
     fontSize: 10,
-    color: '#6b7280'
+    color: '#6b7280',
+    borderBottomWidth: 0.5, // Optional separator
+    borderBottomColor: '#f3f4f6',
+    paddingBottom: 10
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4
-  },
-  moodDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 4
   },
   body: {
     marginBottom: 20,
@@ -70,50 +83,36 @@ const styles = StyleSheet.create({
     gap: 10
   },
   imageWrapper: {
-    width: '30%', // roughly 3 columns
+    width: '30%', 
     height: 150,
     marginBottom: 10,
     borderRadius: 4,
-    overflow: 'hidden',
     backgroundColor: '#f3f4f6'
   },
   image: {
     width: '100%',
     height: '100%',
-    objectFit: 'cover'
+    objectFit: 'cover',
+    borderRadius: 4
   }
 });
 
-// --- HELPER: MARKDOWN PARSER FOR PDF ---
-// Splits text by formatting markers and renders styled Text components
+// --- HELPER: MARKDOWN PARSER ---
 const MarkdownText = ({ text }) => {
   if (!text) return null;
-
-  // Split by newlines first to handle paragraphs/headers
   const lines = text.split('\n');
 
   return lines.map((line, lineIdx) => {
-    // Headers
-    if (line.startsWith('# ')) {
-      return <Text key={lineIdx} style={styles.h1}>{line.replace('# ', '')}</Text>;
-    }
-    if (line.startsWith('## ')) {
-      return <Text key={lineIdx} style={styles.h2}>{line.replace('## ', '')}</Text>;
-    }
+    if (line.startsWith('# ')) return <Text key={lineIdx} style={styles.h1}>{line.replace('# ', '')}</Text>;
+    if (line.startsWith('## ')) return <Text key={lineIdx} style={styles.h2}>{line.replace('## ', '')}</Text>;
 
-    // Paragraph parsing for Bold (**) and Italic (*)
-    // Regex matches: **bold** OR *italic* OR normal text
     const parts = line.split(/(\*\*.*?\*\*|\*.*?\*)/g);
 
     return (
       <Text key={lineIdx} style={styles.paragraph}>
         {parts.map((part, partIdx) => {
-          if (part.startsWith('**') && part.endsWith('**')) {
-            return <Text key={partIdx} style={styles.bold}>{part.slice(2, -2)}</Text>;
-          }
-          if (part.startsWith('*') && part.endsWith('*')) {
-            return <Text key={partIdx} style={styles.italic}>{part.slice(1, -1)}</Text>;
-          }
+          if (part.startsWith('**') && part.endsWith('**')) return <Text key={partIdx} style={styles.bold}>{part.slice(2, -2)}</Text>;
+          if (part.startsWith('*') && part.endsWith('*')) return <Text key={partIdx} style={styles.italic}>{part.slice(1, -1)}</Text>;
           return <Text key={partIdx}>{part}</Text>;
         })}
         {'\n'} 
@@ -123,7 +122,7 @@ const MarkdownText = ({ text }) => {
 };
 
 // --- MAIN PDF DOCUMENT COMPONENT ---
-const EntryPdfDocument = ({ entry, moodLabel, moodColorHex }) => {
+const EntryPdfDocument = ({ entry, moodLabel }) => {
   const dateObj = new Date(entry.date);
   const dateString = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const timeString = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -134,28 +133,28 @@ const EntryPdfDocument = ({ entry, moodLabel, moodColorHex }) => {
         
         {/* HEADER */}
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerLeft}>
             <Text style={styles.date}>{dateString}</Text>
-            <Text style={{ color: '#9ca3af', fontSize: 10, marginTop: 4 }}>{timeString}</Text>
+            <Text style={styles.time}>{timeString}</Text>
           </View>
           {entry.location && (
-            <View>
-              <Text style={{ textAlign: 'right', fontFamily: 'Helvetica-Bold' }}>{entry.location}</Text>
-              {entry.weather && <Text style={{ textAlign: 'right', color: '#6b7280', fontSize: 10 }}>{entry.weather}</Text>}
+            <View style={styles.headerRight}>
+              <Text style={{ fontFamily: 'Helvetica-Bold', textAlign: 'right' }}>{entry.location}</Text>
+              {entry.weather && <Text style={{ color: '#6b7280', fontSize: 10, textAlign: 'right' }}>{entry.weather}</Text>}
             </View>
           )}
         </View>
 
-        {/* META (Mood & Tags) */}
+        {/* META (Text Only, No Icons) */}
         <View style={styles.metaContainer}>
           <View style={styles.metaItem}>
-            {/* Visual Icon: A colored circle representing the mood */}
-            <View style={[styles.moodDot, { backgroundColor: moodColorHex || '#9ca3af' }]} />
-            <Text>Mood: {moodLabel || 'Neutral'}</Text>
+            <Text style={{ fontFamily: 'Helvetica-Bold' }}>Mood: </Text>
+            <Text>{moodLabel || 'Neutral'}</Text>
           </View>
           {entry.tags && entry.tags.length > 0 && (
-            <View style={styles.metaItem}>
-              <Text>•   Tags: {entry.tags.map(t => `#${t}`).join(', ')}</Text>
+            <View style={[styles.metaItem, { marginLeft: 20 }]}>
+               <Text style={{ fontFamily: 'Helvetica-Bold' }}>Tags: </Text>
+               <Text>{entry.tags.join(', ')}</Text>
             </View>
           )}
         </View>
@@ -170,20 +169,12 @@ const EntryPdfDocument = ({ entry, moodLabel, moodColorHex }) => {
           <View wrap={false}>
             <Text style={styles.galleryTitle}>Attachments</Text>
             <View style={styles.galleryGrid}>
-              {entry.images.map((imgBlob, index) => {
-                // Determine source: Blob URL or Base64 string
-                // Note: @react-pdf/renderer <Image> accepts Blob URLs directly!
-                let src = imgBlob;
-                if (imgBlob instanceof Blob) {
-                   src = URL.createObjectURL(imgBlob); 
-                }
-                
-                return (
-                  <View key={index} style={styles.imageWrapper}>
-                    <Image src={src} style={styles.image} />
-                  </View>
-                );
-              })}
+              {entry.images.map((imgSrc, index) => (
+                <View key={index} style={styles.imageWrapper}>
+                  {/* Image source will be a JPEG Data URI */}
+                  <Image src={imgSrc} style={styles.image} />
+                </View>
+              ))}
             </View>
           </View>
         )}
