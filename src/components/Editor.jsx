@@ -1,32 +1,36 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ChevronLeft, Trash2, Plus, MapPin, Cloud, Clock, Image as ImageIcon,
-  Eye, PenLine, CheckCircle2, Moon, Activity
+  Eye, PenLine, CheckCircle2, Moon, Activity, Download
 } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import { motion, AnimatePresence } from 'framer-motion';
-// --- NEW IMPORTS FOR CHART & DB ---
 import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, useBlobUrl } from '../db'; 
+
+// --- PDF IMPORTS ---
+import { pdf } from '@react-pdf/renderer';
+import { saveAs } from 'file-saver';
+import EntryPdfDocument from './EntryPdfDocument';
 
 import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
 
 // --- CONFIGURATION ---
 const MOODS = [
-  { value: 1, icon: Cloud, color: 'text-gray-400', label: 'Awful' },
-  { value: 2, icon: Cloud, color: 'text-blue-400', label: 'Bad' },
-  { value: 3, icon: Cloud, color: 'text-blue-500', label: 'Sad' },
-  { value: 4, icon: Cloud, color: 'text-indigo-400', label: 'Meh' },
-  { value: 5, icon: Cloud, color: 'text-indigo-500', label: 'Okay' },
-  { value: 6, icon: Cloud, color: 'text-yellow-500', label: 'Good' },
-  { value: 7, icon: Cloud, color: 'text-orange-500', label: 'Great' },
-  { value: 8, icon: Cloud, color: 'text-orange-600', label: 'Happy' },
-  { value: 9, icon: Cloud, color: 'text-pink-500', label: 'Loved' },
-  { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' }
+  { value: 1, icon: Cloud, color: 'text-gray-400', hex: '#9ca3af', label: 'Awful' },
+  { value: 2, icon: Cloud, color: 'text-blue-400', hex: '#60a5fa', label: 'Bad' },
+  { value: 3, icon: Cloud, color: 'text-blue-500', hex: '#3b82f6', label: 'Sad' },
+  { value: 4, icon: Cloud, color: 'text-indigo-400', hex: '#818cf8', label: 'Meh' },
+  { value: 5, icon: Cloud, color: 'text-indigo-500', hex: '#6366f1', label: 'Okay' },
+  { value: 6, icon: Cloud, color: 'text-yellow-500', hex: '#eab308', label: 'Good' },
+  { value: 7, icon: Cloud, color: 'text-orange-500', hex: '#f97316', label: 'Great' },
+  { value: 8, icon: Cloud, color: 'text-orange-600', hex: '#ea580c', label: 'Happy' },
+  { value: 9, icon: Cloud, color: 'text-pink-500', hex: '#ec4899', label: 'Loved' },
+  { value: 10, icon: Cloud, color: 'text-red-500', hex: '#ef4444', label: 'Amazing' }
 ];
 
 // --- STYLES ---
@@ -47,7 +51,7 @@ const Styles = () => (
   `}</style>
 );
 
-// --- COMPRESSOR ---
+// --- HELPERS ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     if (file.size > 50 * 1024 * 1024) {
@@ -100,13 +104,6 @@ const getWeatherLabel = (code) => {
   return codes[code] || 'Unknown';
 };
 
-// --- HELPER COMPONENT FOR IMAGES ---
-const BlobImage = ({ src, ...props }) => {
-  const url = useBlobUrl(src);
-  return <motion.img src={url} {...props} />;
-};
-
-// --- TIME FORMATTER ---
 const formatSleepRange = (startTime, durationHours) => {
   if (!startTime) return '';
   const start = new Date(startTime);
@@ -116,7 +113,12 @@ const formatSleepRange = (startTime, durationHours) => {
   return `${fmt(start)} - ${fmt(end)}`;
 };
 
-// --- SLEEP WIDGET COMPONENT ---
+// --- COMPONENTS ---
+const BlobImage = ({ src, ...props }) => {
+  const url = useBlobUrl(src);
+  return <motion.img src={url} {...props} />;
+};
+
 const SleepWidget = ({ session }) => {
   const chartData = session.hypnogram && session.hypnogram.length > 0 
       ? session.hypnogram 
@@ -146,7 +148,6 @@ const SleepWidget = ({ session }) => {
         </div>
       </div>
 
-      {/* Mini Graph */}
       <div className="h-16 w-full bg-white/50 rounded-xl overflow-hidden border border-indigo-50">
         <ResponsiveContainer width="100%" height="100%">
            <AreaChart data={chartData}>
@@ -224,6 +225,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [uploading, setUploading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [saveStatus, setSaveStatus] = useState('idle');
+  const [isExporting, setIsExporting] = useState(false);
 
   // --- FETCH SLEEP DATA ---
   const sleepSessions = useLiveQuery(
@@ -231,9 +233,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     []
   );
 
-  // Filter sessions for the currently selected date
   const todaysSleepSessions = (sleepSessions || []).filter(session => {
-    // We match sessions that started on this day
     const sessionDate = new Date(session.startTime);
     return sessionDate.toDateString() === currentDate.toDateString();
   });
@@ -367,6 +367,35 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const toggleMode = () => setMode(prev => prev === 'edit' ? 'preview' : 'edit');
 
+  // --- PDF EXPORT HANDLER ---
+  const handleExportPdf = async () => {
+    setIsExporting(true);
+    try {
+      const currentEntryData = {
+        id: entryId, content, mood, location, weather, tags, images,
+        date: currentDate.toISOString()
+      };
+      
+      const moodMeta = MOODS.find(m => m.value === mood);
+
+      const doc = (
+        <EntryPdfDocument 
+          entry={currentEntryData} 
+          moodLabel={moodMeta?.label} 
+          moodColorHex={moodMeta?.hex} 
+        />
+      );
+      
+      const blob = await pdf(doc).toBlob();
+      saveAs(blob, `Journal_${currentDate.toISOString().split('T')[0]}.pdf`);
+    } catch (err) {
+      console.error("PDF Export failed", err);
+      alert("Failed to create PDF. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Cloud;
   const currentMoodColor = MOODS.find(m => m.value === mood)?.color || 'text-gray-500';
   const timeString = currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -410,6 +439,23 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* PDF EXPORT BUTTON */}
+            {entry?.id && (
+              <motion.button 
+                whileTap={{ scale: 0.9 }}
+                onClick={handleExportPdf}
+                disabled={isExporting}
+                className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+                title="Export PDF"
+              >
+                {isExporting ? (
+                  <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Download size={20} />
+                )}
+              </motion.button>
+            )}
+
             {entry?.id && (
               <motion.button 
                 whileTap={{ scale: 0.9 }}
