@@ -13,10 +13,16 @@ db.version(1).stores({
 });
 
 // Version 2: Added Sleep Tracking
-// We use 'id' (timestamp from CSV) as the primary key to prevent duplicates
 db.version(2).stores({
   entries: '++id, date, mood, *tags',
   sleep_sessions: 'id, startTime' 
+});
+
+// Version 3: Added WhatsApp Chat Analytics
+db.version(3).stores({
+  entries: '++id, date, mood, *tags',
+  sleep_sessions: 'id, startTime',
+  chat_analytics: 'id, name' 
 });
 
 // --- HELPER: IMAGE URL HOOK ---
@@ -66,13 +72,12 @@ export const exportToZip = async () => {
   const zip = new JSZip();
   const imgFolder = zip.folder("images");
   
-  // 1. Fetch Journal Entries
+  // 1. Fetch All Data
   const entries = await db.entries.toArray();
-  
-  // 2. Fetch Sleep Data
   const sleepSessions = await db.sleep_sessions.toArray();
+  const chats = await db.chat_analytics.toArray();
   
-  // 3. Process Journal Images (Convert to Blobs or Filenames)
+  // 2. Process Journal Images (Convert to Blobs or Filenames)
   const cleanEntries = entries.map(entry => {
     const doc = { ...entry, images: [] };
 
@@ -105,15 +110,18 @@ export const exportToZip = async () => {
     return doc;
   });
 
-  // 4. Add Files to Zip
+  // 3. Add Files to Zip
   zip.file("journal.json", JSON.stringify(cleanEntries, null, 2));
   
-  // Add Sleep Data if exists
   if (sleepSessions.length > 0) {
       zip.file("sleep_data.json", JSON.stringify(sleepSessions, null, 2));
   }
 
-  // 5. Generate and Download
+  if (chats.length > 0) {
+      zip.file("chat_data.json", JSON.stringify(chats, null, 2));
+  }
+
+  // 4. Generate and Download
   const content = await zip.generateAsync({ type: "blob" });
   saveAs(content, `journal_backup_${new Date().toISOString().split('T')[0]}.zip`);
 };
@@ -159,6 +167,17 @@ export const importFromZip = async (file) => {
       if (Array.isArray(sleepSessions) && sleepSessions.length > 0) {
           await db.sleep_sessions.bulkPut(sleepSessions);
           console.log(`Imported ${sleepSessions.length} sleep sessions.`);
+      }
+  }
+
+  // 3. Parse Chat Analytics
+  const chatFile = zip.file("chat_data.json");
+  if (chatFile) {
+      const chatStr = await chatFile.async("string");
+      const chats = JSON.parse(chatStr);
+      if (Array.isArray(chats) && chats.length > 0) {
+          await db.chat_analytics.bulkPut(chats);
+          console.log(`Imported ${chats.length} chat analytics.`);
       }
   }
 
