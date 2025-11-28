@@ -93,17 +93,6 @@ const compressImage = (file) => {
   });
 };
 
-const getWeatherLabel = (code) => {
-  const codes = {
-    0: 'Clear Sky', 1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
-    45: 'Fog', 48: 'Fog', 51: 'Drizzle', 53: 'Drizzle', 55: 'Drizzle',
-    61: 'Rain', 63: 'Rain', 65: 'Heavy Rain', 71: 'Snow', 73: 'Snow', 75: 'Heavy Snow',
-    77: 'Snow Grains', 80: 'Rain Showers', 81: 'Rain Showers', 82: 'Rain Showers',
-    85: 'Snow Showers', 86: 'Snow Showers', 95: 'Thunderstorm', 96: 'Thunderstorm', 99: 'Thunderstorm'
-  };
-  return codes[code] || 'Unknown';
-};
-
 const formatSleepRange = (startTime, durationHours) => {
   if (!startTime) return '';
   const start = new Date(startTime);
@@ -113,11 +102,9 @@ const formatSleepRange = (startTime, durationHours) => {
 };
 
 // --- PDF HELPER: CONVERT WEBP BLOB TO JPEG DATA URI ---
-// PDFs don't support WebP. This converts them to JPEG on the fly.
 const blobToJpeg = (blob) => {
   return new Promise((resolve) => {
     if (!(blob instanceof Blob)) {
-        // If it's already a string (URL or Base64), return as is (legacy support)
         resolve(blob);
         return;
     }
@@ -130,13 +117,12 @@ const blobToJpeg = (blob) => {
       canvas.height = img.height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
-      // Convert to JPEG
       const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.9);
       URL.revokeObjectURL(url);
       resolve(jpegDataUrl);
     };
     img.onerror = () => {
-        resolve(null); // Fail gracefully
+        resolve(null); 
     };
   });
 };
@@ -255,12 +241,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [isExporting, setIsExporting] = useState(false);
 
   // --- FETCH SLEEP DATA ---
-  const sleepSessions = useLiveQuery(
-    () => db.sleep_sessions.toArray(),
-    []
-  );
+  const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
 
-  const todaysSleepSessions = (sleepSessions || []).filter(session => {
+  const todaysSleepSessions = sleepSessions.filter(session => {
     const sessionDate = new Date(session.startTime);
     return sessionDate.toDateString() === currentDate.toDateString();
   });
@@ -411,7 +394,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         location, 
         weather, 
         tags, 
-        images: pdfImages.filter(Boolean), // Remove any failed conversions
+        images: pdfImages.filter(Boolean),
         date: currentDate.toISOString()
       };
       
@@ -420,7 +403,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       const doc = (
         <EntryPdfDocument 
           entry={currentEntryData} 
-          moodLabel={moodMeta?.label} 
+          moodLabel={moodMeta?.label}
+          sleepSessions={todaysSleepSessions}
         />
       );
       
@@ -477,7 +461,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* PDF BUTTON */}
             {entry?.id && (
               <motion.button 
                 whileTap={{ scale: 0.9 }}
