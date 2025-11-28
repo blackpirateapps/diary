@@ -1,39 +1,35 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { 
   Upload, ChevronLeft, MessageCircle, BarChart2, Calendar, 
-  User, MessageSquare, Zap, Trash2 
+  User, MessageSquare, Zap, Trash2, Sliders, Hash, Smile
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line 
+  PieChart, Pie, Cell, LabelList 
 } from 'recharts';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 
 // --- CONFIG ---
-const COLORS = ['#25D366', '#34B7F1', '#ECE5DD', '#128C7E']; // WhatsApp Brand Colors
+const COLORS = ['#25D366', '#34B7F1', '#ECE5DD', '#128C7E']; 
+const STOP_WORDS = new Set(['the', 'and', 'to', 'of', 'a', 'in', 'is', 'that', 'for', 'i', 'you', 'it', 'on', 'with', 'me', 'this', 'but', 'so', 'be', 'are', 'not', 'was', 'at', 'if', 'my', 'have', 'your', 'do', 'what', 'no', 'can', 'just', 'like', 'all', 'ok', 'we', 'up', 'out', 'how', 'yeah', 'good', 'got', 'did', 'why', 'has', 'too', 'one', 'now', 'see', 'im', 'u', 'its', 'go', 'well', 'will', 'he', 'she', 'or', 'as', 'by', 'an', 'omg', 'lol']);
 
 // --- PARSER ---
 const parseWhatsAppChat = (text) => {
   const lines = text.split(/\r?\n/);
   const messages = [];
-  // Regex for "Date, Time - Sender: Message"
-  // Supports: "11/19/25, 13:25 - Name: Msg" AND "19/11/2025, 1:25 pm - Name: Msg"
   const msgRegex = /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s(\d{1,2}:\d{2}(?:\s?[ap]m)?)\s-\s(.*?):\s(.*)$/i;
   
   let currentMsg = null;
 
   lines.forEach(line => {
-    // Filter system messages (e.g., encryption warnings)
     if (line.includes('Messages and calls are end-to-end encrypted')) return;
 
     const match = line.match(msgRegex);
     if (match) {
-      // New Message Found
       if (currentMsg) messages.push(currentMsg);
-      
       const [_, dateStr, timeStr, sender, content] = match;
-      const date = new Date(`${dateStr} ${timeStr}`); // Note: Might need better date parsing for DD/MM vs MM/DD based on locale, assuming MM/DD for now based on file
+      const date = new Date(`${dateStr} ${timeStr}`);
       
       currentMsg = {
         date,
@@ -42,7 +38,6 @@ const parseWhatsAppChat = (text) => {
         timestamp: date.getTime()
       };
     } else if (currentMsg) {
-      // Multiline message continuation
       currentMsg.content += `\n${line}`;
     }
   });
@@ -62,9 +57,11 @@ const analyzeChat = (messages, chatName) => {
     startDate: messages[0].timestamp,
     endDate: messages[messages.length - 1].timestamp,
     participants: {},
-    timeline: {}, // For graphs
     streaks: { current: 0, max: 0, gapMax: 0, totalActiveDays: 0 },
-    initiations: {} // Who starts convos
+    topWords: [],
+    topEmojis: [],
+    // We store minimal metadata to allow re-calculating initiations dynamically
+    messageLog: messages.map(m => ({ t: m.timestamp, s: m.sender })) 
   };
 
   const dates = new Set();
@@ -72,23 +69,40 @@ const analyzeChat = (messages, chatName) => {
   let currentStreak = 0;
   let maxGap = 0;
   
-  // Gap threshold for "Starting a conversation" (e.g., 6 hours silence)
-  const INITIATION_THRESHOLD = 6 * 60 * 60 * 1000; 
+  const wordCounts = {};
+  const emojiCounts = {};
+  // Regex for Emoji (Simple Range)
+  const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
 
-  messages.forEach((msg, index) => {
+  messages.forEach((msg) => {
     // 1. Participant Stats
     if (!stats.participants[msg.sender]) {
       stats.participants[msg.sender] = { count: 0, words: 0 };
-      stats.initiations[msg.sender] = 0;
     }
     stats.participants[msg.sender].count++;
-    stats.participants[msg.sender].words += msg.content.trim().split(/\s+/).length;
+    
+    // 2. Word & Emoji Mining
+    const cleanText = msg.content.toLowerCase();
+    const words = cleanText.split(/[\s,.;!?"]+/);
+    
+    words.forEach(w => {
+        if (w.length > 2 && !STOP_WORDS.has(w) && !w.match(/^\d+$/)) {
+            wordCounts[w] = (wordCounts[w] || 0) + 1;
+        }
+        stats.participants[msg.sender].words++;
+    });
 
-    // 2. Dates & Streaks
+    const emojis = msg.content.match(emojiRegex);
+    if (emojis) {
+        emojis.forEach(e => {
+            emojiCounts[e] = (emojiCounts[e] || 0) + 1;
+        });
+    }
+
+    // 3. Dates & Streaks
     const dateStr = msg.date.toDateString();
     if (!dates.has(dateStr)) {
       dates.add(dateStr);
-      stats.timeline[dateStr] = 0; // Initialize for graph
       
       if (lastDate) {
         const diffDays = Math.round((msg.date - lastDate) / (1000 * 60 * 60 * 24));
@@ -97,7 +111,6 @@ const analyzeChat = (messages, chatName) => {
         } else {
           stats.streaks.max = Math.max(stats.streaks.max, currentStreak);
           currentStreak = 1;
-          // Calculate Gap
           if (diffDays > 1) maxGap = Math.max(maxGap, diffDays - 1);
         }
       } else {
@@ -105,28 +118,28 @@ const analyzeChat = (messages, chatName) => {
       }
       lastDate = msg.date;
     }
-    stats.timeline[dateStr]++;
-
-    // 3. Initiation
-    if (index > 0) {
-      const prev = messages[index-1];
-      if (msg.timestamp - prev.timestamp > INITIATION_THRESHOLD) {
-        stats.initiations[msg.sender]++;
-      }
-    }
   });
 
-  // Finalize stats
   stats.streaks.max = Math.max(stats.streaks.max, currentStreak);
   stats.streaks.gapMax = maxGap;
   stats.streaks.totalActiveDays = dates.size;
-  
-  // Normalize participant data for charts
-  stats.chartData = Object.keys(stats.participants).map(p => ({
+
+  // Sort and Top lists
+  stats.topWords = Object.entries(wordCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([word, count]) => ({ word, count }));
+
+  stats.topEmojis = Object.entries(emojiCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([char, count]) => ({ char, count }));
+
+  // Basic Chart Data (Init counts will be calc'd dynamically)
+  stats.baseChartData = Object.keys(stats.participants).map(p => ({
     name: p,
     messages: stats.participants[p].count,
-    words: stats.participants[p].words,
-    initiations: stats.initiations[p]
+    words: stats.participants[p].words
   }));
 
   return stats;
@@ -145,8 +158,36 @@ const StatCard = ({ icon: Icon, label, value, color = "green" }) => (
 );
 
 const ChatDetail = ({ data, onBack }) => {
-  const durationDays = Math.ceil((data.endDate - data.startDate) / (1000 * 60 * 60 * 24));
-  
+  const [initiationThreshold, setInitiationThreshold] = useState(6); // Hours
+
+  // Dynamic Calculation of Conversation Starters
+  const chartData = useMemo(() => {
+      if (!data.messageLog) return data.baseChartData;
+
+      const initiations = {};
+      Object.keys(data.participants).forEach(p => initiations[p] = 0);
+
+      const THRESHOLD_MS = initiationThreshold * 60 * 60 * 1000;
+
+      data.messageLog.forEach((msg, i) => {
+          if (i > 0) {
+              const prev = data.messageLog[i-1];
+              if (msg.t - prev.t > THRESHOLD_MS) {
+                  initiations[msg.s] = (initiations[msg.s] || 0) + 1;
+              }
+          } else {
+              // First message ever starts a convo
+              initiations[msg.s] = 1; 
+          }
+      });
+
+      return data.baseChartData.map(d => ({
+          ...d,
+          initiations: initiations[d.name] || 0
+      }));
+
+  }, [data, initiationThreshold]);
+
   return (
     <div className="pb-24 animate-slideUp">
       <div className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 backdrop-blur-md z-20 border-b border-gray-200/50 flex items-center gap-3">
@@ -155,7 +196,9 @@ const ChatDetail = ({ data, onBack }) => {
         </button>
         <div>
             <h1 className="text-xl font-bold text-gray-900 truncate max-w-[200px]">{data.name}</h1>
-            <p className="text-xs text-gray-500">{new Date(data.startDate).toLocaleDateString()} — {new Date(data.endDate).toLocaleDateString()}</p>
+            <p className="text-xs text-gray-500">
+                {new Date(data.startDate).toLocaleDateString()} — {new Date(data.endDate).toLocaleDateString()}
+            </p>
         </div>
       </div>
 
@@ -178,13 +221,19 @@ const ChatDetail = ({ data, onBack }) => {
             </h3>
             <div className="h-64 w-full -ml-2">
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data.chartData} layout="vertical" margin={{ left: 40 }}>
+                    <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 30, top: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                         <XAxis type="number" hide />
-                        <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} />
+                        <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 10}} />
                         <Tooltip cursor={{fill: 'transparent'}} />
-                        <Bar dataKey="messages" name="Messages" fill="#25D366" radius={[0, 4, 4, 0]} barSize={20} />
-                        <Bar dataKey="words" name="Words" fill="#34B7F1" radius={[0, 4, 4, 0]} barSize={20} />
+                        
+                        <Bar dataKey="messages" name="Messages" fill="#25D366" radius={[0, 4, 4, 0]} barSize={20}>
+                            <LabelList dataKey="messages" position="right" style={{fontSize: 10, fill: '#666'}} />
+                        </Bar>
+                        
+                        <Bar dataKey="words" name="Words" fill="#34B7F1" radius={[0, 4, 4, 0]} barSize={20}>
+                            <LabelList dataKey="words" position="right" style={{fontSize: 10, fill: '#666'}} />
+                        </Bar>
                     </BarChart>
                 </ResponsiveContainer>
             </div>
@@ -196,14 +245,28 @@ const ChatDetail = ({ data, onBack }) => {
 
         {/* 3. WHO STARTS? (PIE CHART) */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Zap size={18} className="text-orange-500" /> Conversation Starters
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                    <Zap size={18} className="text-orange-500" /> Starters
+                </h3>
+                {/* Config Slider */}
+                <div className="flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-lg">
+                    <Sliders size={12} className="text-gray-400" />
+                    <span className="text-xs font-bold text-gray-600">{initiationThreshold}h Silence</span>
+                    <input 
+                        type="range" min="1" max="48" step="1" 
+                        value={initiationThreshold}
+                        onChange={(e) => setInitiationThreshold(parseInt(e.target.value))}
+                        className="w-16 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                </div>
+            </div>
+
             <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
-                            data={data.chartData}
+                            data={chartData}
                             dataKey="initiations"
                             nameKey="name"
                             cx="50%"
@@ -212,7 +275,7 @@ const ChatDetail = ({ data, onBack }) => {
                             outerRadius={80}
                             paddingAngle={5}
                         >
-                            {data.chartData.map((entry, index) => (
+                            {chartData.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                         </Pie>
@@ -221,16 +284,49 @@ const ChatDetail = ({ data, onBack }) => {
                 </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap justify-center gap-3">
-                {data.chartData.map((entry, index) => (
+                {chartData.map((entry, index) => (
                     <div key={entry.name} className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                         <span className="text-xs text-gray-500">{entry.name} ({entry.initiations})</span>
                     </div>
                 ))}
             </div>
-            <p className="text-center text-[10px] text-gray-400 mt-4">
-                *Starts a chat after {'>'}6 hours of silence.
-            </p>
+        </div>
+
+        {/* 4. TOP WORDS & EMOJIS */}
+        <div className="grid grid-cols-1 gap-4">
+            
+            {/* Top Words */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Hash size={18} className="text-purple-500" /> Top Words
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                    {data.topWords.map((w, i) => (
+                        <div key={i} className="flex items-center bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-xs font-medium">
+                            {w.word}
+                            <span className="ml-1.5 opacity-60 text-[10px]">{w.count}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Top Emojis */}
+            {data.topEmojis.length > 0 && (
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <Smile size={18} className="text-yellow-500" /> Top Emojis
+                    </h3>
+                    <div className="flex flex-wrap gap-3">
+                        {data.topEmojis.map((e, i) => (
+                            <div key={i} className="flex flex-col items-center bg-gray-50 p-2 rounded-xl min-w-[50px]">
+                                <span className="text-2xl mb-1">{e.char}</span>
+                                <span className="text-[10px] text-gray-500 font-bold">{e.count}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
 
       </div>
