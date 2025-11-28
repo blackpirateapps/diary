@@ -1,11 +1,59 @@
 import React, { useState, useMemo } from 'react';
 import { Image as ImageIcon, X, Calendar, MapPin, ChevronLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useBlobUrl } from '../db'; // NEW IMPORT
+
+// --- HELPER COMPONENTS ---
+
+// 1. Grid Item Helper
+const GalleryItem = ({ image, onClick }) => {
+  const url = useBlobUrl(image.src); // Generate URL from Blob
+  
+  return (
+    <motion.button
+      layoutId={`img-${image.id}`} // Shared layout ID for smooth transition
+      onClick={onClick}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.95 }}
+      className="aspect-square rounded-2xl overflow-hidden bg-gray-100 relative group cursor-pointer border border-transparent hover:border-black/5"
+    >
+      {url ? (
+        <img
+          src={url}
+          alt="Memory"
+          loading="lazy"
+          className="w-full h-full object-cover transition-transform duration-700"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-100">
+           <ImageIcon size={24} />
+        </div>
+      )}
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+    </motion.button>
+  );
+};
+
+// 2. Lightbox Helper
+const LightboxImage = ({ src }) => {
+  const url = useBlobUrl(src);
+  if (!url) return <div className="w-full h-64 flex items-center justify-center text-gray-400">Loading...</div>;
+  
+  return (
+    <img
+      src={url}
+      alt="Full screen"
+      className="w-full h-auto max-h-[70vh] object-contain"
+    />
+  );
+};
+
+// --- MAIN COMPONENT ---
 
 const MediaGallery = ({ entries }) => {
   const [selectedImage, setSelectedImage] = useState(null);
 
-  // --- DATA PROCESSING (Same as before) ---
+  // --- DATA PROCESSING ---
   const galleryData = useMemo(() => {
     const allImages = entries.reduce((acc, entry) => {
       const imgs = Array.isArray(entry.images) ? entry.images : [];
@@ -14,7 +62,7 @@ const MediaGallery = ({ entries }) => {
       const dateObj = new Date(entry.date);
       
       return [...acc, ...imgs.map((src, index) => ({
-        src,
+        src, // This is now a Blob or a Base64 string
         id: `${entry.id}-${index}`,
         entryId: entry.id,
         date: dateObj,
@@ -122,22 +170,12 @@ const MediaGallery = ({ entries }) => {
                   
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {galleryData[year][month].map((img) => (
-                      <motion.button
-                        key={img.id}
-                        layoutId={`img-${img.id}`} // Magic: Shared element transition
-                        onClick={() => setSelectedImage(img)}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="aspect-square rounded-2xl overflow-hidden bg-gray-100 relative group cursor-pointer border border-transparent hover:border-black/5"
-                      >
-                        <img
-                          src={img.src}
-                          alt="Memory"
-                          loading="lazy"
-                          className="w-full h-full object-cover transition-transform duration-700"
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
-                      </motion.button>
+                      // USE NEW HELPER COMPONENT
+                      <GalleryItem 
+                        key={img.id} 
+                        image={img} 
+                        onClick={() => setSelectedImage(img)} 
+                      />
                     ))}
                   </div>
                 </motion.div>
@@ -148,7 +186,6 @@ const MediaGallery = ({ entries }) => {
       </div>
 
       {/* --- LIGHTBOX MODAL --- */}
-      {/* AnimatePresence allows the component to animate OUT before unmounting */}
       <AnimatePresence>
         {selectedImage && (
           <motion.div 
@@ -183,11 +220,8 @@ const MediaGallery = ({ entries }) => {
                 className="w-full max-w-3xl bg-white rounded-3xl shadow-xl overflow-hidden"
               >
                 <div className="bg-black/5 relative aspect-auto min-h-[300px] flex items-center justify-center">
-                  <img 
-                    src={selectedImage.src} 
-                    alt="Full screen" 
-                    className="w-full h-auto max-h-[70vh] object-contain"
-                  />
+                  {/* USE NEW HELPER COMPONENT */}
+                  <LightboxImage src={selectedImage.src} />
                 </div>
 
                 {/* Metadata Footer */}

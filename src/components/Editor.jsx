@@ -18,6 +18,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
+// --- NEW IMPORT FOR IMAGE HANDLING ---
+import { useBlobUrl } from '../db'; 
 
 // --- CONFIGURATION ---
 const MOODS = [
@@ -83,9 +85,10 @@ const getWeatherLabel = (code) => {
   return codes[code] || 'Unknown';
 };
 
+// --- UPDATED: COMPRESS TO BLOB INSTEAD OF BASE64 ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
-    if (file.size > 10 * 1024 * 1024) {
+    if (file.size > 20 * 1024 * 1024) { // Increased limit for IndexedDB
       reject(new Error('Image too large.'));
       return;
     }
@@ -96,8 +99,8 @@ const compressImage = (file) => {
       img.src = event.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
-        const MAX_HEIGHT = 800;
+        const MAX_WIDTH = 1200; // Increased quality since we have more storage
+        const MAX_HEIGHT = 1200;
         let width = img.width;
         let height = img.height;
         if (width > height && width > MAX_WIDTH) {
@@ -111,12 +114,27 @@ const compressImage = (file) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.6));
+        
+        // Convert to Blob instead of DataURL
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Compression failed.'));
+          }
+        }, 'image/jpeg', 0.8);
       };
       img.onerror = () => reject(new Error('Failed to load image.'));
     };
     reader.onerror = () => reject(new Error('Failed to read file.'));
   });
+};
+
+// --- NEW HELPER COMPONENT FOR IMAGES ---
+// Handles converting Blobs to ObjectURLs automatically
+const BlobImage = ({ src, ...props }) => {
+  const url = useBlobUrl(src);
+  return <motion.img src={url} {...props} />;
 };
 
 // --- UPDATED ANIMATION VARIANTS (Simple Fade) ---
@@ -197,7 +215,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       locationLng, 
       weather, 
       tags, 
-      images,
+      images, // Now contains Blobs
       date: dateToSave.toISOString()
     });
 
@@ -236,9 +254,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     if (file) {
       setUploading(true);
       try {
-        const compressedBase64 = await compressImage(file);
-        setImages(prev => [...prev, compressedBase64]);
-        setImgIndex(images.length);
+        const compressedBlob = await compressImage(file);
+        setImages(prev => [...prev, compressedBlob]);
+        setImgIndex(images.length); // Fix: point to the new image (length is actually length + 1 after update, but here we depend on prev state, effectively setting it to the last index)
         saveData(true);
       } catch (err) {
         alert(err.message);
@@ -380,7 +398,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           variants={contentStagger}
         >
           
-          {/* IMAGE CAROUSEL */}
+          {/* IMAGE CAROUSEL (UPDATED TO USE BlobImage) */}
           <AnimatePresence>
             {images.length > 0 && (
               <motion.div 
@@ -389,7 +407,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 exit={{ opacity: 0, height: 0 }}
                 className="w-full relative group bg-gray-50 flex-shrink-0"
               >
-                <motion.img 
+                {/* Main Image */}
+                <BlobImage 
                   key={imgIndex}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -399,9 +418,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                   className="w-full h-full object-contain" 
                 />
                 
-                <div className="absolute inset-0 -z-10">
-                   {/* Blur Background */}
-                  <img src={images[imgIndex]} className="w-full h-full object-cover blur-2xl opacity-30" alt="" />
+                <div className="absolute inset-0 -z-10 overflow-hidden">
+                   {/* Blur Background - REPLACED IMG WITH BLOBIMAGE */}
+                  <BlobImage src={images[imgIndex]} className="w-full h-full object-cover blur-2xl opacity-30" alt="" />
                 </div>
                 
                 {/* Navigation Controls */}

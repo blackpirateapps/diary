@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import { ChevronLeft, Calendar, ArrowRight, Smile, Frown, Meh, Heart, Sun, CloudRain } from 'lucide-react';
+// --- IMPORT NEW HOOK ---
+import { useBlobUrl } from '../db';
 
 // Shared Moods (In a real app, this should be in a separate constants file)
 const MOODS = [
@@ -15,6 +17,13 @@ const MOODS = [
   { value: 10, icon: Heart, color: 'text-red-500' },
 ];
 
+// --- HELPER COMPONENT FOR IMAGES ---
+const FlashbackImage = ({ src }) => {
+  const url = useBlobUrl(src);
+  if (!url) return null;
+  return <img src={url} alt="Memory" className="w-full h-full object-cover" />;
+};
+
 const FlashbackCard = ({ entry, label, subLabel, onClick }) => {
   const moodMeta = MOODS.find(m => m.value === entry.mood);
   const MoodIcon = moodMeta?.icon || Sun;
@@ -29,7 +38,8 @@ const FlashbackCard = ({ entry, label, subLabel, onClick }) => {
     >
       {coverImage && (
         <div className="w-20 h-20 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100">
-          <img src={coverImage} alt="Memory" className="w-full h-full object-cover" />
+          {/* Replaced raw img with Helper */}
+          <FlashbackImage src={coverImage} />
         </div>
       )}
       <div className="flex-1 min-w-0">

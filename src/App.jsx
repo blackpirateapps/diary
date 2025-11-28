@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+// --- NEW IMPORTS ---
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db'; 
+
 import Editor from './components/Editor';
 import JournalList from './components/JournalList';
 import StatsPage from './components/StatsPage';
@@ -9,49 +13,9 @@ import {
   BarChart2,
   Grid,
   Home,
-  Map as MapIcon, // RENAME THIS to avoid "SR is not a constructor" conflicts
+  Map as MapIcon, 
   Trash2,
 } from 'lucide-react';
-
-const INITIAL_ENTRIES = [
-  {
-    id: '1',
-    content: 'Found a new spot downtown. The light coming through the window was perfect. Spent an hour reading and sipping a cortado.',
-    date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-    mood: 8,
-    location: 'Downtown, Seattle',
-    locationLat: 47.6062,
-    locationLng: -122.3321,
-    weather: '18°C',
-    tags: ['coffee', 'relaxing'],
-    images: ['https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=400']
-  },
-  {
-    id: '2',
-    content: 'Heavy rain all day. Good day for coding and lo-fi beats.',
-    date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(),
-    mood: 5,
-    location: 'Home Office',
-    weather: '12°C',
-    tags: ['work', 'rain'],
-    images: []
-  },
-  {
-    id: '3',
-    content: 'Beat my personal best time today! Felt exhausted but accomplished.',
-    date: new Date().toISOString(),
-    mood: 10,
-    location: 'Central Park',
-    locationLat: 40.785091,
-    locationLng: -73.968285,
-    weather: '24°C',
-    tags: ['fitness', 'health'],
-    images: [
-      'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&q=80&w=400',
-      'https://images.unsplash.com/photo-1502224562085-639556652f33?auto=format&fit=crop&q=80&w=400'
-    ]
-  }
-];
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('journal');
@@ -62,35 +26,22 @@ const App = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState(null);
 
-  // Load from localStorage
-  const [entries, setEntries] = useState(() => {
-    try {
-      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('journal_entries') : null;
-      return saved ? JSON.parse(saved) : INITIAL_ENTRIES;
-    } catch (e) {
-      console.error("Failed to load entries:", e);
-      return INITIAL_ENTRIES;
-    }
-  });
+  // --- REPLACED LOCALSTORAGE STATE WITH DEXIE QUERY ---
+  // This automatically updates the UI whenever the database changes
+  const entries = useLiveQuery(
+    () => db.entries.orderBy('date').reverse().toArray(), 
+    []
+  ) || [];
 
   const dateInputRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // --- PERSISTENCE ---
+  // --- INIT & MIGRATION ---
   useEffect(() => {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('journal_entries', JSON.stringify(entries));
-      }
-    } catch (e) {
-      if (e.name === 'QuotaExceededError') {
-        alert('Storage full! Please delete images or entries.');
-      }
-    }
-  }, [entries]);
+    // 1. Migrate old localStorage data if it exists
+    migrateFromLocalStorage();
 
-  // --- ONLINE STATUS ---
-  useEffect(() => {
+    // 2. Network Listeners
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
     window.addEventListener('online', handleOnline);
@@ -101,35 +52,41 @@ const App = () => {
     };
   }, []);
 
-  // --- CRUD OPERATIONS ---
-  const handleSaveEntry = (entry) => {
-    setEntries(prev => {
-      if (prev.some(e => e.id === entry.id)) {
-        return prev.map(e => (e.id === entry.id ? entry : e));
-      }
-      return [entry, ...prev];
-    });
+  // --- CRUD OPERATIONS (Updated for Dexie) ---
+  const handleSaveEntry = async (entry) => {
+    try {
+      // .put works for both insert (if id is new) and update (if id exists)
+      await db.entries.put(entry);
+    } catch (error) {
+      console.error("Failed to save entry:", error);
+      alert("Failed to save. Storage might be full.");
+    }
   };
 
-  const handleDeleteEntry = (id) => {
+  const handleDeleteEntry = async (id) => {
     if (!id) {
       setIsEditorOpen(false);
       setEditingEntry(null);
       return;
     }
-    setEntries(prev => prev.filter(e => e.id !== id));
-    setIsEditorOpen(false);
-    setEditingEntry(null);
+    try {
+      await db.entries.delete(id);
+      setIsEditorOpen(false);
+      setEditingEntry(null);
+    } catch (error) {
+      console.error("Failed to delete:", error);
+    }
   };
 
   // --- NAVIGATION & EDITOR ---
   const openNewEditor = (date = new Date()) => {
     const dateStr = date.toDateString();
+    // Logic remains same, but we search the live array
     const existing = entries.find(e => new Date(e.date).toDateString() === dateStr);
     if (existing) {
       setEditingEntry(existing);
     } else {
-      setEditingEntry({ date: date.toISOString() });
+      setEditingEntry({ id: Date.now().toString(), date: date.toISOString() });
     }
     setIsEditorOpen(true);
   };
@@ -147,113 +104,57 @@ const App = () => {
     e.target.value = '';
   };
 
-  // --- EXPORT LOGIC ---
-  const handleExport = () => {
+  // --- EXPORT LOGIC (Now uses ZIP) ---
+  const handleExport = async () => {
     try {
-      const backupData = {
-        version: 1,
-        timestamp: new Date().toISOString(),
-        entries: entries
-      };
-
-      const dataStr = JSON.stringify(backupData, null, 2);
-      const blob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `blackpirates_journal_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 100);
+      await exportToZip(); // Calls logic in db.js
     } catch (e) {
       alert("Export failed: " + e.message);
     }
   };
 
-  // --- IMPORT LOGIC (Fixed & Robust) ---
-  const handleImport = (event) => {
+  // --- IMPORT LOGIC (Handles ZIP & Legacy JSON) ---
+  const handleImport = async (event) => {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
 
     setIsImporting(true);
     setImportError(null);
 
-    const reader = new FileReader();
-
-    reader.onload = (ev) => {
-      try {
-        const text = ev.target && ev.target.result;
-        if (typeof text !== 'string') throw new Error("Could not read file contents.");
-
-        let parsed;
+    try {
+      // 1. Handle New ZIP Backups
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        const count = await importFromZip(file);
+        alert(`Success! Imported ${count} entries from ZIP archive.`);
+      } 
+      // 2. Handle Legacy JSON Backups
+      else if (file.name.toLowerCase().endsWith('.json')) {
+        const text = await file.text();
+        let data;
         try {
-          parsed = JSON.parse(text);
-        } catch (jsonErr) {
-          throw new Error("Invalid JSON format.");
-        }
+          data = JSON.parse(text);
+        } catch(e) { throw new Error("Invalid JSON file"); }
+
+        // Normalize structure (some exports are array, some are object with 'entries')
+        const incomingEntries = Array.isArray(data) ? data : (data.entries || []);
         
-        let incomingEntries = [];
-        if (Array.isArray(parsed)) {
-          incomingEntries = parsed;
-        } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.entries)) {
-          incomingEntries = parsed.entries;
-        } else {
-          throw new Error("Invalid backup: No 'entries' found.");
-        }
+        if (incomingEntries.length === 0) throw new Error("No entries found in JSON.");
 
-        const validEntries = incomingEntries
-          .filter(entry => entry && typeof entry === 'object')
-          .map((entry, index) => {
-            const id = entry.id || `imported_${Date.now()}_${index}`;
-            
-            // Prevent crashes: Validate Date
-            let date = entry.date;
-            const parsedDate = new Date(date);
-            if (!date || isNaN(parsedDate.getTime())) {
-              console.warn(`Invalid date for entry ${id}, using current date.`);
-              date = new Date().toISOString();
-            }
-
-            return {
-              id,
-              content: entry.content || '',
-              date: date,
-              mood: typeof entry.mood === 'number' ? entry.mood : 5,
-              location: entry.location || '',
-              locationLat: entry.locationLat,
-              locationLng: entry.locationLng,
-              weather: entry.weather || '',
-              tags: Array.isArray(entry.tags) ? entry.tags : [],
-              images: Array.isArray(entry.images) ? entry.images : []
-            };
-          });
-
-        if (validEntries.length === 0) {
-          throw new Error("No valid entries found to import.");
-        }
-
-        setEntries(prev => {
-          const entryMap = new Map(prev.map(e => [e.id, e]));
-          validEntries.forEach(e => entryMap.set(e.id, e));
-          return Array.from(entryMap.values()).sort(
-            (a, b) => new Date(b.date) - new Date(a.date)
-          );
-        });
-
-        alert(`Success! Imported ${validEntries.length} entries.`);
-
-      } catch (err) {
-        console.error("Import Error:", err);
-        setImportError(err.message);
-      } finally {
-        setIsImporting(false);
-        if (event.target) event.target.value = '';
+        // Bulk insert into IndexedDB
+        // Note: Dexie handles Base64 strings in the 'images' array perfectly fine
+        await db.entries.bulkPut(incomingEntries);
+        alert(`Success! Imported ${incomingEntries.length} legacy entries.`);
+      } 
+      else {
+        throw new Error("Unsupported file type. Please upload a .zip or .json file.");
       }
-    };
-
-    reader.readAsText(file);
+    } catch (err) {
+      console.error("Import Error:", err);
+      setImportError(err.message);
+    } finally {
+      setIsImporting(false);
+      if (event.target) event.target.value = '';
+    }
   };
 
   return (
@@ -265,7 +166,7 @@ const App = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-slideUp">
               <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="font-semibold text-gray-700">Processing...</p>
+              <p className="font-semibold text-gray-700">Processing backup...</p>
             </div>
           </div>
         )}
@@ -298,7 +199,6 @@ const App = () => {
                 onEdit={openEditEditor}
                 onCreate={() => openNewEditor()}
                 onAddOld={() => dateInputRef.current?.showPicker()}
-                // Correctly passed the import handler
                 onImport={handleImport} 
                 onExport={handleExport}
                 isOffline={isOffline}
@@ -312,8 +212,9 @@ const App = () => {
           </>
         )}
 
+        {/* Note: accept attribute now allows both formats */}
         <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
-        <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".json" />
+        <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".zip,.json" />
         
         {isEditorOpen && (
           <Editor
@@ -332,7 +233,6 @@ const App = () => {
           </button>
           
           <button onClick={() => { setActiveTab('map'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'map' ? 'text-blue-600' : 'text-gray-400'}`}>
-            {/* Using the renamed MapIcon */}
             <MapIcon size={22} strokeWidth={activeTab === 'map' ? 2.5 : 2} />
             <span className="text-[10px] font-medium">Atlas</span>
           </button>

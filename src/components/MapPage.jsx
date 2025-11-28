@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { MapPin, Calendar, ArrowRight } from 'lucide-react';
+// --- IMPORT NEW HOOK ---
+import { useBlobUrl } from '../db';
+
 // We inject the Leaflet CSS directly via a style tag since we can't edit index.html
 const LeafletStyles = () => (
   <>
@@ -21,9 +24,24 @@ const LeafletStyles = () => (
       .leaflet-default-icon-path {
         background-image: url(https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png);
       }
+      .custom-popup .leaflet-popup-content-wrapper {
+        border-radius: 12px;
+        padding: 0;
+        overflow: hidden;
+      }
+      .custom-popup .leaflet-popup-content {
+        margin: 0;
+      }
     `}</style>
   </>
 );
+
+// --- HELPER COMPONENT FOR MAP IMAGES ---
+const MapPopupImage = ({ src }) => {
+  const url = useBlobUrl(src);
+  if (!url) return null;
+  return <img src={url} alt="" className="w-full h-full object-cover" />;
+};
 
 // Helper to recenter map when entries change
 const RecenterMap = ({ entries }) => {
@@ -88,24 +106,27 @@ const MapPage = ({ entries, onEdit }) => {
                 >
                   <Popup className="custom-popup">
                     <div className="p-1 min-w-[200px]" onClick={() => onEdit(entry)}>
-                      <div className="flex items-center gap-2 mb-2 text-gray-400 text-xs font-medium uppercase tracking-wider">
+                      <div className="flex items-center gap-2 mb-2 p-2 pb-0 text-gray-400 text-xs font-medium uppercase tracking-wider">
                          <Calendar size={12} />
                          {new Date(entry.date).toLocaleDateString()}
                       </div>
                       
                       {entry.images && entry.images.length > 0 && (
-                        <div className="w-full h-24 mb-2 rounded-lg overflow-hidden">
-                          <img src={entry.images[0]} alt="" className="w-full h-full object-cover" />
+                        <div className="w-full h-24 mb-2 overflow-hidden bg-gray-100 mt-2">
+                          {/* Use Helper Component */}
+                          <MapPopupImage src={entry.images[0]} />
                         </div>
                       )}
 
-                      <p className="font-semibold text-gray-800 text-sm line-clamp-2 mb-2">
-                        {entry.content.replace(/<[^>]*>?/gm, ' ')}
-                      </p>
-                      
-                      <button className="text-blue-500 text-xs font-bold flex items-center gap-1 hover:underline">
-                        View Entry <ArrowRight size={12} />
-                      </button>
+                      <div className="p-2 pt-0">
+                        <p className="font-semibold text-gray-800 text-sm line-clamp-2 mb-2">
+                          {entry.content.replace(/<[^>]*>?/gm, ' ')}
+                        </p>
+                        
+                        <button className="text-blue-500 text-xs font-bold flex items-center gap-1 hover:underline">
+                          View Entry <ArrowRight size={12} />
+                        </button>
+                      </div>
                     </div>
                   </Popup>
                 </Marker>
