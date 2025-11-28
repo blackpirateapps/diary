@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   ChevronLeft, Settings, Info, Download, Upload, 
-  ChevronRight, Github, Mail, Shield, Smartphone 
+  ChevronRight, Github, Mail, Shield, Smartphone, Moon
 } from 'lucide-react';
 
 // --- SHARED HEADER COMPONENT ---
@@ -38,6 +38,14 @@ export const MoreMenu = ({ navigate }) => {
     <div className="pb-24">
       <PageHeader title="More" />
       <div className="p-4 space-y-6">
+        
+        {/* New "Tools" Section */}
+        <div>
+           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-2">Tools</h3>
+           <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+             <MenuItem icon={Moon} label="Sleep Insights" onClick={() => navigate('sleep')} />
+           </div>
+        </div>
         
         {/* Section 1 */}
         <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100">

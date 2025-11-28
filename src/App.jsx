@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db'; 
+import { SleepPage } from './components/SleepPage';
 
 import Editor from './components/Editor';
 import JournalList from './components/JournalList';
@@ -212,6 +213,8 @@ const App = () => {
             
             {/* NEW PAGES */}
             {currentRoute === 'more' && <MoreMenu navigate={navigate} />}
+            {/* NEW ROUTE */}
+    {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
             {currentRoute === 'settings' && (
               <SettingsPage 
                 navigate={navigate} 
