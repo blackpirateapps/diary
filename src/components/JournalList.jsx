@@ -4,7 +4,6 @@ import {
   X, Tag, MapPin, Smile, Frown, Meh, Heart, Sun, CloudRain
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-// --- IMPORT NEW HOOK ---
 import { useBlobUrl } from '../db';
 
 // --- CONFIGURATION ---
@@ -22,7 +21,6 @@ const MOODS = [
 ];
 
 // --- HELPER COMPONENT FOR IMAGES ---
-// Handles converting Blobs to ObjectURLs automatically
 const JournalEntryImage = ({ src }) => {
   const url = useBlobUrl(src);
   
@@ -73,8 +71,6 @@ const JournalList = ({
 
     return matchesSearch && matchesMood && matchesTag && matchesLoc;
   });
-  // Note: Sorting is now handled by Dexie in App.jsx or rely on default sort here if needed
-  // filteredEntries.sort((a, b) => new Date(b.date) - new Date(a.date)); 
 
   const toggleFilter = (type, value) => {
     setActiveFilters(prev => ({
@@ -171,10 +167,10 @@ const JournalList = ({
                       </button>
                       <div className="h-px bg-gray-100 my-1" />
                       <button onClick={() => { onExport(); setIsMenuOpen(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded-lg w-full text-left">
-                        <Download size={14} /> Export ZIP
+                        <Download size={14} /> Export Backup
                       </button>
                       <button onClick={() => { importInputRef.current.click(); setIsMenuOpen(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded-lg w-full text-left">
-                        <Upload size={14} /> Import ZIP
+                        <Upload size={14} /> Import Backup
                       </button>
                     </motion.div>
                   </>
@@ -192,8 +188,9 @@ const JournalList = ({
             </motion.button>
           </motion.div>
         </div>
-        {/* Updated accept attribute to .zip */}
-        <input ref={importInputRef} type="file" className="hidden" accept=".zip" onChange={onImport} />
+        
+        {/* --- FIXED: ACCEPT BOTH FORMATS --- */}
+        <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
 
         {/* SEARCH & FILTER BAR ANIMATION */}
         <AnimatePresence>
@@ -373,12 +370,10 @@ const JournalList = ({
                   </div>
                 )}
                 
-                {/* Images Preview - UPDATED FOR BLOB SUPPORT */}
+                {/* Images Preview */}
                 {entry.images && entry.images.length > 0 && (
                   <div className="mt-3 h-32 w-full rounded-xl overflow-hidden relative border border-gray-100">
-                    {/* Replaced raw img with Helper */}
                     <JournalEntryImage src={entry.images[0]} />
-                    
                     {entry.images.length > 1 && (
                       <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
                         +{entry.images.length - 1} photos
