@@ -25,6 +25,7 @@
     "dexie": "latest",
     "dompurify": "latest", 
     "@react-pdf/renderer": "latest", 
+    "html-to-image": "latest", 
     "file-saver": "latest"
   },
   "devDependencies": {
