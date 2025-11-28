@@ -18,7 +18,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
-// --- NEW IMPORT FOR IMAGE HANDLING ---
+// --- IMPORT FROM DB (Ensure db.js exists as per previous steps) ---
 import { useBlobUrl } from '../db'; 
 
 // --- CONFIGURATION ---
@@ -85,24 +85,35 @@ const getWeatherLabel = (code) => {
   return codes[code] || 'Unknown';
 };
 
-// --- UPDATED: COMPRESS TO BLOB INSTEAD OF BASE64 ---
+// --- UPDATED: HIGH QUALITY / LOW SIZE COMPRESSION ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
-    if (file.size > 20 * 1024 * 1024) { // Increased limit for IndexedDB
-      reject(new Error('Image too large.'));
+    // 1. Check strict file size limit (IndexedDB handles large files well, but we keep a sanity check of 50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      reject(new Error('Image too large (Max 50MB).'));
       return;
     }
+
     const reader = new FileReader();
     reader.readAsDataURL(file);
+    
     reader.onload = (event) => {
       const img = new window.Image();
       img.src = event.target.result;
+      
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1200; // Increased quality since we have more storage
-        const MAX_HEIGHT = 1200;
+        
+        // 2. INCREASED RESOLUTION LIMIT
+        // 2560px is standard 2K resolution. It preserves high detail for large screens
+        // while still reducing the massive pixel count of raw 48MP camera photos.
+        const MAX_WIDTH = 2560; 
+        const MAX_HEIGHT = 2560;
+        
         let width = img.width;
         let height = img.height;
+
+        // Calculate new dimensions
         if (width > height && width > MAX_WIDTH) {
           height *= MAX_WIDTH / width;
           width = MAX_WIDTH;
@@ -110,39 +121,48 @@ const compressImage = (file) => {
           width *= MAX_HEIGHT / height;
           height = MAX_HEIGHT;
         }
+
         canvas.width = width;
         canvas.height = height;
+        
         const ctx = canvas.getContext('2d');
+        // High quality scaling
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Convert to Blob instead of DataURL
+        // 3. SWITCH TO WEBP @ HIGH QUALITY
+        // 'image/webp' is far more efficient than JPEG. 
+        // Quality 0.95 is "visually lossless" - indistinguishable from original to the human eye,
+        // but creates much smaller files than PNG or 100% JPEG.
         canvas.toBlob((blob) => {
           if (blob) {
             resolve(blob);
           } else {
             reject(new Error('Compression failed.'));
           }
-        }, 'image/jpeg', 0.8);
+        }, 'image/webp', 0.95);
       };
+      
       img.onerror = () => reject(new Error('Failed to load image.'));
     };
+    
     reader.onerror = () => reject(new Error('Failed to read file.'));
   });
 };
 
-// --- NEW HELPER COMPONENT FOR IMAGES ---
-// Handles converting Blobs to ObjectURLs automatically
+// --- HELPER COMPONENT FOR IMAGES ---
 const BlobImage = ({ src, ...props }) => {
   const url = useBlobUrl(src);
   return <motion.img src={url} {...props} />;
 };
 
-// --- UPDATED ANIMATION VARIANTS (Simple Fade) ---
+// --- ANIMATION VARIANTS ---
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: { 
     opacity: 1, 
-    transition: { duration: 0.2, ease: "easeOut" } // Simple fade, very fast
+    transition: { duration: 0.2, ease: "easeOut" }
   },
   exit: { 
     opacity: 0, 
@@ -156,14 +176,14 @@ const contentStagger = {
     opacity: 1,
     transition: { 
         duration: 0.3,
-        delayChildren: 0.05, // Reduced delay for snappiness
+        delayChildren: 0.05,
         staggerChildren: 0.05 
     }
   }
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 5 }, // Reduced movement range
+  hidden: { opacity: 0, y: 5 },
   visible: { opacity: 1, y: 0 }
 };
 
@@ -215,7 +235,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       locationLng, 
       weather, 
       tags, 
-      images, // Now contains Blobs
+      images, // Contains efficient WebP Blobs
       date: dateToSave.toISOString()
     });
 
@@ -256,7 +276,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       try {
         const compressedBlob = await compressImage(file);
         setImages(prev => [...prev, compressedBlob]);
-        setImgIndex(images.length); // Fix: point to the new image (length is actually length + 1 after update, but here we depend on prev state, effectively setting it to the last index)
+        setImgIndex(images.length); // Update index to show new image
         saveData(true);
       } catch (err) {
         alert(err.message);
@@ -398,7 +418,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           variants={contentStagger}
         >
           
-          {/* IMAGE CAROUSEL (UPDATED TO USE BlobImage) */}
+          {/* IMAGE CAROUSEL (UPDATED) */}
           <AnimatePresence>
             {images.length > 0 && (
               <motion.div 
@@ -407,7 +427,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 exit={{ opacity: 0, height: 0 }}
                 className="w-full relative group bg-gray-50 flex-shrink-0"
               >
-                {/* Main Image */}
+                {/* Main Image (Using Blob Helper) */}
                 <BlobImage 
                   key={imgIndex}
                   initial={{ opacity: 0 }}
@@ -419,7 +439,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 />
                 
                 <div className="absolute inset-0 -z-10 overflow-hidden">
-                   {/* Blur Background - REPLACED IMG WITH BLOBIMAGE */}
+                   {/* Blur Background (Using Blob Helper) */}
                   <BlobImage src={images[imgIndex]} className="w-full h-full object-cover blur-2xl opacity-30" alt="" />
                 </div>
                 
