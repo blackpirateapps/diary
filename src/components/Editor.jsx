@@ -106,9 +106,18 @@ const BlobImage = ({ src, ...props }) => {
   return <motion.img src={url} {...props} />;
 };
 
-// --- NEW SLEEP WIDGET COMPONENT ---
+// --- TIME FORMATTER ---
+const formatSleepRange = (startTime, durationHours) => {
+  if (!startTime) return '';
+  const start = new Date(startTime);
+  const end = new Date(startTime + (durationHours * 60 * 60 * 1000));
+  
+  const fmt = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${fmt(start)} - ${fmt(end)}`;
+};
+
+// --- SLEEP WIDGET COMPONENT ---
 const SleepWidget = ({ session }) => {
-  // Prepare data for the graph (Hypnogram preferred, fallback to movement)
   const chartData = session.hypnogram && session.hypnogram.length > 0 
       ? session.hypnogram 
       : session.movementData?.map((m, i) => ({ time: i, stage: 2 })) || [];
@@ -122,7 +131,7 @@ const SleepWidget = ({ session }) => {
           </div>
           <div>
              <h4 className="text-sm font-bold text-gray-900">Sleep Session</h4>
-             <p className="text-[10px] text-gray-500 font-medium">{session.dateString}</p>
+             <p className="text-[10px] text-gray-500 font-medium">{formatSleepRange(session.startTime, session.duration)}</p>
           </div>
         </div>
         <div className="flex gap-3 text-right">

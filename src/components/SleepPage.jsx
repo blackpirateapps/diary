@@ -13,6 +13,16 @@ import { motion } from 'framer-motion';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 
+// --- HELPER: TIME FORMATTER ---
+const formatSleepRange = (startTime, durationHours) => {
+  if (!startTime) return '';
+  const start = new Date(startTime);
+  const end = new Date(startTime + (durationHours * 60 * 60 * 1000));
+  
+  const fmt = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${fmt(start)} - ${fmt(end)}`;
+};
+
 // --- CSV PARSING LOGIC ---
 const parseSleepCSV = (csvText) => {
   const lines = csvText.split(/\r?\n/);
@@ -150,6 +160,8 @@ const SessionDetail = ({ session, onBack }) => {
         ? session.hypnogram 
         : session.movementData.map((m, i) => ({ time: i * 5, stage: 2 }));
 
+    const timeRange = formatSleepRange(session.startTime, session.duration);
+
     return (
         <div className="pb-24 animate-slideUp">
              <div className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 backdrop-blur-md z-20 border-b border-gray-200/50 flex items-center gap-3">
@@ -158,7 +170,11 @@ const SessionDetail = ({ session, onBack }) => {
                 </button>
                 <div>
                     <h1 className="text-xl font-bold text-gray-900">Sleep Analysis</h1>
-                    <p className="text-xs text-gray-500">{session.dateString}</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span>{session.dateString.split(' ')[0]}</span>
+                      <span>•</span>
+                      <span className="font-medium text-gray-700">{timeRange}</span>
+                    </div>
                 </div>
             </div>
 
@@ -233,7 +249,6 @@ const SessionDetail = ({ session, onBack }) => {
 };
 
 export const SleepPage = ({ navigate }) => {
-  // Use Dexie's useLiveQuery to automatically fetch and update data
   const sessions = useLiveQuery(() => db.sleep_sessions.orderBy('startTime').reverse().toArray(), []) || [];
   const [selectedSession, setSelectedSession] = useState(null);
   const fileInputRef = useRef(null);
@@ -246,7 +261,6 @@ export const SleepPage = ({ navigate }) => {
     const parsed = parseSleepCSV(text);
     
     if (parsed && parsed.length > 0) {
-        // Save to IndexedDB (bulkPut handles upsert/duplicates based on ID)
         await db.sleep_sessions.bulkPut(parsed);
         alert(`Imported ${parsed.length} sleep sessions.`);
     } else {
@@ -317,7 +331,9 @@ export const SleepPage = ({ navigate }) => {
                             </div>
                             <div>
                                 <h4 className="font-bold text-gray-900">{session.dateString.split(' ')[0]}</h4>
-                                <span className="text-xs text-gray-400">{session.dateString.split(' ').slice(1).join(' ')}</span>
+                                <span className="text-xs text-gray-400 font-medium">
+                                    {formatSleepRange(session.startTime, session.duration)}
+                                </span>
                             </div>
                         </div>
                         <div className="text-right">
