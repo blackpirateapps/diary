@@ -8,7 +8,7 @@ import CalendarHeatmap from 'react-calendar-heatmap';
 import 'react-calendar-heatmap/dist/styles.css';
 import { 
   Trophy, TrendingUp, Calendar as CalendarIcon, 
-  Clock, Activity, Moon, ChevronLeft, ChevronRight 
+  Clock, Activity, Moon, ChevronDown
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -27,12 +27,10 @@ const calculateStreak = (entries) => {
   const today = new Date().toDateString();
   const yesterday = new Date(Date.now() - 86400000).toDateString();
 
-  // Check if streak is active (entry today or yesterday)
   if (sortedDates[0] !== today && sortedDates[0] !== yesterday) {
     return 0;
   }
 
-  // Count backwards
   let currentDate = new Date(sortedDates[0]);
   
   for (let i = 0; i < sortedDates.length; i++) {
@@ -46,27 +44,25 @@ const calculateStreak = (entries) => {
       streak++;
       currentDate = entryDate;
     } else if (diffDays === 0) {
-      continue; // Same day entry
+      continue;
     } else {
-      break; // Gap found
+      break;
     }
   }
   return streak;
 };
 
-// Format hours to HH:MM
 const formatDecimalHour = (decimal) => {
   const hours = Math.floor(decimal);
   const minutes = Math.round((decimal - hours) * 60);
   return `${hours}h ${minutes}m`;
 };
 
-// Normalize time for the Sleep Schedule graph (Noon to Noon shift)
-// 12 PM = 12, 6 PM = 18, 12 AM = 24, 6 AM = 30, 11 AM = 35
+// Normalize time: Noon (12) to Noon (36)
 const normalizeTime = (dateMs) => {
   const date = new Date(dateMs);
   let hours = date.getHours() + date.getMinutes() / 60;
-  if (hours < 12) hours += 24; // Shift morning hours to "next day" scale
+  if (hours < 12) hours += 24; 
   return hours;
 };
 
@@ -79,38 +75,32 @@ const formatAxisTime = (val) => {
 };
 
 const StatsPage = ({ entries }) => {
-  const [selectedPeriod, setSelectedPeriod] = useState('month'); // all, year, month
+  const [selectedPeriod, setSelectedPeriod] = useState('month'); 
   const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear());
 
-  // --- FETCH SLEEP DATA ---
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
 
   // --- FILTERING LOGIC ---
   const dateRange = useMemo(() => {
     const now = new Date();
-    if (selectedPeriod === 'year') {
-      return new Date(now.getFullYear(), 0, 1);
-    } else if (selectedPeriod === 'month') {
-      return new Date(now.getFullYear(), now.getMonth(), 1);
-    }
-    return new Date(0); // All time
+    if (selectedPeriod === 'year') return new Date(now.getFullYear(), 0, 1);
+    if (selectedPeriod === 'month') return new Date(now.getFullYear(), now.getMonth(), 1);
+    return new Date(0); 
   }, [selectedPeriod]);
 
-  // Filter Journal Entries
   const filteredEntries = useMemo(() => {
     return entries.filter(e => new Date(e.date) >= dateRange).sort((a, b) => new Date(a.date) - new Date(b.date));
   }, [entries, dateRange]);
 
-  // Filter Sleep Sessions
   const filteredSleep = useMemo(() => {
     return sleepSessions
       .filter(s => new Date(s.startTime) >= dateRange)
       .sort((a, b) => a.startTime - b.startTime);
   }, [sleepSessions, dateRange]);
 
-  // --- PREPARE CHART DATA ---
-  
-  // 1. Mood & Volume (Journal)
+  // --- DATA PROCESSING ---
+
+  // 1. Mood & Volume
   const moodVolumeData = useMemo(() => {
     return filteredEntries.map(e => ({
       date: new Date(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
@@ -119,7 +109,7 @@ const StatsPage = ({ entries }) => {
     }));
   }, [filteredEntries]);
 
-  // 2. Time of Day (Journal)
+  // 2. Time of Day
   const timeOfDayData = useMemo(() => {
     const counts = { Morning: 0, Afternoon: 0, Evening: 0, Night: 0 };
     filteredEntries.forEach(e => {
@@ -132,37 +122,74 @@ const StatsPage = ({ entries }) => {
     return Object.keys(counts).map(key => ({ name: key, value: counts[key] })).filter(d => d.value > 0);
   }, [filteredEntries]);
 
-  // 3. Sleep Stats
+  // 3. Sleep Stats (Aggregated by Day)
   const sleepStats = useMemo(() => {
     if (filteredSleep.length === 0) return null;
+
+    // Group sessions by Date string to handle multiple sleeps per day
+    const dailyGroups = {};
+    let maxSessionsPerDay = 1;
+
+    filteredSleep.forEach(session => {
+        const dateKey = new Date(session.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const fullDate = new Date(session.startTime).toLocaleDateString(); // For tooltip
+        
+        if (!dailyGroups[dateKey]) {
+            dailyGroups[dateKey] = {
+                date: dateKey,
+                fullDate: fullDate,
+                totalDuration: 0,
+                sessions: []
+            };
+        }
+        
+        dailyGroups[dateKey].totalDuration += session.duration;
+        
+        // Calculate range for this specific session
+        const start = normalizeTime(session.startTime);
+        const end = start + session.duration;
+        dailyGroups[dateKey].sessions.push([start, end]);
+        
+        if (dailyGroups[dateKey].sessions.length > maxSessionsPerDay) {
+            maxSessionsPerDay = dailyGroups[dateKey].sessions.length;
+        }
+    });
+
+    const groupedData = Object.values(dailyGroups);
     
+    // Metrics Calculation (Based on Daily Totals)
     let totalDur = 0;
-    let min = filteredSleep[0];
-    let max = filteredSleep[0];
+    let minDay = groupedData[0];
+    let maxDay = groupedData[0];
 
-    const chartData = filteredSleep.map(s => {
-      totalDur += s.duration;
-      if (s.duration < min.duration) min = s;
-      if (s.duration > max.duration) max = s;
+    // Format data for Recharts
+    // For BarChart with multiple bars, we need keys like range0, range1, range2...
+    const chartData = groupedData.map(day => {
+        totalDur += day.totalDuration;
+        
+        if (day.totalDuration < minDay.totalDuration) minDay = day;
+        if (day.totalDuration > maxDay.totalDuration) maxDay = day;
 
-      // Prepare range for Bar chart [start, end]
-      // We assume sleep generally starts in evening and ends next morning
-      const start = normalizeTime(s.startTime);
-      const end = start + s.duration;
+        const entry = {
+            date: day.date,
+            fullDate: day.fullDate,
+            totalDuration: day.totalDuration,
+        };
 
-      return {
-        date: new Date(s.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-        duration: s.duration,
-        fullDate: new Date(s.startTime).toLocaleDateString(),
-        range: [start, end] 
-      };
+        // Assign ranges to keys
+        day.sessions.forEach((range, index) => {
+            entry[`range${index}`] = range;
+        });
+
+        return entry;
     });
 
     return {
-      avg: totalDur / filteredSleep.length,
-      min,
-      max,
-      chartData
+        avg: totalDur / groupedData.length,
+        min: minDay,
+        max: maxDay,
+        chartData,
+        maxSessions: maxSessionsPerDay
     };
   }, [filteredSleep]);
 
@@ -179,7 +206,6 @@ const StatsPage = ({ entries }) => {
       <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 backdrop-blur-md z-20 border-b border-gray-200/50">
         <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Insights</h1>
         
-        {/* Filter Tabs */}
         <div className="flex p-1 bg-gray-200/50 rounded-xl mt-4 mb-2">
           {['all', 'year', 'month'].map((p) => (
             <button
@@ -199,7 +225,7 @@ const StatsPage = ({ entries }) => {
 
       <div className="px-4 space-y-6 mt-6">
         
-        {/* 1. KEY METRICS */}
+        {/* 1. METRICS */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center">
             <div className="p-2 bg-orange-50 text-orange-500 rounded-full mb-2">
@@ -217,7 +243,7 @@ const StatsPage = ({ entries }) => {
           </div>
         </div>
 
-        {/* 2. WRITING CONSISTENCY (Adjustable Year) */}
+        {/* 2. WRITING CONSISTENCY (With Dropdown) */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -225,28 +251,25 @@ const StatsPage = ({ entries }) => {
               <h2 className="text-lg font-bold text-gray-900">Writing Habits</h2>
             </div>
             
-            {/* Year Selector */}
-            <div className="flex items-center bg-gray-50 rounded-lg p-0.5">
-              <button 
-                onClick={() => setHeatmapYear(y => availableYears.includes(y - 1) ? y - 1 : y)}
-                disabled={!availableYears.includes(heatmapYear - 1)}
-                className="p-1 text-gray-400 hover:text-blue-600 disabled:opacity-30"
+            <div className="relative group">
+              <div className="flex items-center gap-1 bg-gray-50 px-3 py-1.5 rounded-lg border border-transparent hover:border-gray-200 transition-all cursor-pointer">
+                <span className="text-xs font-bold text-gray-700">{heatmapYear}</span>
+                <ChevronDown size={14} className="text-gray-400" />
+              </div>
+              <select 
+                value={heatmapYear}
+                onChange={(e) => setHeatmapYear(Number(e.target.value))}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
               >
-                <ChevronLeft size={16} />
-              </button>
-              <span className="text-xs font-bold text-gray-700 w-12 text-center">{heatmapYear}</span>
-              <button 
-                onClick={() => setHeatmapYear(y => availableYears.includes(y + 1) ? y + 1 : y)}
-                disabled={!availableYears.includes(heatmapYear + 1)}
-                className="p-1 text-gray-400 hover:text-blue-600 disabled:opacity-30"
-              >
-                <ChevronRight size={16} />
-              </button>
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <div className="min-w-[500px]"> {/* Force scroll on mobile */}
+            <div className="min-w-[500px]">
               <CalendarHeatmap
                 startDate={new Date(heatmapYear, 0, 1)}
                 endDate={new Date(heatmapYear, 11, 31)}
@@ -271,7 +294,7 @@ const StatsPage = ({ entries }) => {
         {sleepStats ? (
           <div className="space-y-4">
             
-            {/* 3a. Sleep Duration Graph */}
+            {/* 3a. Sleep Duration Graph (Aggregated) */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-2 mb-4">
                 <Moon size={18} className="text-indigo-500" />
@@ -280,18 +303,18 @@ const StatsPage = ({ entries }) => {
               
               <div className="flex justify-between text-center mb-6 bg-gray-50 p-3 rounded-xl">
                 <div>
-                  <span className="block text-xs text-gray-400 font-bold uppercase">Avg</span>
+                  <span className="block text-xs text-gray-400 font-bold uppercase">Avg / Day</span>
                   <span className="text-lg font-bold text-gray-800">{formatDecimalHour(sleepStats.avg)}</span>
                 </div>
                 <div className="px-4 border-l border-r border-gray-200">
-                  <span className="block text-xs text-gray-400 font-bold uppercase">Shortest</span>
-                  <span className="text-lg font-bold text-gray-800">{formatDecimalHour(sleepStats.min.duration)}</span>
-                  <span className="block text-[10px] text-gray-400">{new Date(sleepStats.min.startTime).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
+                  <span className="block text-xs text-gray-400 font-bold uppercase">Shortest Day</span>
+                  <span className="text-lg font-bold text-gray-800">{formatDecimalHour(sleepStats.min.totalDuration)}</span>
+                  <span className="block text-[10px] text-gray-400">{sleepStats.min.date}</span>
                 </div>
                 <div>
-                  <span className="block text-xs text-gray-400 font-bold uppercase">Longest</span>
-                  <span className="text-lg font-bold text-gray-800">{formatDecimalHour(sleepStats.max.duration)}</span>
-                  <span className="block text-[10px] text-gray-400">{new Date(sleepStats.max.startTime).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
+                  <span className="block text-xs text-gray-400 font-bold uppercase">Longest Day</span>
+                  <span className="text-lg font-bold text-gray-800">{formatDecimalHour(sleepStats.max.totalDuration)}</span>
+                  <span className="block text-[10px] text-gray-400">{sleepStats.max.date}</span>
                 </div>
               </div>
 
@@ -310,15 +333,15 @@ const StatsPage = ({ entries }) => {
                     <Tooltip 
                       contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
                       labelStyle={{color:'#6b7280', fontSize:'12px', marginBottom:'4px'}}
-                      formatter={(val) => [formatDecimalHour(val), 'Duration']}
+                      formatter={(val) => [formatDecimalHour(val), 'Total Duration']}
                     />
-                    <Area type="monotone" dataKey="duration" stroke="#6366f1" fillOpacity={1} fill="url(#colorSleep)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="totalDuration" stroke="#6366f1" fillOpacity={1} fill="url(#colorSleep)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* 3b. Sleep Schedule (Start/End Time) */}
+            {/* 3b. Sleep Schedule (Multi-bar Support) */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-2 mb-4">
                 <Clock size={18} className="text-purple-500" />
@@ -330,35 +353,50 @@ const StatsPage = ({ entries }) => {
                   <BarChart data={sleepStats.chartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                     <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
-                    {/* Y Axis mapped from 12 (Noon) to 36 (Noon next day) */}
                     <YAxis 
-                      domain={[18, 34]} // Roughly 6PM to 10AM
+                      domain={[18, 34]} 
                       tickFormatter={formatAxisTime} 
                       width={45} 
                       tick={{fontSize: 10}} 
                       tickLine={false} 
                       axisLine={false}
-                      allowDataOverflow={false} // Allow auto-scale if outliers exist
+                      allowDataOverflow={false} 
                     />
                     <Tooltip 
+                      cursor={{fill: '#f3f4f6'}}
                       content={({ active, payload, label }) => {
                         if (active && payload && payload.length) {
-                          const [start, end] = payload[0].value;
                           return (
                             <div className="bg-white p-3 rounded-xl shadow-lg border border-gray-100">
-                              <p className="text-xs text-gray-500 mb-1">{label}</p>
-                              <p className="text-sm font-bold text-gray-800">
-                                {formatAxisTime(start)} - {formatAxisTime(end)}
-                              </p>
+                              <p className="text-xs text-gray-500 mb-2 font-bold">{label}</p>
+                              {payload.map((entry, idx) => {
+                                const [start, end] = entry.value;
+                                return (
+                                  <div key={idx} className="mb-1 last:mb-0">
+                                    <p className="text-xs font-medium text-gray-800">
+                                      <span className="text-purple-500 mr-1">●</span>
+                                      {formatAxisTime(start)} - {formatAxisTime(end)}
+                                    </p>
+                                  </div>
+                                );
+                              })}
                             </div>
                           );
                         }
                         return null;
                       }}
                     />
-                    <Bar dataKey="range" fill="#8b5cf6" radius={[4, 4, 4, 4]} barSize={12} />
-                    
-                    {/* Reference Lines for typical sleep times */}
+                    {/* Render dynamic bars based on max sessions found in period */}
+                    {[...Array(sleepStats.maxSessions)].map((_, i) => (
+                        <Bar 
+                            key={i}
+                            dataKey={`range${i}`} 
+                            fill="#8b5cf6" 
+                            radius={[4, 4, 4, 4]} 
+                            barSize={12} 
+                            isAnimationActive={false}
+                        />
+                    ))}
                     <ReferenceLine y={24} stroke="#e5e7eb" strokeDasharray="3 3" label={{ value: 'Midnight', fontSize: 9, fill: '#9ca3af', position: 'insideTopLeft' }} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -374,7 +412,7 @@ const StatsPage = ({ entries }) => {
           </div>
         )}
 
-        {/* 4. MOOD & VOLUME (Existing) */}
+        {/* 4. MOOD & VOLUME */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center gap-2 mb-4">
             <Activity size={18} className="text-blue-500" />
@@ -397,7 +435,7 @@ const StatsPage = ({ entries }) => {
           </div>
         </div>
 
-        {/* 5. TIME OF DAY (Existing) */}
+        {/* 5. TIME OF DAY */}
         {timeOfDayData.length > 0 && (
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-4">
