@@ -13,37 +13,89 @@ import { db } from '../db';
 
 // --- CONFIG ---
 const COLORS = ['#25D366', '#34B7F1', '#ECE5DD', '#128C7E']; 
-const STOP_WORDS = new Set(['the', 'and', 'to', 'of', 'a', 'in', 'is', 'that', 'for', 'i', 'you', 'it', 'on', 'with', 'me', 'this', 'but', 'so', 'be', 'are', 'not', 'was', 'at', 'if', 'my', 'have', 'your', 'do', 'what', 'no', 'can', 'just', 'like', 'all', 'ok', 'we', 'up', 'out', 'how', 'yeah', 'good', 'got', 'did', 'why', 'has', 'too', 'one', 'now', 'see', 'im', 'u', 'its', 'go', 'well', 'will', 'he', 'she', 'or', 'as', 'by', 'an', 'omg', 'lol']);
+const STOP_WORDS = new Set(['the', 'and', 'to', 'of', 'a', 'in', 'is', 'that', 'for', 'i', 'you', 'it', 'on', 'with', 'me', 'this', 'but', 'so', 'be', 'are', 'not', 'was', 'at', 'if', 'my', 'have', 'your', 'do', 'what', 'no', 'can', 'just', 'like', 'all', 'ok', 'we', 'up', 'out', 'how', 'yeah', 'good', 'got', 'did', 'why', 'has', 'too', 'one', 'now', 'see', 'im', 'u', 'its', 'go', 'well', 'will', 'he', 'she', 'or', 'as', 'by', 'an', 'omg', 'lol', 're', 'er']);
 
-// --- PARSER ---
+// --- ROBUST PARSER ---
 const parseWhatsAppChat = (text) => {
   const lines = text.split(/\r?\n/);
   const messages = [];
-  const msgRegex = /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s(\d{1,2}:\d{2}(?:\s?[ap]m)?)\s-\s(.*?):\s(.*)$/i;
+  
+  // Regex Breakdown:
+  // 1. Date: (\d{1,2}\/\d{1,2}\/\d{2,4}) -> Matches 22/09/23 or 9/22/2023
+  // 2. Separator: ,\s+ -> Comma and spaces
+  // 3. Time: (\d{1,2}:\d{2}(?:[\s\u202f]?[ap]m)?) -> Matches 11:11pm, 11:11 pm, 11:11\u202fpm
+  // 4. Separator: \s-\s -> " - "
+  // 5. Sender: (.*?) -> Non-greedy match for name
+  // 6. Separator: :\s -> Colon and space (Crucial: filters out system msgs like "You created group")
+  // 7. Content: (.*) -> The rest
+  const msgRegex = /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s+(\d{1,2}:\d{2}(?:[\s\u202f]?[ap]m)?)\s-\s(.*?):\s(.*)$/i;
   
   let currentMsg = null;
 
+  // Helper to parse date string strictly
+  const parseDate = (dateStr, timeStr) => {
+    try {
+      const parts = dateStr.split('/').map(Number);
+      let day, month, year;
+
+      // Smart Detection for DD/MM vs MM/DD
+      // If first part > 12, it MUST be DD/MM
+      if (parts[0] > 12) {
+        [day, month, year] = parts;
+      } 
+      // If second part > 12, it MUST be MM/DD
+      else if (parts[1] > 12) {
+        [month, day, year] = parts;
+      } 
+      // Ambiguous (e.g. 05/06)? Default to DD/MM (International) 
+      // as previous file was MM/DD but user context suggests International/Indian now.
+      else {
+        [day, month, year] = parts;
+      }
+
+      // Handle 2-digit year
+      const fullYear = year < 100 ? 2000 + year : year;
+
+      // Clean Time String (remove unicode spaces)
+      const cleanTime = timeStr.replace(/[\u202f]/g, ' ').toLowerCase();
+      let [time, modifier] = cleanTime.split(' ');
+      let [hours, minutes] = time.split(':').map(Number);
+
+      if (modifier === 'pm' && hours < 12) hours += 12;
+      if (modifier === 'am' && hours === 12) hours = 0;
+
+      return new Date(fullYear, month - 1, day, hours, minutes);
+    } catch (e) {
+      return null;
+    }
+  };
+
   lines.forEach(line => {
+    // Skip encryption messages
     if (line.includes('Messages and calls are end-to-end encrypted')) return;
 
     const match = line.match(msgRegex);
     if (match) {
       if (currentMsg) messages.push(currentMsg);
-      const [_, dateStr, timeStr, sender, content] = match;
-      const date = new Date(`${dateStr} ${timeStr}`);
       
-      currentMsg = {
-        date,
-        sender,
-        content,
-        timestamp: date.getTime()
-      };
+      const [_, dateStr, timeStr, sender, content] = match;
+      const date = parseDate(dateStr, timeStr);
+      
+      if (date && !isNaN(date.getTime())) {
+        currentMsg = {
+          date,
+          sender,
+          content,
+          timestamp: date.getTime()
+        };
+      }
     } else if (currentMsg) {
+      // Multiline message support
       currentMsg.content += `\n${line}`;
     }
   });
-  if (currentMsg) messages.push(currentMsg);
   
+  if (currentMsg) messages.push(currentMsg);
   return messages;
 };
 
@@ -51,17 +103,14 @@ const parseWhatsAppChat = (text) => {
 const analyzeChat = (messages, chatName) => {
   if (!messages.length) return null;
 
-  // Sort messages by time to be safe
+  // Ensure sorting
   messages.sort((a, b) => a.timestamp - b.timestamp);
 
   const startDate = messages[0].date;
   const endDate = messages[messages.length - 1].date;
   
-  // Normalize dates to midnight for accurate day diffs
   const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
   const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-  
-  // Calculate total span in days
   const totalDurationDays = Math.round((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1;
 
   const stats = {
@@ -88,23 +137,18 @@ const analyzeChat = (messages, chatName) => {
   const wordCounts = {};
   const emojiCounts = {};
   const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
-  
-  // Detect Media (Android & iOS variants)
   const mediaRegex = /(<Media omitted>|image omitted|video omitted|GIF omitted|sticker omitted)/i;
 
-  // 1. Process Messages (Counts, Words, Active Dates)
+  // 1. Process Messages
   messages.forEach((msg) => {
     if (!stats.participants[msg.sender]) {
       stats.participants[msg.sender] = { count: 0, words: 0, media: 0 };
     }
     stats.participants[msg.sender].count++;
     
-    const isMedia = mediaRegex.test(msg.content);
-
-    if (isMedia) {
+    if (mediaRegex.test(msg.content)) {
         stats.participants[msg.sender].media++;
     } else {
-        // Only count words if NOT media
         const cleanText = msg.content.toLowerCase();
         const words = cleanText.split(/[\s,.;!?"]+/);
         
@@ -123,12 +167,10 @@ const analyzeChat = (messages, chatName) => {
         }
     }
 
-    // Store Normalized Date string
     activeDateSet.add(new Date(msg.date.getFullYear(), msg.date.getMonth(), msg.date.getDate()).toDateString());
   });
 
-  // 2. Timeline Traversal (Streaks & Gaps)
-  // We loop through every single day from start to end
+  // 2. Timeline Traversal
   let currentStreak = 0;
   let currentGap = 0;
   let streakStart = null;
@@ -141,67 +183,40 @@ const analyzeChat = (messages, chatName) => {
       const isActive = activeDateSet.has(dateStr);
 
       if (isActive) {
-          // --- HANDLING STREAK ---
           if (currentStreak === 0) streakStart = dateStr;
           currentStreak++;
           
-          // Check Max Streak
           if (currentStreak > stats.streaks.max.count) {
-              stats.streaks.max = {
-                  count: currentStreak,
-                  start: streakStart,
-                  end: dateStr
-              };
+              stats.streaks.max = { count: currentStreak, start: streakStart, end: dateStr };
           }
 
-          // --- HANDLING GAP RESET ---
           if (currentGap > 0) {
-              // Gap just ended yesterday
               if (currentGap > stats.streaks.maxGap.count) {
                   const gapEnd = new Date(current);
                   gapEnd.setDate(gapEnd.getDate() - 1);
-                  stats.streaks.maxGap = {
-                      count: currentGap,
-                      start: gapStart,
-                      end: gapEnd.toDateString()
-                  };
+                  stats.streaks.maxGap = { count: currentGap, start: gapStart, end: gapEnd.toDateString() };
               }
               currentGap = 0;
           }
       } else {
-          // --- HANDLING GAP ---
           if (currentGap === 0) gapStart = dateStr;
           currentGap++;
-
-          // --- HANDLING STREAK RESET ---
           currentStreak = 0;
       }
   }
 
-  // Final Gap Check (if chat ends on a silence)
+  // Final Gap Check
   if (currentGap > 0 && currentGap > stats.streaks.maxGap.count) {
-      const gapEnd = new Date(endDay); // Last day checked
-      stats.streaks.maxGap = {
-          count: currentGap,
-          start: gapStart,
-          end: gapEnd.toDateString()
-      };
+      const gapEnd = new Date(endDay); 
+      stats.streaks.maxGap = { count: currentGap, start: gapStart, end: gapEnd.toDateString() };
   }
 
   stats.streaks.activeDays = activeDateSet.size;
   stats.streaks.emptyDays = totalDurationDays - activeDateSet.size;
 
   // 3. Finalize Lists
-  stats.topWords = Object.entries(wordCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([word, count]) => ({ word, count }));
-
-  stats.topEmojis = Object.entries(emojiCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([char, count]) => ({ char, count }));
-
+  stats.topWords = Object.entries(wordCounts).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([word, count]) => ({ word, count }));
+  stats.topEmojis = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([char, count]) => ({ char, count }));
   stats.baseChartData = Object.keys(stats.participants).map(p => ({
     name: p,
     messages: stats.participants[p].count,
@@ -215,7 +230,7 @@ const analyzeChat = (messages, chatName) => {
 // --- COMPONENTS ---
 
 const StatCard = ({ icon: Icon, label, value, subLabel, color = "green" }) => (
-    <div className={`bg-${color}-50 p-4 rounded-2xl border border-${color}-100 flex flex-col items-center text-center`}>
+    <div className={`bg-${color}-50 p-4 rounded-2xl border border-${color}-100 flex flex-col items-center text-center flex-1`}>
         <div className={`p-2 bg-${color}-100 text-${color}-600 rounded-full mb-2`}>
             <Icon size={20} />
         </div>
@@ -298,7 +313,7 @@ const ChatDetail = ({ data, onBack }) => {
             />
         </div>
 
-        {/* 3. ACTIVITY COMPARISON (INCL. MEDIA) */}
+        {/* 3. ACTIVITY COMPARISON */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <BarChart2 size={18} className="text-green-600" /> Activity Comparison
@@ -310,15 +325,12 @@ const ChatDetail = ({ data, onBack }) => {
                         <XAxis type="number" hide />
                         <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 10}} />
                         <Tooltip cursor={{fill: 'transparent'}} />
-                        
                         <Bar dataKey="messages" name="Messages" fill="#25D366" radius={[0, 4, 4, 0]} barSize={16}>
                             <LabelList dataKey="messages" position="right" style={{fontSize: 10, fill: '#666'}} />
                         </Bar>
-                        
                         <Bar dataKey="words" name="Words" fill="#34B7F1" radius={[0, 4, 4, 0]} barSize={16}>
                             <LabelList dataKey="words" position="right" style={{fontSize: 10, fill: '#666'}} />
                         </Bar>
-
                         <Bar dataKey="media" name="Media" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={16}>
                             <LabelList dataKey="media" position="right" style={{fontSize: 10, fill: '#666'}} />
                         </Bar>
