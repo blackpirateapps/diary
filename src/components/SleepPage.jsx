@@ -1,46 +1,44 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Upload, ChevronLeft, Moon, Clock, Activity, 
-  BarChart2, Zap, Calendar, AlertCircle, FileText
+  BarChart2, Zap, Calendar, Trash2
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, ReferenceLine
+  LineChart, Line
 } from 'recharts';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+
+// --- DATABASE IMPORTS ---
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db';
 
 // --- CSV PARSING LOGIC ---
 const parseSleepCSV = (csvText) => {
   const lines = csvText.split(/\r?\n/);
   const sessions = [];
-  
   let currentBlockStart = -1;
 
-  // 1. Identify Blocks (Lines starting with "Id")
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].startsWith('Id,') || lines[i].startsWith('"Id",')) {
       if (currentBlockStart !== -1) {
-        // Process previous block
         const session = processBlock(lines.slice(currentBlockStart, i));
         if (session) sessions.push(session);
       }
       currentBlockStart = i;
     }
   }
-  // Process last block
   if (currentBlockStart !== -1) {
     const session = processBlock(lines.slice(currentBlockStart));
     if (session) sessions.push(session);
   }
-
-  return sessions.sort((a, b) => b.startTime - a.startTime); // Newest first
+  return sessions;
 };
 
 const processBlock = (blockLines) => {
   try {
     if (blockLines.length < 2) return null;
 
-    // Helper to safely split CSV line respecting quotes
     const splitCSV = (str) => {
       const matches = str.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || [];
       return matches.map(m => m.replace(/^"|"$/g, '').trim());
@@ -49,79 +47,51 @@ const processBlock = (blockLines) => {
     const header = splitCSV(blockLines[0]);
     const values1 = splitCSV(blockLines[1]);
     
-    // Find key indices
     const geoIndex = header.indexOf('Geo');
     if (geoIndex === -1) return null;
 
-    // --- 1. EXTRACT METADATA ---
+    // 1. Metadata
     const metadata = {};
     for (let i = 0; i <= geoIndex; i++) {
       metadata[header[i]] = values1[i];
     }
 
-    // --- 2. EXTRACT TIME SERIES (ACTIGRAPHY) ---
-    // Columns after Geo are time buckets (e.g. "8:55", "8:56"...)
-    // Events are usually at the end of the values array, we need to handle that.
-    
+    // 2. Time Series
     const timeCols = header.slice(geoIndex + 1).filter(c => c.includes(':'));
     const movementData = [];
-    
-    // The data values correspond to these time cols.
-    // Note: values1 might be longer than header due to events appended at the end
     const rawMovementValues = values1.slice(geoIndex + 1, geoIndex + 1 + timeCols.length);
 
     timeCols.forEach((time, index) => {
       const val = parseFloat(rawMovementValues[index]);
-      if (!isNaN(val)) {
-        movementData.push({ time, value: val });
-      }
+      if (!isNaN(val)) movementData.push({ time, value: val });
     });
 
-    // --- 3. EXTRACT SENSOR DATA (Row 2 if exists) ---
-    // Row 2 often contains Light/Noise data. It usually starts with empty commas.
+    // 3. Sensor Data
     const sensorData = [];
-    if (blockLines.length > 2) {
-      const row2 = blockLines[2];
-      // Simple heuristic: if it has many commas at start
-      if (row2.startsWith(',,,,')) {
-         const values2 = splitCSV(row2);
-         // Align with time columns again
-         // The empty commas usually skip the metadata columns
+    if (blockLines.length > 2 && blockLines[2].startsWith(',,,,')) {
+         const values2 = splitCSV(blockLines[2]);
          const rawSensorValues = values2.slice(geoIndex + 1, geoIndex + 1 + timeCols.length);
          timeCols.forEach((time, index) => {
             const val = parseFloat(rawSensorValues[index]);
-            if (!isNaN(val)) {
-              sensorData.push({ time, value: val });
-            }
+            if (!isNaN(val)) sensorData.push({ time, value: val });
          });
-      }
     }
 
-    // --- 4. EXTRACT EVENTS & HYPNOGRAM ---
-    // Events are mixed in the values array or separate columns.
-    // In the provided sample, events appear as strings like "DEEP_START-1764..."
-    // We look for any value in values1 that looks like an event tag.
-    
+    // 4. Hypnogram
     const allValues = values1; 
     const events = allValues.filter(v => v && v.match && v.match(/^[A-Z_]+-\d+$/));
-    
-    const startTimeMs = parseInt(metadata.Id); // ID seems to be timestamp
+    const startTimeMs = parseInt(metadata.Id);
     const hypnogram = [];
     
-    // Sort events by time
     const parsedEvents = events.map(e => {
         const [type, ts] = e.split('-');
         return { type, time: parseInt(ts) };
     }).sort((a, b) => a.time - b.time);
 
-    // Reconstruct stages
-    // 3=Awake, 2=Light, 1=REM, 0=Deep
-    let currentStage = 2; // Assume Light start
-    
+    let currentStage = 2; // Light
     if (parsedEvents.length > 0) {
         parsedEvents.forEach(e => {
             const relativeTimeMin = (e.time - startTimeMs) / 1000 / 60;
-            
             if (e.type.includes('DEEP_START')) currentStage = 0;
             if (e.type.includes('DEEP_END')) currentStage = 2;
             if (e.type.includes('REM_START')) currentStage = 1;
@@ -138,7 +108,7 @@ const processBlock = (blockLines) => {
     }
 
     return {
-      id: metadata.Id,
+      id: metadata.Id, // Used as Primary Key
       dateString: metadata.From,
       startTime: startTimeMs,
       duration: parseFloat(metadata.Hours),
@@ -152,7 +122,6 @@ const processBlock = (blockLines) => {
       hypnogram
     };
   } catch (e) {
-    console.error("Parse Error for block", e);
     return null;
   }
 };
@@ -166,22 +135,20 @@ const getStageLabel = (val) => {
 
 // --- COMPONENTS ---
 
-const StatCard = ({ icon: Icon, label, value, sub, color = "blue" }) => (
+const StatCard = ({ icon: Icon, label, value, color = "blue" }) => (
     <div className={`bg-${color}-50 p-4 rounded-2xl border border-${color}-100 flex flex-col items-center text-center`}>
         <div className={`p-2 bg-${color}-100 text-${color}-600 rounded-full mb-2`}>
             <Icon size={20} />
         </div>
         <span className="text-2xl font-bold text-gray-800">{value}</span>
         <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</span>
-        {sub && <span className="text-[10px] text-gray-400 mt-1">{sub}</span>}
     </div>
 );
 
 const SessionDetail = ({ session, onBack }) => {
-    // Format Hypnogram Data for Step Chart
     const chartData = session.hypnogram.length > 0 
         ? session.hypnogram 
-        : session.movementData.map((m, i) => ({ time: i * 5, stage: 2 })); // Fallback if no events
+        : session.movementData.map((m, i) => ({ time: i * 5, stage: 2 }));
 
     return (
         <div className="pb-24 animate-slideUp">
@@ -196,14 +163,12 @@ const SessionDetail = ({ session, onBack }) => {
             </div>
 
             <div className="p-4 space-y-6">
-                {/* 1. Scorecard */}
                 <div className="grid grid-cols-3 gap-3">
                     <StatCard icon={Clock} label="Duration" value={`${session.duration.toFixed(1)}h`} color="indigo" />
                     <StatCard icon={Moon} label="Deep Sleep" value={`${(session.deepSleepPerc * 100).toFixed(0)}%`} color="purple" />
                     <StatCard icon={Activity} label="Efficiency" value={session.rating > 0 ? `${session.rating}/5` : '-'} color="emerald" />
                 </div>
 
-                {/* 2. Hypnogram */}
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <Zap size={18} className="text-yellow-500" /> Sleep Stages
@@ -221,19 +186,12 @@ const SessionDetail = ({ session, onBack }) => {
                                 <XAxis dataKey="time" hide />
                                 <YAxis domain={[0, 3]} ticks={[0, 1, 2, 3]} tickFormatter={getStageLabel} width={50} tick={{fontSize: 10}} />
                                 <Tooltip contentStyle={{borderRadius: '12px'}} />
-                                <Area 
-                                    type="stepAfter" 
-                                    dataKey="stage" 
-                                    stroke="#4f46e5" 
-                                    strokeWidth={2}
-                                    fill="url(#splitColor)" 
-                                />
+                                <Area type="stepAfter" dataKey="stage" stroke="#4f46e5" strokeWidth={2} fill="url(#splitColor)" />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* 3. Actigraphy (Movement) */}
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <Activity size={18} className="text-blue-500" /> Actigraphy
@@ -249,10 +207,8 @@ const SessionDetail = ({ session, onBack }) => {
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
-                    <p className="text-xs text-gray-400 mt-2 text-center">Movement intensity during sleep</p>
                 </div>
 
-                {/* 4. Environment (Sensor) */}
                 {session.sensorData.length > 0 && (
                     <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                         <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -269,7 +225,6 @@ const SessionDetail = ({ session, onBack }) => {
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>
-                        <p className="text-xs text-gray-400 mt-2 text-center">Light / Noise Sensor Data</p>
                     </div>
                 )}
             </div>
@@ -278,7 +233,8 @@ const SessionDetail = ({ session, onBack }) => {
 };
 
 export const SleepPage = ({ navigate }) => {
-  const [sessions, setSessions] = useState([]);
+  // Use Dexie's useLiveQuery to automatically fetch and update data
+  const sessions = useLiveQuery(() => db.sleep_sessions.orderBy('startTime').reverse().toArray(), []) || [];
   const [selectedSession, setSelectedSession] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -290,12 +246,20 @@ export const SleepPage = ({ navigate }) => {
     const parsed = parseSleepCSV(text);
     
     if (parsed && parsed.length > 0) {
-        setSessions(parsed);
+        // Save to IndexedDB (bulkPut handles upsert/duplicates based on ID)
+        await db.sleep_sessions.bulkPut(parsed);
         alert(`Imported ${parsed.length} sleep sessions.`);
     } else {
         alert("Failed to parse CSV. Please ensure it's a valid Sleep as Android export.");
     }
-    e.target.value = ''; // Reset input
+    e.target.value = ''; 
+  };
+
+  const deleteSession = async (e, id) => {
+      e.stopPropagation();
+      if(window.confirm("Delete this sleep record?")) {
+          await db.sleep_sessions.delete(id);
+      }
   };
 
   if (selectedSession) {
@@ -329,7 +293,7 @@ export const SleepPage = ({ navigate }) => {
                 <div>
                     <h3 className="text-lg font-bold text-gray-900">No Data Yet</h3>
                     <p className="text-gray-500 text-sm max-w-xs mx-auto">
-                        Export your CSV from Sleep as Android and upload it here to visualize your sleep patterns.
+                        Export your CSV from Sleep as Android and upload it here.
                     </p>
                 </div>
                 <button 
@@ -344,7 +308,7 @@ export const SleepPage = ({ navigate }) => {
                 <motion.div 
                     key={session.id}
                     onClick={() => setSelectedSession(session)}
-                    className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 active:scale-[0.98] transition-transform cursor-pointer"
+                    className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 active:scale-[0.98] transition-transform cursor-pointer relative group"
                 >
                     <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-3">
@@ -364,7 +328,6 @@ export const SleepPage = ({ navigate }) => {
                         </div>
                     </div>
                     
-                    {/* Mini Sparkline */}
                     <div className="h-12 w-full mt-3 opacity-50">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={session.movementData}>
@@ -372,6 +335,13 @@ export const SleepPage = ({ navigate }) => {
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
+
+                    <button 
+                        onClick={(e) => deleteSession(e, session.id)}
+                        className="absolute top-4 right-4 p-2 bg-white text-red-400 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
+                    >
+                        <Trash2 size={16} />
+                    </button>
                 </motion.div>
             ))
         )}
