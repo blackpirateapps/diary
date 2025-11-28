@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-// --- NEW IMPORTS ---
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db'; 
 
@@ -9,16 +8,34 @@ import StatsPage from './components/StatsPage';
 import MediaGallery from './components/MediaGallery';
 import FlashbackPage from './components/FlashbackPage';
 import MapPage from './components/MapPage';
+// NEW IMPORT
+import { MoreMenu, SettingsPage, AboutPage } from './components/MorePages';
+
 import {
   BarChart2,
   Grid,
   Home,
   Map as MapIcon, 
   Trash2,
+  Menu // New Icon for 'More'
 } from 'lucide-react';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState('journal');
+  // --- ROUTING LOGIC (REPLACES SIMPLE STATE) ---
+  const getHash = () => window.location.hash.replace('#', '') || 'journal';
+  const [currentRoute, setCurrentRoute] = useState(getHash());
+
+  useEffect(() => {
+    const handleHashChange = () => setCurrentRoute(getHash());
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const navigate = (route) => {
+    window.location.hash = route;
+  };
+
+  // --- STATE ---
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [showFlashback, setShowFlashback] = useState(false);
@@ -26,8 +43,6 @@ const App = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState(null);
 
-  // --- REPLACED LOCALSTORAGE STATE WITH DEXIE QUERY ---
-  // This automatically updates the UI whenever the database changes
   const entries = useLiveQuery(
     () => db.entries.orderBy('date').reverse().toArray(), 
     []
@@ -38,10 +53,7 @@ const App = () => {
 
   // --- INIT & MIGRATION ---
   useEffect(() => {
-    // 1. Migrate old localStorage data if it exists
     migrateFromLocalStorage();
-
-    // 2. Network Listeners
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
     window.addEventListener('online', handleOnline);
@@ -52,10 +64,9 @@ const App = () => {
     };
   }, []);
 
-  // --- CRUD OPERATIONS (Updated for Dexie) ---
+  // --- CRUD OPERATIONS ---
   const handleSaveEntry = async (entry) => {
     try {
-      // .put works for both insert (if id is new) and update (if id exists)
       await db.entries.put(entry);
     } catch (error) {
       console.error("Failed to save entry:", error);
@@ -78,10 +89,9 @@ const App = () => {
     }
   };
 
-  // --- NAVIGATION & EDITOR ---
+  // --- EDITOR HANDLING ---
   const openNewEditor = (date = new Date()) => {
     const dateStr = date.toDateString();
-    // Logic remains same, but we search the live array
     const existing = entries.find(e => new Date(e.date).toDateString() === dateStr);
     if (existing) {
       setEditingEntry(existing);
@@ -104,16 +114,15 @@ const App = () => {
     e.target.value = '';
   };
 
-  // --- EXPORT LOGIC (Now uses ZIP) ---
+  // --- IMPORT/EXPORT HANDLERS ---
   const handleExport = async () => {
     try {
-      await exportToZip(); // Calls logic in db.js
+      await exportToZip();
     } catch (e) {
       alert("Export failed: " + e.message);
     }
   };
 
-  // --- IMPORT LOGIC (Handles ZIP & Legacy JSON) ---
   const handleImport = async (event) => {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
@@ -122,31 +131,18 @@ const App = () => {
     setImportError(null);
 
     try {
-      // 1. Handle New ZIP Backups
       if (file.name.toLowerCase().endsWith('.zip')) {
         const count = await importFromZip(file);
         alert(`Success! Imported ${count} entries from ZIP archive.`);
-      } 
-      // 2. Handle Legacy JSON Backups
-      else if (file.name.toLowerCase().endsWith('.json')) {
+      } else if (file.name.toLowerCase().endsWith('.json')) {
         const text = await file.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch(e) { throw new Error("Invalid JSON file"); }
-
-        // Normalize structure (some exports are array, some are object with 'entries')
+        const data = JSON.parse(text);
         const incomingEntries = Array.isArray(data) ? data : (data.entries || []);
-        
         if (incomingEntries.length === 0) throw new Error("No entries found in JSON.");
-
-        // Bulk insert into IndexedDB
-        // Note: Dexie handles Base64 strings in the 'images' array perfectly fine
         await db.entries.bulkPut(incomingEntries);
         alert(`Success! Imported ${incomingEntries.length} legacy entries.`);
-      } 
-      else {
-        throw new Error("Unsupported file type. Please upload a .zip or .json file.");
+      } else {
+        throw new Error("Unsupported file type.");
       }
     } catch (err) {
       console.error("Import Error:", err);
@@ -156,6 +152,9 @@ const App = () => {
       if (event.target) event.target.value = '';
     }
   };
+
+  // Helper to determine if a route belongs to the "More" tab
+  const isMoreRoute = ['more', 'settings', 'about'].includes(currentRoute);
 
   return (
     <div className="min-h-screen bg-[#F3F4F6] text-gray-900">
@@ -185,6 +184,7 @@ const App = () => {
           </div>
         )}
 
+        {/* --- PAGE ROUTING --- */}
         {showFlashback ? (
           <FlashbackPage 
             entries={entries} 
@@ -193,26 +193,38 @@ const App = () => {
           />
         ) : (
           <>
-            {activeTab === 'journal' && (
+            {currentRoute === 'journal' && (
               <JournalList
                 entries={entries}
                 onEdit={openEditEditor}
                 onCreate={() => openNewEditor()}
                 onAddOld={() => dateInputRef.current?.showPicker()}
-                onImport={handleImport} 
+                onImport={handleImport}
                 onExport={handleExport}
                 isOffline={isOffline}
                 isImporting={isImporting}
                 onOpenFlashback={() => setShowFlashback(true)} 
               />
             )}
-            {activeTab === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
-            {activeTab === 'stats' && <StatsPage entries={entries} />}
-            {activeTab === 'media' && <MediaGallery entries={entries} />}
+            {currentRoute === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
+            {currentRoute === 'stats' && <StatsPage entries={entries} />}
+            {currentRoute === 'media' && <MediaGallery entries={entries} />}
+            
+            {/* NEW PAGES */}
+            {currentRoute === 'more' && <MoreMenu navigate={navigate} />}
+            {currentRoute === 'settings' && (
+              <SettingsPage 
+                navigate={navigate} 
+                onExport={handleExport} 
+                onImport={() => fileInputRef.current?.click()}
+                importInputRef={fileInputRef} 
+              />
+            )}
+            {currentRoute === 'about' && <AboutPage navigate={navigate} />}
           </>
         )}
 
-        {/* Note: accept attribute now allows both formats */}
+        {/* Hidden Inputs */}
         <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
         <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".zip,.json" />
         
@@ -226,23 +238,36 @@ const App = () => {
         )}
       </div>
 
+      {/* --- BOTTOM NAVIGATION --- */}
       <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur-md z-40 pb-safe">
         <div className="max-w-xl mx-auto flex justify-around py-3">
-          <button onClick={() => { setActiveTab('journal'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'journal' && !showFlashback ? 'text-blue-600' : 'text-gray-400'}`}>
-            <Home size={22} strokeWidth={activeTab === 'journal' ? 2.5 : 2} /><span className="text-[10px] font-medium">Journal</span>
+          
+          <button onClick={() => { navigate('journal'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'journal' && !showFlashback ? 'text-blue-600' : 'text-gray-400'}`}>
+            <Home size={22} strokeWidth={currentRoute === 'journal' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Journal</span>
           </button>
           
-          <button onClick={() => { setActiveTab('map'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'map' ? 'text-blue-600' : 'text-gray-400'}`}>
-            <MapIcon size={22} strokeWidth={activeTab === 'map' ? 2.5 : 2} />
+          <button onClick={() => { navigate('map'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'map' ? 'text-blue-600' : 'text-gray-400'}`}>
+            <MapIcon size={22} strokeWidth={currentRoute === 'map' ? 2.5 : 2} />
             <span className="text-[10px] font-medium">Atlas</span>
           </button>
 
-          <button onClick={() => { setActiveTab('stats'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'stats' ? 'text-blue-600' : 'text-gray-400'}`}>
-            <BarChart2 size={22} strokeWidth={activeTab === 'stats' ? 2.5 : 2} /><span className="text-[10px] font-medium">Stats</span>
+          <button onClick={() => { navigate('stats'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'stats' ? 'text-blue-600' : 'text-gray-400'}`}>
+            <BarChart2 size={22} strokeWidth={currentRoute === 'stats' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Stats</span>
           </button>
-          <button onClick={() => { setActiveTab('media'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'media' ? 'text-blue-600' : 'text-gray-400'}`}>
-            <Grid size={22} strokeWidth={activeTab === 'media' ? 2.5 : 2} /><span className="text-[10px] font-medium">Media</span>
+          
+          <button onClick={() => { navigate('media'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'media' ? 'text-blue-600' : 'text-gray-400'}`}>
+            <Grid size={22} strokeWidth={currentRoute === 'media' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Media</span>
           </button>
+
+          {/* NEW MORE TAB */}
+          <button onClick={() => { navigate('more'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${isMoreRoute ? 'text-blue-600' : 'text-gray-400'}`}>
+            <Menu size={22} strokeWidth={isMoreRoute ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">More</span>
+          </button>
+
         </div>
       </nav>
     </div>
