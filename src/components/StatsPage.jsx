@@ -238,18 +238,18 @@ const StatsPage = ({ entries }) => {
   return (
     <div className="pb-24 animate-slideUp">
       {/* Header */}
-      <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 backdrop-blur-md z-20 border-b border-gray-200/50">
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Insights</h1>
+      <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 transition-colors">
+        <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Insights</h1>
         
-        <div className="flex p-1 bg-gray-200/50 rounded-xl mt-4 mb-2">
+        <div className="flex p-1 bg-gray-200/50 dark:bg-gray-800 rounded-xl mt-4 mb-2">
           {['all', 'year', 'month'].map((p) => (
             <button
               key={p}
               onClick={() => setSelectedPeriod(p)}
               className={`flex-1 py-1.5 text-xs font-bold rounded-lg capitalize transition-all ${
                 selectedPeriod === p 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' 
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
               }`}
             >
               {p === 'all' ? 'All Time' : p === 'year' ? 'This Year' : 'This Month'}
@@ -262,33 +262,33 @@ const StatsPage = ({ entries }) => {
         
         {/* 1. METRICS */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center">
-            <div className="p-2 bg-orange-50 text-orange-500 rounded-full mb-2">
+          <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center">
+            <div className="p-2 bg-orange-50 dark:bg-orange-900/30 text-orange-500 rounded-full mb-2">
               <Trophy size={20} />
             </div>
-            <span className="text-2xl font-bold text-gray-900">{calculateStreak(entries)}</span>
+            <span className="text-2xl font-bold text-gray-900 dark:text-white">{calculateStreak(entries)}</span>
             <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Day Streak</span>
           </div>
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center">
-            <div className="p-2 bg-blue-50 text-blue-500 rounded-full mb-2">
+          <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center">
+            <div className="p-2 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-500)] rounded-full mb-2">
               <TrendingUp size={20} />
             </div>
-            <span className="text-2xl font-bold text-gray-900">{filteredEntries.length}</span>
+            <span className="text-2xl font-bold text-gray-900 dark:text-white">{filteredEntries.length}</span>
             <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Entries</span>
           </div>
         </div>
 
         {/* 2. WRITING CONSISTENCY (With Dropdown) */}
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <CalendarIcon size={18} className="text-green-500" />
-              <h2 className="text-lg font-bold text-gray-900">Writing Habits</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Writing Habits</h2>
             </div>
             
             <div className="relative group">
-              <div className="flex items-center gap-1 bg-gray-50 px-3 py-1.5 rounded-lg border border-transparent hover:border-gray-200 transition-all cursor-pointer">
-                <span className="text-xs font-bold text-gray-700">{heatmapYear}</span>
+              <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-all cursor-pointer">
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{heatmapYear}</span>
                 <ChevronDown size={14} className="text-gray-400" />
               </div>
               <select 
@@ -321,42 +321,44 @@ const StatsPage = ({ entries }) => {
           <style>{`
             .react-calendar-heatmap text { font-size: 8px; fill: #9ca3af; }
             .react-calendar-heatmap .color-empty { fill: #f3f4f6; rx: 2px; }
-            .react-calendar-heatmap .color-scale-4 { fill: #3b82f6; rx: 2px; }
+            .dark .react-calendar-heatmap .color-empty { fill: #374151; }
+            .react-calendar-heatmap .color-scale-4 { fill: var(--accent-500); rx: 2px; }
           `}</style>
         </div>
 
-        {/* 3. WORD COUNT & MOOD ANALYTICS (Restored) */}
+        {/* 3. WORD COUNT & MOOD ANALYTICS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
           {/* Word Count */}
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-2 mb-4">
-              <AlignLeft size={18} className="text-blue-500" />
-              <h2 className="text-lg font-bold text-gray-900">Word Volume</h2>
+              <AlignLeft size={18} className="text-[var(--accent-500)]" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Word Volume</h2>
             </div>
             <div className="h-48 w-full -ml-2">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={moodVolumeData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" className="dark:opacity-10" />
                   <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
                   <YAxis hide />
                   <Tooltip 
-                    cursor={{fill: '#f3f4f6'}}
+                    cursor={{fill: 'var(--accent-50)'}}
                     contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
                     labelStyle={{color:'#6b7280', fontSize:'12px', marginBottom:'4px'}}
                     formatter={(val, name, props) => [val, `Mood: ${props.payload.mood}`]}
                   />
-                  <Bar dataKey="words" fill="#60A5FA" radius={[4, 4, 0, 0]} />
+                  {/* Updated fill to use Theme variable */}
+                  <Bar dataKey="words" fill="var(--accent-400)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
           {/* Time of Day */}
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-2 mb-4">
               <Activity size={18} className="text-purple-500" />
-              <h2 className="text-lg font-bold text-gray-900">Posting Time</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Posting Time</h2>
             </div>
             <div className="h-48 w-full flex items-center justify-center">
                <ResponsiveContainer width="100%" height="100%">
@@ -385,7 +387,7 @@ const StatsPage = ({ entries }) => {
               {timeOfDayData.map((entry, index) => (
                 <div key={index} className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <span className="text-[10px] text-gray-500">{entry.name}</span>
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">{entry.name}</span>
                 </div>
               ))}
             </div>
@@ -397,25 +399,25 @@ const StatsPage = ({ entries }) => {
           <div className="space-y-4">
             
             {/* 4a. Sleep Duration Graph */}
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-2 mb-4">
                 <Moon size={18} className="text-indigo-500" />
-                <h2 className="text-lg font-bold text-gray-900">Sleep Duration</h2>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Sleep Duration</h2>
               </div>
               
-              <div className="flex justify-between text-center mb-6 bg-gray-50 p-3 rounded-xl">
+              <div className="flex justify-between text-center mb-6 bg-gray-50 dark:bg-gray-800 p-3 rounded-xl">
                 <div>
                   <span className="block text-xs text-gray-400 font-bold uppercase">Avg / Day</span>
-                  <span className="text-lg font-bold text-gray-800">{formatDecimalHour(sleepStats.avg)}</span>
+                  <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{formatDecimalHour(sleepStats.avg)}</span>
                 </div>
-                <div className="px-4 border-l border-r border-gray-200">
+                <div className="px-4 border-l border-r border-gray-200 dark:border-gray-700">
                   <span className="block text-xs text-gray-400 font-bold uppercase">Shortest Day</span>
-                  <span className="text-lg font-bold text-gray-800">{formatDecimalHour(sleepStats.min.totalDuration)}</span>
+                  <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{formatDecimalHour(sleepStats.min.totalDuration)}</span>
                   <span className="block text-[10px] text-gray-400">{sleepStats.min.date}</span>
                 </div>
                 <div>
                   <span className="block text-xs text-gray-400 font-bold uppercase">Longest Day</span>
-                  <span className="text-lg font-bold text-gray-800">{formatDecimalHour(sleepStats.max.totalDuration)}</span>
+                  <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{formatDecimalHour(sleepStats.max.totalDuration)}</span>
                   <span className="block text-[10px] text-gray-400">{sleepStats.max.date}</span>
                 </div>
               </div>
@@ -429,7 +431,7 @@ const StatsPage = ({ entries }) => {
                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" className="dark:opacity-10" />
                     <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
                     <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
                     <Tooltip 
@@ -444,16 +446,16 @@ const StatsPage = ({ entries }) => {
             </div>
 
             {/* 4b. Sleep Schedule */}
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-2 mb-4">
                 <Clock size={18} className="text-purple-500" />
-                <h2 className="text-lg font-bold text-gray-900">Sleep Schedule</h2>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Sleep Schedule</h2>
               </div>
               
               <div className="h-56 w-full -ml-2">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={sleepStats.chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" className="dark:opacity-10" />
                     <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
                     <YAxis 
                       domain={[18, 34]} 
@@ -507,35 +509,35 @@ const StatsPage = ({ entries }) => {
 
           </div>
         ) : (
-          <div className="bg-white p-6 rounded-2xl border border-dashed border-gray-300 text-center">
-            <Moon size={24} className="mx-auto text-gray-300 mb-2" />
-            <p className="text-sm text-gray-400">No sleep data found</p>
+          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 text-center">
+            <Moon size={24} className="mx-auto text-gray-300 dark:text-gray-600 mb-2" />
+            <p className="text-sm text-gray-400 dark:text-gray-500">No sleep data found</p>
           </div>
         )}
         
-        {/* 5. MEDITATION ANALYTICS (NEW) */}
+        {/* 5. MEDITATION ANALYTICS */}
         {meditationStats ? (
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-2 mb-4">
               <Leaf size={18} className="text-teal-500" />
-              <h2 className="text-lg font-bold text-gray-900">Mindfulness</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Mindfulness</h2>
             </div>
 
-            <div className="flex items-center justify-between bg-teal-50 p-4 rounded-xl mb-6">
+            <div className="flex items-center justify-between bg-teal-50 dark:bg-teal-900/20 p-4 rounded-xl mb-6">
               <div>
                 <span className="block text-xs text-gray-500 font-bold uppercase">Total Time</span>
-                <span className="text-xl font-bold text-teal-700">{meditationStats.totalMinutes} min</span>
+                <span className="text-xl font-bold text-teal-700 dark:text-teal-400">{meditationStats.totalMinutes} min</span>
               </div>
               <div className="text-right">
                 <span className="block text-xs text-gray-500 font-bold uppercase">Sessions</span>
-                <span className="text-xl font-bold text-teal-700">{filteredMeditation.length}</span>
+                <span className="text-xl font-bold text-teal-700 dark:text-teal-400">{filteredMeditation.length}</span>
               </div>
             </div>
 
             <div className="h-48 w-full -ml-2">
                <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={meditationStats.chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" className="dark:opacity-10" />
                     <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
                     <YAxis hide />
                     <Tooltip 
@@ -550,9 +552,9 @@ const StatsPage = ({ entries }) => {
             </div>
           </div>
         ) : (
-          <div className="bg-white p-6 rounded-2xl border border-dashed border-gray-300 text-center">
-            <Leaf size={24} className="mx-auto text-gray-300 mb-2" />
-            <p className="text-sm text-gray-400">No meditation data found</p>
+          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 text-center">
+            <Leaf size={24} className="mx-auto text-gray-300 dark:text-gray-600 mb-2" />
+            <p className="text-sm text-gray-400 dark:text-gray-500">No meditation data found</p>
           </div>
         )}
 
