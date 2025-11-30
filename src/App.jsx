@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db'; 
@@ -6,7 +5,10 @@ import { SleepPage } from './components/SleepPage';
 import { WhatsAppPage } from './components/WhatsAppPage';
 import MeditationPage from './components/MeditationPage'; 
 import YearInReviewPage from './components/YearInReviewPage'; 
-import Editor from './components/Editor';
+
+// --- UPDATED IMPORT PATH ---
+import Editor from './components/editor/Editor'; 
+
 import JournalList from './components/JournalList';
 import StatsPage from './components/StatsPage';
 import MediaGallery from './components/MediaGallery';
@@ -279,10 +281,7 @@ const App = () => {
               />
             )}
             {currentRoute === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
-            
-            {/* UPDATED: Passing isDarkMode prop here */}
             {currentRoute === 'stats' && <StatsPage entries={entries} isDarkMode={isDarkMode} />}
-            
             {currentRoute === 'media' && <MediaGallery entries={entries} />}
             
             {/* NEW PAGES */}
