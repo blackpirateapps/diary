@@ -1,18 +1,18 @@
 import React from 'react';
 import { 
   ChevronLeft, Settings, Info, Download, Upload, 
-  ChevronRight, Github, Mail, Shield, Smartphone, Moon, MessageCircle, Flower2, BookOpen, PenTool
+  ChevronRight, Github, Mail, Shield, Smartphone, Moon, MessageCircle, Flower2, BookOpen, PenTool, Palette, Check
 } from 'lucide-react';
 
 // --- SHARED HEADER COMPONENT ---
 const PageHeader = ({ title, onBack }) => (
-  <div className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 backdrop-blur-md z-20 border-b border-gray-200/50 flex items-center gap-3">
+  <div className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center gap-3 transition-colors">
     {onBack && (
-      <button onClick={onBack} className="p-2 -ml-2 text-blue-500 rounded-full hover:bg-blue-50">
+      <button onClick={onBack} className="p-2 -ml-2 text-[var(--accent-500)] rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
         <ChevronLeft size={24} />
       </button>
     )}
-    <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{title}</h1>
   </div>
 );
 
@@ -20,29 +20,29 @@ const PageHeader = ({ title, onBack }) => (
 const MenuItem = ({ icon: Icon, label, onClick, isDestructive }) => (
   <button 
     onClick={onClick}
-    className="w-full bg-white p-4 flex items-center justify-between border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors active:scale-[0.99]"
+    className="w-full bg-white dark:bg-gray-900 p-4 flex items-center justify-between border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors active:scale-[0.99]"
   >
     <div className="flex items-center gap-3">
-      <div className={`p-2 rounded-lg ${isDestructive ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-600'}`}>
+      <div className={`p-2 rounded-lg ${isDestructive ? 'bg-red-50 text-red-500' : 'bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-500)]'}`}>
         <Icon size={20} />
       </div>
-      <span className={`font-medium ${isDestructive ? 'text-red-600' : 'text-gray-700'}`}>{label}</span>
+      <span className={`font-medium ${isDestructive ? 'text-red-600' : 'text-gray-700 dark:text-gray-200'}`}>{label}</span>
     </div>
-    <ChevronRight size={16} className="text-gray-300" />
+    <ChevronRight size={16} className="text-gray-300 dark:text-gray-600" />
   </button>
 );
 
-// --- PAGE: MORE MENU (The root of the "More" tab) ---
+// --- PAGE: MORE MENU ---
 export const MoreMenu = ({ navigate }) => {
   return (
     <div className="pb-24">
       <PageHeader title="More" />
       <div className="p-4 space-y-6">
         
-        {/* New "Tools" Section */}
+        {/* Tools */}
         <div>
-           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-2">Tools</h3>
-           <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+           <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Tools</h3>
+           <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800">
              <MenuItem icon={Moon} label="Sleep Insights" onClick={() => navigate('sleep')} />
              <MenuItem icon={Flower2} label="Meditation" onClick={() => navigate('meditation')} />
              <MenuItem icon={BookOpen} label="Year in Review (PDF)" onClick={() => navigate('year-review')} />
@@ -50,16 +50,11 @@ export const MoreMenu = ({ navigate }) => {
            </div>
         </div>
         
-        {/* Section 1 */}
-        <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+        {/* Settings */}
+        <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800">
+          <MenuItem icon={Palette} label="Appearance" onClick={() => navigate('themes')} />
           <MenuItem icon={Settings} label="Settings" onClick={() => navigate('settings')} />
           <MenuItem icon={Info} label="About" onClick={() => navigate('about')} />
-        </div>
-
-        {/* Section 2 (Example of future expansion) */}
-        <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100">
-          <MenuItem icon={Smartphone} label="App Icon" onClick={() => alert('Coming soon!')} />
-          <MenuItem icon={Shield} label="Privacy" onClick={() => alert('Data is stored locally on your device.')} />
         </div>
 
         <p className="text-center text-xs text-gray-400 font-medium mt-8">
@@ -70,9 +65,69 @@ export const MoreMenu = ({ navigate }) => {
   );
 };
 
+// --- PAGE: THEMES ---
+export const ThemesPage = ({ navigate, isDarkMode, setIsDarkMode, accentColor, setAccentColor }) => {
+  const colors = [
+    { id: 'blue', color: '#3b82f6', label: 'Ocean' },
+    { id: 'violet', color: '#8b5cf6', label: 'Royal' },
+    { id: 'emerald', color: '#10b981', label: 'Nature' },
+    { id: 'amber', color: '#f59e0b', label: 'Sunset' },
+    { id: 'rose', color: '#f43f5e', label: 'Love' },
+  ];
+
+  return (
+    <div className="pb-24 animate-slideUp">
+      <PageHeader title="Appearance" onBack={() => navigate('more')} />
+      
+      <div className="p-4 space-y-8">
+        
+        {/* Dark Mode Toggle */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 flex items-center justify-between border border-gray-100 dark:border-gray-800 shadow-sm">
+           <div className="flex items-center gap-3">
+             <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-300">
+               <Moon size={20} />
+             </div>
+             <div>
+               <h3 className="font-medium text-gray-900 dark:text-white">Dark Mode</h3>
+               <p className="text-xs text-gray-500 dark:text-gray-400">Easier on the eyes at night</p>
+             </div>
+           </div>
+           
+           <button 
+             onClick={() => setIsDarkMode(!isDarkMode)}
+             className={`w-12 h-6 rounded-full transition-colors relative ${isDarkMode ? 'bg-[var(--accent-500)]' : 'bg-gray-300'}`}
+           >
+             <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`} />
+           </button>
+        </div>
+
+        {/* Accent Color Selection */}
+        <div>
+           <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 ml-2">Accent Color</h3>
+           <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shadow-sm grid grid-cols-1 gap-2">
+              {colors.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setAccentColor(c.id)}
+                  className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full shadow-sm" style={{ backgroundColor: c.color }} />
+                    <span className="font-medium text-gray-700 dark:text-gray-200">{c.label}</span>
+                  </div>
+                  {accentColor === c.id && <Check size={20} className="text-[var(--accent-500)]" />}
+                </button>
+              ))}
+           </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
 // --- PAGE: SETTINGS ---
 export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport, importInputRef }) => {
-  
   const handleNameChange = (e) => {
     const newName = e.target.value;
     setAppName(newName);
@@ -84,40 +139,33 @@ export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport
       <PageHeader title="Settings" onBack={() => navigate('more')} />
       
       <div className="p-4 space-y-6">
-        
         {/* PERSONALIZATION */}
         <div>
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-2">Personalization</h3>
-          <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 p-4">
+          <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Personalization</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800 p-4">
             <div className="flex items-center gap-3 mb-2">
-               <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+               <div className="p-2 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-500)] rounded-lg">
                  <PenTool size={20} />
                </div>
-               <span className="font-medium text-gray-700">Journal Name</span>
+               <span className="font-medium text-gray-700 dark:text-gray-200">Journal Name</span>
             </div>
             <input 
               type="text" 
               value={appName}
               onChange={handleNameChange}
-              placeholder="e.g. My Life, Captain's Log"
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              placeholder="e.g. My Life"
+              className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--accent-500)]/20 focus:border-[var(--accent-500)] transition-all dark:text-white"
             />
-            <p className="text-[10px] text-gray-400 mt-2 ml-1">
-              This name will appear on the main journal page.
-            </p>
           </div>
         </div>
 
         {/* DATA */}
         <div>
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-2">Data Management</h3>
-          <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+          <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Data Management</h3>
+          <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800">
             <MenuItem icon={Download} label="Export Backup (ZIP)" onClick={onExport} />
             <MenuItem icon={Upload} label="Import Backup" onClick={() => importInputRef.current?.click()} />
           </div>
-          <p className="text-xs text-gray-400 mt-2 ml-2">
-            Backups include all your entries and full-quality images.
-          </p>
         </div>
       </div>
     </div>
@@ -131,26 +179,25 @@ export const AboutPage = ({ navigate }) => {
       <PageHeader title="About" onBack={() => navigate('more')} />
       
       <div className="p-6 flex flex-col items-center text-center space-y-6">
-        <div className="w-20 h-20 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-3xl shadow-xl flex items-center justify-center text-white">
+        <div className="w-20 h-20 bg-gradient-to-tr from-[var(--accent-500)] to-purple-500 rounded-3xl shadow-xl flex items-center justify-center text-white">
           <span className="text-3xl font-bold">J</span>
         </div>
         
         <div className="space-y-2">
-          <h2 className="text-xl font-bold text-gray-900">Journal App</h2>
-          <p className="text-gray-500 leading-relaxed">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Journal App</h2>
+          <p className="text-gray-500 dark:text-gray-400 leading-relaxed">
             A privacy-focused, offline-first journal designed to keep your memories safe. 
-            Built with React, Dexie.js, and Tailwind CSS.
           </p>
         </div>
 
-        <div className="w-full rounded-2xl overflow-hidden shadow-sm border border-gray-100 text-left">
-          <a href="#" className="bg-white p-4 flex items-center gap-3 hover:bg-gray-50 border-b border-gray-100">
-            <Github size={20} className="text-gray-700" />
-            <span className="text-gray-700 font-medium">Source Code</span>
+        <div className="w-full rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800 text-left">
+          <a href="#" className="bg-white dark:bg-gray-900 p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
+            <Github size={20} className="text-gray-700 dark:text-gray-200" />
+            <span className="text-gray-700 dark:text-gray-200 font-medium">Source Code</span>
           </a>
-          <a href="#" className="bg-white p-4 flex items-center gap-3 hover:bg-gray-50">
-            <Mail size={20} className="text-gray-700" />
-            <span className="text-gray-700 font-medium">Contact Support</span>
+          <a href="#" className="bg-white dark:bg-gray-900 p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+            <Mail size={20} className="text-gray-700 dark:text-gray-200" />
+            <span className="text-gray-700 dark:text-gray-200 font-medium">Contact Support</span>
           </a>
         </div>
       </div>

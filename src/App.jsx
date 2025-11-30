@@ -11,7 +11,7 @@ import StatsPage from './components/StatsPage';
 import MediaGallery from './components/MediaGallery';
 import FlashbackPage from './components/FlashbackPage';
 import MapPage from './components/MapPage';
-import { MoreMenu, SettingsPage, AboutPage } from './components/MorePages';
+import { MoreMenu, SettingsPage, AboutPage, ThemesPage } from './components/MorePages'; // Updated Import
 
 import {
   BarChart2,
@@ -22,10 +22,46 @@ import {
   Menu 
 } from 'lucide-react';
 
+// --- THEME ENGINE CONSTANTS ---
+const ACCENT_COLORS = {
+  blue:   { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 500: '#3b82f6', 600: '#2563eb' },
+  violet: { 50: '#f5f3ff', 100: '#ede9fe', 200: '#ddd6fe', 500: '#8b5cf6', 600: '#7c3aed' },
+  emerald:{ 50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 500: '#10b981', 600: '#059669' },
+  amber:  { 50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 500: '#f59e0b', 600: '#d97706' },
+  rose:   { 50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 500: '#f43f5e', 600: '#e11d48' },
+};
+
 const App = () => {
   // --- APP PREFERENCES STATE ---
-  // Load name from local storage or default to 'Journal'
   const [appName, setAppName] = useState(() => localStorage.getItem('app_name') || 'Journal');
+  
+  // THEME STATE
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('app_theme') === 'dark');
+  const [accentColor, setAccentColor] = useState(() => localStorage.getItem('app_accent') || 'blue');
+
+  // --- THEME ENGINE EFFECT ---
+  useEffect(() => {
+    const root = document.documentElement;
+    const colors = ACCENT_COLORS[accentColor] || ACCENT_COLORS.blue;
+
+    // 1. Handle Dark Mode Class
+    if (isDarkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('app_theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('app_theme', 'light');
+    }
+
+    // 2. Inject CSS Variables for Accent Colors
+    root.style.setProperty('--accent-50', colors[50]);
+    root.style.setProperty('--accent-100', colors[100]);
+    root.style.setProperty('--accent-200', colors[200]);
+    root.style.setProperty('--accent-500', colors[500]);
+    root.style.setProperty('--accent-600', colors[600]);
+    
+    localStorage.setItem('app_accent', accentColor);
+  }, [isDarkMode, accentColor]);
 
   // --- ROUTING LOGIC ---
   const getHash = () => window.location.hash.replace('#', '') || 'journal';
@@ -160,18 +196,18 @@ const App = () => {
   };
 
   // Helper to determine if a route belongs to the "More" tab
-  const isMoreRoute = ['more', 'settings', 'about'].includes(currentRoute);
+  const isMoreRoute = ['more', 'settings', 'about', 'themes'].includes(currentRoute);
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] text-gray-900">
+    <div className="min-h-screen bg-[#F3F4F6] dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-300">
       <div className="max-w-xl mx-auto min-h-screen relative pb-16">
         
         {/* IMPORT SPINNER */}
         {isImporting && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-slideUp">
-              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="font-semibold text-gray-700">Processing backup...</p>
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-slideUp">
+              <div className="w-8 h-8 border-4 border-[var(--accent-500)] border-t-transparent rounded-full animate-spin"></div>
+              <p className="font-semibold text-gray-700 dark:text-gray-200">Processing backup...</p>
             </div>
           </div>
         )}
@@ -179,13 +215,13 @@ const App = () => {
         {/* ERROR MODAL */}
         {importError && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white p-6 rounded-2xl shadow-xl max-w-sm w-full animate-slideUp">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl max-w-sm w-full animate-slideUp">
               <div className="flex items-center gap-3 text-red-500 mb-2">
                 <Trash2 size={24} />
                 <h3 className="font-bold text-lg">Import Failed</h3>
               </div>
-              <p className="text-gray-600 text-sm mb-4">{importError}</p>
-              <button onClick={() => setImportError(null)} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-xl">Close</button>
+              <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">{importError}</p>
+              <button onClick={() => setImportError(null)} className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-white font-medium py-2 rounded-xl">Close</button>
             </div>
           </div>
         )}
@@ -202,7 +238,7 @@ const App = () => {
             {currentRoute === 'journal' && (
               <JournalList
                 entries={entries}
-                appName={appName} // PASSING THE NAME
+                appName={appName}
                 onEdit={openEditEditor}
                 onCreate={() => openNewEditor()}
                 onAddOld={() => dateInputRef.current?.showPicker()}
@@ -225,11 +261,22 @@ const App = () => {
             {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />}
             {currentRoute === 'year-review' && <YearInReviewPage navigate={navigate} />}
             
+            {/* THEMES PAGE */}
+            {currentRoute === 'themes' && (
+              <ThemesPage 
+                navigate={navigate}
+                isDarkMode={isDarkMode}
+                setIsDarkMode={setIsDarkMode}
+                accentColor={accentColor}
+                setAccentColor={setAccentColor}
+              />
+            )}
+            
             {currentRoute === 'settings' && (
               <SettingsPage 
                 navigate={navigate} 
-                appName={appName} // PASS VALUE
-                setAppName={setAppName} // PASS SETTER
+                appName={appName} 
+                setAppName={setAppName} 
                 onExport={handleExport} 
                 onImport={() => fileInputRef.current?.click()}
                 importInputRef={fileInputRef} 
@@ -254,30 +301,30 @@ const App = () => {
       </div>
 
       {/* --- BOTTOM NAVIGATION --- */}
-      <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur-md z-40 pb-safe">
+      <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-40 pb-safe transition-colors">
         <div className="max-w-xl mx-auto flex justify-around py-3">
           
-          <button onClick={() => { navigate('journal'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'journal' && !showFlashback ? 'text-blue-600' : 'text-gray-400'}`}>
+          <button onClick={() => { navigate('journal'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'journal' && !showFlashback ? 'text-[var(--accent-600)]' : 'text-gray-400 dark:text-gray-500'}`}>
             <Home size={22} strokeWidth={currentRoute === 'journal' ? 2.5 : 2} />
             <span className="text-[10px] font-medium">{appName.length > 8 ? 'Journal' : appName}</span>
           </button>
           
-          <button onClick={() => { navigate('map'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'map' ? 'text-blue-600' : 'text-gray-400'}`}>
+          <button onClick={() => { navigate('map'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'map' ? 'text-[var(--accent-600)]' : 'text-gray-400 dark:text-gray-500'}`}>
             <MapIcon size={22} strokeWidth={currentRoute === 'map' ? 2.5 : 2} />
             <span className="text-[10px] font-medium">Atlas</span>
           </button>
 
-          <button onClick={() => { navigate('stats'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'stats' ? 'text-blue-600' : 'text-gray-400'}`}>
+          <button onClick={() => { navigate('stats'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'stats' ? 'text-[var(--accent-600)]' : 'text-gray-400 dark:text-gray-500'}`}>
             <BarChart2 size={22} strokeWidth={currentRoute === 'stats' ? 2.5 : 2} />
             <span className="text-[10px] font-medium">Stats</span>
           </button>
           
-          <button onClick={() => { navigate('media'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'media' ? 'text-blue-600' : 'text-gray-400'}`}>
+          <button onClick={() => { navigate('media'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'media' ? 'text-[var(--accent-600)]' : 'text-gray-400 dark:text-gray-500'}`}>
             <Grid size={22} strokeWidth={currentRoute === 'media' ? 2.5 : 2} />
             <span className="text-[10px] font-medium">Media</span>
           </button>
 
-          <button onClick={() => { navigate('more'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${isMoreRoute ? 'text-blue-600' : 'text-gray-400'}`}>
+          <button onClick={() => { navigate('more'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${isMoreRoute ? 'text-[var(--accent-600)]' : 'text-gray-400 dark:text-gray-500'}`}>
             <Menu size={22} strokeWidth={isMoreRoute ? 2.5 : 2} />
             <span className="text-[10px] font-medium">More</span>
           </button>
