@@ -1,14 +1,15 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import Calendar from 'react-calendar'; 
 import 'react-calendar/dist/Calendar.css'; 
 import { 
-  Plus, Calendar as CalendarIcon, Search, WifiOff, Settings, Download, Upload,
+  Plus, Calendar as CalendarIcon, Search, WifiOff, Download, Upload,
   X, Tag, MapPin, Smile, Frown, Meh, Heart, Sun, CloudRain,
-  LayoutList, LayoutGrid, Eye, CalendarDays
+  LayoutList, LayoutGrid, Eye, CalendarDays, MoreVertical, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBlobUrl } from '../db';
 
+// --- CONFIGURATION ---
 const MOODS = [
   { value: 1, icon: CloudRain, color: 'text-gray-400', label: 'Awful' },
   { value: 2, icon: CloudRain, color: 'text-blue-400', label: 'Bad' },
@@ -24,7 +25,7 @@ const MOODS = [
 
 const JournalEntryImage = ({ src, className = "w-full h-full object-cover" }) => {
   const url = useBlobUrl(src);
-  if (!url) return <div className={`bg-gray-100 dark:bg-gray-700 animate-pulse ${className}`} />;
+  if (!url) return <div className={`bg-gray-100 dark:bg-gray-800 animate-pulse ${className}`} />;
   return (
     <motion.img
       whileHover={{ scale: 1.05 }}
@@ -54,6 +55,7 @@ const JournalList = ({
   const [activeFilters, setActiveFilters] = useState({ mood: null, tag: null, location: null });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
+  // --- CALENDAR STATE ---
   const [selectedDate, setSelectedDate] = useState(() => {
     const saved = localStorage.getItem('journal_selected_date');
     return saved ? new Date(saved) : new Date();
@@ -63,8 +65,9 @@ const JournalList = ({
     localStorage.setItem('journal_selected_date', selectedDate.toISOString());
   }, [selectedDate]);
 
-  const importInputRef = React.useRef(null);
+  const importInputRef = useRef(null);
 
+  // --- DERIVE DATA ---
   const uniqueTags = useMemo(() => [...new Set(entries.flatMap(e => e.tags || []))], [entries]);
   const uniqueLocations = useMemo(() => [...new Set(entries.map(e => e.location).filter(Boolean))], [entries]);
 
@@ -89,10 +92,7 @@ const JournalList = ({
   }, [entries, searchTerm, activeFilters, viewMode, selectedDate]);
 
   const toggleFilter = (type, value) => {
-    setActiveFilters(prev => ({
-      ...prev,
-      [type]: prev[type] === value ? null : value
-    }));
+    setActiveFilters(prev => ({ ...prev, [type]: prev[type] === value ? null : value }));
   };
 
   const clearFilters = () => {
@@ -224,33 +224,50 @@ const JournalList = ({
   };
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-24 text-gray-900 dark:text-gray-100 transition-colors">
+      
+      {/* HEADER */}
       <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 transition-colors">
-        <div className="flex flex-col gap-3">
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="w-full">
-            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight leading-tight break-words">{appName}</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1 flex items-center gap-2 font-medium">
+        <div className="flex justify-between items-center gap-2 mb-2">
+          
+          {/* TITLE LEFT */}
+          <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="min-w-0 flex-1 pr-2">
+            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight truncate">{appName}</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm flex items-center gap-2 font-medium">
               {entries.length} memories
               {isOffline && <span className="flex items-center gap-1 text-[10px] bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full"><WifiOff size={10} /> Offline</span>}
             </p>
           </motion.div>
           
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-end gap-2 w-full">
+          {/* ACTIONS RIGHT (3 ICONS ONLY) */}
+          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 flex-shrink-0">
+            
+            {/* 1. Search */}
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className={`p-2 rounded-full transition-colors ${isSearchOpen || searchTerm ? 'bg-[var(--accent-100)] dark:bg-[var(--accent-900)] text-[var(--accent-600)] ring-2 ring-[var(--accent-500)]/20' : 'bg-white dark:bg-gray-900 text-gray-500 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+              className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isSearchOpen || searchTerm ? 'bg-[var(--accent-100)] dark:bg-[var(--accent-900)] text-[var(--accent-600)] ring-2 ring-[var(--accent-500)]/20' : 'bg-white dark:bg-gray-900 text-gray-500 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800'}`}
             >
               <Search size={20} />
             </motion.button>
-            
+
+            {/* 2. New (Respects Calendar Mode) */}
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
+              onClick={handleCreateNew} 
+              className="w-10 h-10 flex items-center justify-center bg-[var(--accent-500)] text-white rounded-full shadow-lg shadow-[var(--accent-500)]/30 active:scale-95 transition-all"
+            >
+              <Plus size={20} />
+            </motion.button>
+
+            {/* 3. More Menu (Contains View Switcher & Settings) */}
             <div className="relative">
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="p-2 bg-white dark:bg-gray-900 text-gray-500 shadow-sm rounded-full hover:text-[var(--accent-600)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 transition-colors"
+                className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-900 text-gray-500 shadow-sm rounded-full hover:text-[var(--accent-600)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 transition-colors"
               >
-                <Settings size={20} />
+                <MoreVertical size={20} />
               </motion.button>
               
               <AnimatePresence>
@@ -261,40 +278,47 @@ const JournalList = ({
                       initial={{ opacity: 0, scale: 0.9, y: 10, x: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
                       exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                      className="absolute right-0 top-10 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 p-2 w-36 z-30 flex flex-col gap-1 origin-top-right"
+                      className="absolute right-0 top-12 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 p-2 w-48 z-30 flex flex-col gap-1 origin-top-right"
                     >
-                      <button onClick={onAddOld} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left">
-                         <CalendarIcon size={14} /> Add Past Date
+                      {/* VIEW SWITCHER INSIDE MENU */}
+                      <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex mb-2">
+                        {['list', 'grid', 'calendar'].map(mode => (
+                          <button
+                            key={mode}
+                            onClick={() => setViewMode(mode)}
+                            className={`flex-1 flex items-center justify-center py-1.5 rounded-md transition-all ${viewMode === mode ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                          >
+                            {mode === 'list' && <LayoutList size={16} />}
+                            {mode === 'grid' && <LayoutGrid size={16} />}
+                            {mode === 'calendar' && <CalendarIcon size={16} />}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button onClick={onAddOld} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left">
+                         <CalendarIcon size={16} className="text-gray-400" /> Add Past Date
                       </button>
-                      <button onClick={onOpenFlashback} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left">
-                         <Smile size={14} /> On This Day
+                      <button onClick={onOpenFlashback} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left">
+                         <Smile size={16} className="text-gray-400" /> On This Day
                       </button>
                       <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
-                      <button onClick={() => { onExport(); setIsMenuOpen(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left">
-                        <Download size={14} /> Export Backup
+                      <button onClick={() => { onExport(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left">
+                        <Download size={16} className="text-gray-400" /> Export Backup
                       </button>
-                      <button onClick={() => { importInputRef.current.click(); setIsMenuOpen(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left">
-                        <Upload size={14} /> Import Backup
+                      <button onClick={() => { importInputRef.current.click(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left">
+                        <Upload size={16} className="text-gray-400" /> Import Backup
                       </button>
                     </motion.div>
                   </>
                 )}
               </AnimatePresence>
             </div>
-            
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              whileHover={{ scale: 1.05 }}
-              onClick={handleCreateNew} 
-              className="px-4 py-2 bg-[var(--accent-500)] text-white font-semibold rounded-full shadow-lg shadow-[var(--accent-500)]/30 active:scale-95 transition-all flex items-center gap-1 text-sm ml-1"
-            >
-              <Plus size={16} /> New
-            </motion.button>
           </motion.div>
         </div>
         
         <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
 
+        {/* EXPANDABLE SEARCH & FILTERS */}
         <AnimatePresence>
           {(isSearchOpen || searchTerm || activeFilters.mood || activeFilters.tag || activeFilters.location) && (
             <motion.div 
@@ -303,7 +327,7 @@ const JournalList = ({
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-4 space-y-4 pb-2">
+              <div className="pt-2 space-y-4 pb-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                   <input 
@@ -319,30 +343,6 @@ const JournalList = ({
                       <X size={14} />
                     </button>
                   )}
-                </div>
-
-                <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-1">View</span>
-                    <div className="bg-gray-200/50 dark:bg-gray-800 p-1 rounded-lg flex items-center gap-0.5">
-                        <button 
-                            onClick={() => setViewMode('list')}
-                            className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
-                        >
-                            <LayoutList size={14} /> List
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('grid')}
-                            className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
-                        >
-                            <LayoutGrid size={14} /> Grid
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('calendar')}
-                            className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'calendar' ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
-                        >
-                            <CalendarIcon size={14} /> Calendar
-                        </button>
-                    </div>
                 </div>
 
                 <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
@@ -395,7 +395,10 @@ const JournalList = ({
         </AnimatePresence>
       </header>
 
+      {/* MAIN CONTENT AREA */}
       <div className="px-4">
+        
+        {/* CALENDAR VIEW */}
         {viewMode === 'calendar' && (
            <div className="animate-slideUp space-y-4">
              <div className="flex justify-between items-center px-1">
@@ -439,6 +442,7 @@ const JournalList = ({
            </div>
         )}
 
+        {/* RESULTS (List/Grid) */}
         <motion.div 
           variants={containerVariants}
           initial="hidden"
@@ -467,6 +471,7 @@ const JournalList = ({
         </motion.div>
       </div>
 
+      {/* CUSTOM CSS FOR CALENDAR */}
       <style>{`
         .react-calendar {
           width: 100%;

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, 
@@ -13,41 +13,40 @@ import {
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 
-// --- CONFIGURATION ---
 const COLORS = ['#60A5FA', '#34D399', '#F87171', '#FBBF24', '#A78BFA'];
 
-// --- HELPERS ---
+// Helper hook to detect theme changes for Recharts
+const useThemeDetector = () => {
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const checkTheme = () => setIsDark(document.documentElement.classList.contains('dark'));
+    checkTheme();
+    // Use MutationObserver to detect class changes on <html>
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+};
+
+// ... (calculateStreak, formatDecimalHour, normalizeTime, formatAxisTime remain the same)
 const calculateStreak = (entries) => {
   if (!entries.length) return 0;
-  
   const sortedDates = [...new Set(entries.map(e => new Date(e.date).toDateString()))]
-    .sort((a, b) => new Date(b) - new Date(a)); // Newest first
-
+    .sort((a, b) => new Date(b) - new Date(a));
   let streak = 0;
   const today = new Date().toDateString();
   const yesterday = new Date(Date.now() - 86400000).toDateString();
-
-  if (sortedDates[0] !== today && sortedDates[0] !== yesterday) {
-    return 0;
-  }
-
+  if (sortedDates[0] !== today && sortedDates[0] !== yesterday) return 0;
   let currentDate = new Date(sortedDates[0]);
-  
   for (let i = 0; i < sortedDates.length; i++) {
     const entryDate = new Date(sortedDates[i]);
     const diffTime = Math.abs(currentDate - entryDate);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-
-    if (i === 0) {
-      streak++;
-    } else if (diffDays === 1) {
-      streak++;
-      currentDate = entryDate;
-    } else if (diffDays === 0) {
-      continue;
-    } else {
-      break;
-    }
+    if (i === 0) streak++;
+    else if (diffDays === 1) { streak++; currentDate = entryDate; }
+    else if (diffDays === 0) continue;
+    else break;
   }
   return streak;
 };
@@ -58,7 +57,6 @@ const formatDecimalHour = (decimal) => {
   return `${hours}h ${minutes}m`;
 };
 
-// Normalize time: Noon (12) to Noon (36)
 const normalizeTime = (dateMs) => {
   const date = new Date(dateMs);
   let hours = date.getHours() + date.getMinutes() / 60;
@@ -77,9 +75,16 @@ const formatAxisTime = (val) => {
 const StatsPage = ({ entries }) => {
   const [selectedPeriod, setSelectedPeriod] = useState('month'); 
   const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear());
+  const isDark = useThemeDetector(); // Hooks for Recharts styling
 
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
   const meditationSessions = useLiveQuery(() => db.meditation_sessions.toArray(), []) || [];
+
+  // Theme Constants
+  const gridColor = isDark ? '#374151' : '#f0f0f0'; // Gray-700 vs Gray-100
+  const textColor = isDark ? '#9ca3af' : '#6b7280'; // Gray-400 vs Gray-500
+  const tooltipBg = isDark ? '#1f2937' : '#ffffff'; // Gray-800 vs White
+  const tooltipText = isDark ? '#f3f4f6' : '#111827';
 
   // --- FILTERING LOGIC ---
   const dateRange = useMemo(() => {
@@ -105,9 +110,7 @@ const StatsPage = ({ entries }) => {
       .sort((a, b) => a.startTime - b.startTime);
   }, [meditationSessions, dateRange]);
 
-  // --- DATA PROCESSING ---
-
-  // 1. Mood & Volume
+  // --- DATA PROCESSING (Same as before) ---
   const moodVolumeData = useMemo(() => {
     return filteredEntries.map(e => ({
       date: new Date(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
@@ -116,7 +119,6 @@ const StatsPage = ({ entries }) => {
     }));
   }, [filteredEntries]);
 
-  // 2. Time of Day
   const timeOfDayData = useMemo(() => {
     const counts = { Morning: 0, Afternoon: 0, Evening: 0, Night: 0 };
     filteredEntries.forEach(e => {
@@ -129,106 +131,51 @@ const StatsPage = ({ entries }) => {
     return Object.keys(counts).map(key => ({ name: key, value: counts[key] })).filter(d => d.value > 0);
   }, [filteredEntries]);
 
-  // 3. Sleep Stats (Aggregated by Day)
   const sleepStats = useMemo(() => {
     if (filteredSleep.length === 0) return null;
-
-    // Group sessions by Date string to handle multiple sleeps per day
     const dailyGroups = {};
     let maxSessionsPerDay = 1;
-
     filteredSleep.forEach(session => {
         const dateKey = new Date(session.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        const fullDate = new Date(session.startTime).toLocaleDateString(); // For tooltip
-        
-        if (!dailyGroups[dateKey]) {
-            dailyGroups[dateKey] = {
-                date: dateKey,
-                fullDate: fullDate,
-                totalDuration: 0,
-                sessions: []
-            };
-        }
-        
+        const fullDate = new Date(session.startTime).toLocaleDateString(); 
+        if (!dailyGroups[dateKey]) dailyGroups[dateKey] = { date: dateKey, fullDate: fullDate, totalDuration: 0, sessions: [] };
         dailyGroups[dateKey].totalDuration += session.duration;
-        
-        // Calculate range for this specific session
         const start = normalizeTime(session.startTime);
         const end = start + session.duration;
         dailyGroups[dateKey].sessions.push([start, end]);
-        
-        if (dailyGroups[dateKey].sessions.length > maxSessionsPerDay) {
-            maxSessionsPerDay = dailyGroups[dateKey].sessions.length;
-        }
+        if (dailyGroups[dateKey].sessions.length > maxSessionsPerDay) maxSessionsPerDay = dailyGroups[dateKey].sessions.length;
     });
-
     const groupedData = Object.values(dailyGroups);
-    
-    // Metrics Calculation (Based on Daily Totals)
     let totalDur = 0;
     let minDay = groupedData[0];
     let maxDay = groupedData[0];
-
-    // Format data for Recharts
     const chartData = groupedData.map(day => {
         totalDur += day.totalDuration;
-        
         if (day.totalDuration < minDay.totalDuration) minDay = day;
         if (day.totalDuration > maxDay.totalDuration) maxDay = day;
-
-        const entry = {
-            date: day.date,
-            fullDate: day.fullDate,
-            totalDuration: day.totalDuration,
-        };
-
-        // Assign ranges to keys
-        day.sessions.forEach((range, index) => {
-            entry[`range${index}`] = range;
-        });
-
+        const entry = { date: day.date, fullDate: day.fullDate, totalDuration: day.totalDuration };
+        day.sessions.forEach((range, index) => { entry[`range${index}`] = range; });
         return entry;
     });
-
-    return {
-        avg: totalDur / groupedData.length,
-        min: minDay,
-        max: maxDay,
-        chartData,
-        maxSessions: maxSessionsPerDay
-    };
+    return { avg: totalDur / groupedData.length, min: minDay, max: maxDay, chartData, maxSessions: maxSessionsPerDay };
   }, [filteredSleep]);
 
-  // 4. Meditation Stats
   const meditationStats = useMemo(() => {
     if (filteredMeditation.length === 0) return null;
-
     const dailyGroups = {};
     let totalSeconds = 0;
-
     filteredMeditation.forEach(session => {
       const dateKey = new Date(session.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      
-      if (!dailyGroups[dateKey]) {
-        dailyGroups[dateKey] = { date: dateKey, minutes: 0 };
-      }
-      // db stores duration in seconds
+      if (!dailyGroups[dateKey]) dailyGroups[dateKey] = { date: dateKey, minutes: 0 };
       const mins = session.duration / 60;
       dailyGroups[dateKey].minutes += mins;
       totalSeconds += session.duration;
     });
-
     const chartData = Object.values(dailyGroups).sort((a,b) => new Date(a.date) - new Date(b.date));
     const totalMinutes = Math.floor(totalSeconds / 60);
-
-    return {
-      totalMinutes,
-      chartData
-    };
-
+    return { totalMinutes, chartData };
   }, [filteredMeditation]);
 
-  // --- HEATMAP YEARS ---
   const availableYears = useMemo(() => {
     const years = new Set(entries.map(e => new Date(e.date).getFullYear()));
     years.add(new Date().getFullYear());
@@ -236,11 +183,9 @@ const StatsPage = ({ entries }) => {
   }, [entries]);
 
   return (
-    <div className="pb-24 animate-slideUp">
-      {/* Header */}
+    <div className="pb-24 animate-slideUp text-gray-900 dark:text-gray-100 transition-colors">
       <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 transition-colors">
         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Insights</h1>
-        
         <div className="flex p-1 bg-gray-200/50 dark:bg-gray-800 rounded-xl mt-4 mb-2">
           {['all', 'year', 'month'].map((p) => (
             <button
@@ -260,7 +205,7 @@ const StatsPage = ({ entries }) => {
 
       <div className="px-4 space-y-6 mt-6">
         
-        {/* 1. METRICS */}
+        {/* METRICS */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center">
             <div className="p-2 bg-orange-50 dark:bg-orange-900/30 text-orange-500 rounded-full mb-2">
@@ -278,14 +223,13 @@ const StatsPage = ({ entries }) => {
           </div>
         </div>
 
-        {/* 2. WRITING CONSISTENCY (With Dropdown) */}
+        {/* HEATMAP */}
         <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <CalendarIcon size={18} className="text-green-500" />
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">Writing Habits</h2>
             </div>
-            
             <div className="relative group">
               <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-all cursor-pointer">
                 <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{heatmapYear}</span>
@@ -302,7 +246,6 @@ const StatsPage = ({ entries }) => {
               </select>
             </div>
           </div>
-
           <div className="overflow-x-auto">
             <div className="min-w-[500px]">
               <CalendarHeatmap
@@ -326,7 +269,7 @@ const StatsPage = ({ entries }) => {
           `}</style>
         </div>
 
-        {/* 3. WORD COUNT & MOOD ANALYTICS */}
+        {/* WORD COUNT & MOOD ANALYTICS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
           {/* Word Count */}
@@ -338,16 +281,16 @@ const StatsPage = ({ entries }) => {
             <div className="h-48 w-full -ml-2">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={moodVolumeData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" className="dark:opacity-10" />
-                  <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                  <XAxis dataKey="date" tick={{fontSize: 10, fill: textColor}} tickLine={false} axisLine={false} />
                   <YAxis hide />
                   <Tooltip 
-                    cursor={{fill: 'var(--accent-50)'}}
-                    contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                    labelStyle={{color:'#6b7280', fontSize:'12px', marginBottom:'4px'}}
+                    cursor={{fill: isDark ? '#374151' : '#f3f4f6'}}
+                    contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: tooltipBg}}
+                    labelStyle={{color: textColor, fontSize:'12px', marginBottom:'4px'}}
+                    itemStyle={{ color: tooltipText }}
                     formatter={(val, name, props) => [val, `Mood: ${props.payload.mood}`]}
                   />
-                  {/* Updated fill to use Theme variable */}
                   <Bar dataKey="words" fill="var(--accent-400)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -377,51 +320,37 @@ const StatsPage = ({ entries }) => {
                      ))}
                    </Pie>
                    <Tooltip 
-                     contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                     itemStyle={{color: '#374151', fontWeight: '600'}}
+                     contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: tooltipBg}}
+                     itemStyle={{color: tooltipText, fontWeight: '600'}}
                    />
                  </PieChart>
                </ResponsiveContainer>
             </div>
-            <div className="flex justify-center gap-3 mt-2">
-              {timeOfDayData.map((entry, index) => (
-                <div key={index} className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400">{entry.name}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
-        {/* 4. SLEEP ANALYTICS */}
+        {/* SLEEP ANALYTICS */}
         {sleepStats ? (
           <div className="space-y-4">
-            
-            {/* 4a. Sleep Duration Graph */}
             <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-2 mb-4">
                 <Moon size={18} className="text-indigo-500" />
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">Sleep Duration</h2>
               </div>
-              
               <div className="flex justify-between text-center mb-6 bg-gray-50 dark:bg-gray-800 p-3 rounded-xl">
                 <div>
                   <span className="block text-xs text-gray-400 font-bold uppercase">Avg / Day</span>
                   <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{formatDecimalHour(sleepStats.avg)}</span>
                 </div>
                 <div className="px-4 border-l border-r border-gray-200 dark:border-gray-700">
-                  <span className="block text-xs text-gray-400 font-bold uppercase">Shortest Day</span>
+                  <span className="block text-xs text-gray-400 font-bold uppercase">Shortest</span>
                   <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{formatDecimalHour(sleepStats.min.totalDuration)}</span>
-                  <span className="block text-[10px] text-gray-400">{sleepStats.min.date}</span>
                 </div>
                 <div>
-                  <span className="block text-xs text-gray-400 font-bold uppercase">Longest Day</span>
+                  <span className="block text-xs text-gray-400 font-bold uppercase">Longest</span>
                   <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{formatDecimalHour(sleepStats.max.totalDuration)}</span>
-                  <span className="block text-[10px] text-gray-400">{sleepStats.max.date}</span>
                 </div>
               </div>
-
               <div className="h-48 w-full -ml-2">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={sleepStats.chartData}>
@@ -431,12 +360,13 @@ const StatsPage = ({ entries }) => {
                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" className="dark:opacity-10" />
-                    <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                    <XAxis dataKey="date" tick={{fontSize: 10, fill: textColor}} tickLine={false} axisLine={false} />
                     <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
                     <Tooltip 
-                      contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                      labelStyle={{color:'#6b7280', fontSize:'12px', marginBottom:'4px'}}
+                      contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: tooltipBg}}
+                      labelStyle={{color: textColor, fontSize:'12px', marginBottom:'4px'}}
+                      itemStyle={{ color: tooltipText }}
                       formatter={(val) => [formatDecimalHour(val), 'Total Duration']}
                     />
                     <Area type="monotone" dataKey="totalDuration" stroke="#6366f1" fillOpacity={1} fill="url(#colorSleep)" strokeWidth={2} />
@@ -445,7 +375,7 @@ const StatsPage = ({ entries }) => {
               </div>
             </div>
 
-            {/* 4b. Sleep Schedule */}
+            {/* Sleep Schedule */}
             <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-2 mb-4">
                 <Clock size={18} className="text-purple-500" />
@@ -455,29 +385,30 @@ const StatsPage = ({ entries }) => {
               <div className="h-56 w-full -ml-2">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={sleepStats.chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" className="dark:opacity-10" />
-                    <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                    <XAxis dataKey="date" tick={{fontSize: 10, fill: textColor}} tickLine={false} axisLine={false} />
                     <YAxis 
                       domain={[18, 34]} 
                       tickFormatter={formatAxisTime} 
                       width={45} 
-                      tick={{fontSize: 10}} 
+                      tick={{fontSize: 10, fill: textColor}} 
                       tickLine={false} 
                       axisLine={false}
                       allowDataOverflow={false} 
                     />
                     <Tooltip 
-                      cursor={{fill: '#f3f4f6'}}
+                      cursor={{fill: isDark ? '#374151' : '#f3f4f6'}}
+                      contentStyle={{backgroundColor: tooltipBg}}
                       content={({ active, payload, label }) => {
                         if (active && payload && payload.length) {
                           return (
-                            <div className="bg-white p-3 rounded-xl shadow-lg border border-gray-100">
-                              <p className="text-xs text-gray-500 mb-2 font-bold">{label}</p>
+                            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-bold">{label}</p>
                               {payload.map((entry, idx) => {
                                 const [start, end] = entry.value;
                                 return (
                                   <div key={idx} className="mb-1 last:mb-0">
-                                    <p className="text-xs font-medium text-gray-800">
+                                    <p className="text-xs font-medium text-gray-800 dark:text-gray-200">
                                       <span className="text-purple-500 mr-1">●</span>
                                       {formatAxisTime(start)} - {formatAxisTime(end)}
                                     </p>
@@ -500,7 +431,7 @@ const StatsPage = ({ entries }) => {
                             isAnimationActive={false}
                         />
                     ))}
-                    <ReferenceLine y={24} stroke="#e5e7eb" strokeDasharray="3 3" label={{ value: 'Midnight', fontSize: 9, fill: '#9ca3af', position: 'insideTopLeft' }} />
+                    <ReferenceLine y={24} stroke={gridColor} strokeDasharray="3 3" label={{ value: 'Midnight', fontSize: 9, fill: textColor, position: 'insideTopLeft' }} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -515,7 +446,7 @@ const StatsPage = ({ entries }) => {
           </div>
         )}
         
-        {/* 5. MEDITATION ANALYTICS */}
+        {/* MEDITATION ANALYTICS */}
         {meditationStats ? (
           <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-2 mb-4">
@@ -537,13 +468,14 @@ const StatsPage = ({ entries }) => {
             <div className="h-48 w-full -ml-2">
                <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={meditationStats.chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" className="dark:opacity-10" />
-                    <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                    <XAxis dataKey="date" tick={{fontSize: 10, fill: textColor}} tickLine={false} axisLine={false} />
                     <YAxis hide />
                     <Tooltip 
                       cursor={{fill: '#f0fdfa'}}
-                      contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                      labelStyle={{color:'#6b7280', fontSize:'12px', marginBottom:'4px'}}
+                      contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: tooltipBg}}
+                      labelStyle={{color: textColor, fontSize:'12px', marginBottom:'4px'}}
+                      itemStyle={{ color: tooltipText }}
                       formatter={(val) => [`${val.toFixed(1)} mins`, 'Duration']}
                     />
                     <Bar dataKey="minutes" fill="#2dd4bf" radius={[4, 4, 0, 0]} barSize={20} />
