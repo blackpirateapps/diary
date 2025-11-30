@@ -22,7 +22,6 @@ import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
 
 // --- CONFIGURATION ---
-// Synchronized with MoodPopup.jsx icons/colors for consistency
 const MOODS = [
   { value: 1, icon: CloudRain, color: 'text-gray-400', label: 'Awful' },
   { value: 2, icon: CloudRain, color: 'text-blue-400', label: 'Bad' },
@@ -49,18 +48,32 @@ const Styles = () => (
       line-height: 1.5;
       color: #374151;
     }
+    .dark .native-input { color: #e5e7eb; }
     
     /* MDEditor Customization for Things 3 Look */
     .wmde-markdown { background-color: transparent !important; color: #374151 !important; font-family: -apple-system, BlinkMacSystemFont, sans-serif !important; font-size: 17px !important; line-height: 1.6 !important; }
+    .dark .wmde-markdown { color: #d1d5db !important; }
+    
     .w-md-editor { box-shadow: none !important; border: none !important; background-color: transparent !important; }
     .w-md-editor-toolbar { display: none; } /* Hide toolbar for cleaner look */
     .w-md-editor-content { background-color: transparent !important; }
-    .wmde-markdown h1 { border-bottom: none !important; font-weight: 700; font-size: 1.6em; margin-top: 1.2em; margin-bottom: 0.5em; color: #111827 !important; letter-spacing: -0.02em; }
-    .wmde-markdown h2 { border-bottom: none !important; font-weight: 600; font-size: 1.3em; margin-top: 1.2em; margin-bottom: 0.5em; color: #1f2937 !important; letter-spacing: -0.01em; }
-    .wmde-markdown blockquote { border-left: 3px solid #e5e7eb !important; color: #6b7280 !important; padding-left: 1em !important; margin-left: 0 !important; }
     
-    /* Custom Scrollbar for editor area if needed */
-    textarea { caret-color: #3b82f6; }
+    /* Headers */
+    .wmde-markdown h1 { border-bottom: none !important; font-weight: 700; font-size: 1.6em; margin-top: 1.2em; margin-bottom: 0.5em; color: #111827 !important; letter-spacing: -0.02em; }
+    .dark .wmde-markdown h1 { color: #f9fafb !important; }
+    
+    .wmde-markdown h2 { border-bottom: none !important; font-weight: 600; font-size: 1.3em; margin-top: 1.2em; margin-bottom: 0.5em; color: #1f2937 !important; letter-spacing: -0.01em; }
+    .dark .wmde-markdown h2 { color: #f3f4f6 !important; }
+    
+    /* Blockquotes */
+    .wmde-markdown blockquote { border-left: 3px solid var(--accent-200) !important; color: #6b7280 !important; padding-left: 1em !important; margin-left: 0 !important; }
+    .dark .wmde-markdown blockquote { border-left: 3px solid var(--accent-800) !important; color: #9ca3af !important; }
+    
+    /* Links */
+    .wmde-markdown a { color: var(--accent-500) !important; text-decoration: none !important; }
+    .wmde-markdown a:hover { text-decoration: underline !important; }
+
+    textarea { caret-color: var(--accent-500); }
   `}</style>
 );
 
@@ -163,25 +176,25 @@ const SleepWidget = ({ session }) => {
       : session.movementData?.map((m, i) => ({ time: i, stage: 2 })) || [];
 
   return (
-    <div className="bg-white border border-gray-100 shadow-sm rounded-xl p-4 flex flex-col gap-3 mt-4 hover:shadow-md transition-shadow">
+    <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm rounded-xl p-4 flex flex-col gap-3 mt-4 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-50 text-indigo-500 rounded-full">
+          <div className="p-2 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-500)] rounded-full">
             <Moon size={16} />
           </div>
           <div>
-             <h4 className="text-sm font-semibold text-gray-900">Sleep Session</h4>
-             <p className="text-xs text-gray-500 font-medium">{formatSleepRange(session.startTime, session.duration)}</p>
+             <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Sleep Session</h4>
+             <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{formatSleepRange(session.startTime, session.duration)}</p>
           </div>
         </div>
         <div className="flex gap-4 text-right">
            <div className="flex flex-col items-end">
-              <span className="block text-sm font-semibold text-gray-900">{session.duration.toFixed(1)}h</span>
-              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Time</span>
+              <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">{session.duration.toFixed(1)}h</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-bold">Time</span>
            </div>
            <div className="flex flex-col items-end">
-              <span className="block text-sm font-semibold text-gray-900">{(session.deepSleepPerc * 100).toFixed(0)}%</span>
-              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Deep</span>
+              <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">{(session.deepSleepPerc * 100).toFixed(0)}%</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-bold">Deep</span>
            </div>
         </div>
       </div>
@@ -191,15 +204,15 @@ const SleepWidget = ({ session }) => {
            <AreaChart data={chartData}>
               <defs>
                   <linearGradient id="sleepGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4}/>
-                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0.05}/>
+                      <stop offset="0%" stopColor="var(--accent-500)" stopOpacity={0.4}/>
+                      <stop offset="100%" stopColor="var(--accent-500)" stopOpacity={0.05}/>
                   </linearGradient>
               </defs>
               <YAxis hide domain={[0, 3]} />
               <Area 
                   type="stepAfter" 
                   dataKey="stage" 
-                  stroke="#6366f1" 
+                  stroke="var(--accent-500)" 
                   strokeWidth={2} 
                   fill="url(#sleepGradient)" 
               />
@@ -216,7 +229,7 @@ const containerVariants = {
   visible: { 
     opacity: 1, 
     scale: 1,
-    transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } // Apple/Things ease
+    transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } 
   },
   exit: { 
     opacity: 0, 
@@ -471,7 +484,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   
   // Clean time formatting
   const timeString = currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  // Display string (e.g. 10:30 PM)
   const displayTime = currentDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
   return (
@@ -479,8 +491,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       <Styles />
       <AnimatePresence>
         <motion.div 
-            className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden font-sans" 
-            data-color-mode="light"
+            className="fixed inset-0 bg-white dark:bg-gray-950 z-50 flex flex-col overflow-hidden font-sans transition-colors" 
             variants={containerVariants}
             initial="hidden"
             animate="visible"
@@ -488,12 +499,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         >
             
             {/* --- HEADER --- */}
-            <div className="px-6 py-4 flex justify-between items-center bg-white/90 backdrop-blur-xl z-30 border-b border-gray-100/50 sticky top-0">
+            <div className="px-6 py-4 flex justify-between items-center bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl z-30 border-b border-gray-100/50 dark:border-gray-800/50 sticky top-0 transition-colors">
             <div className="flex items-center gap-4">
                 <motion.button 
                 whileTap={{ scale: 0.95 }}
                 onClick={onClose} 
-                className="p-2 -ml-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50/50 rounded-lg transition-all"
+                className="p-2 -ml-2 text-gray-400 hover:text-[var(--accent-500)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 rounded-lg transition-all"
                 >
                 <ChevronLeft size={24} strokeWidth={2.5} />
                 </motion.button>
@@ -503,7 +514,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     initial={{ opacity: 0, x: -10 }} 
                     animate={{ opacity: 1, x: 0 }} 
                     exit={{ opacity: 0 }}
-                    className="text-xs font-semibold tracking-wide uppercase text-gray-300 flex items-center gap-1.5"
+                    className="text-xs font-semibold tracking-wide uppercase text-gray-300 dark:text-gray-600 flex items-center gap-1.5"
                     >
                         {saveStatus === 'saving' && <span>Saving...</span>}
                         {saveStatus === 'saved' && <span className="text-teal-500 flex items-center gap-1"><CheckCircle2 size={12}/> Saved</span>}
@@ -519,7 +530,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     whileTap={{ scale: 0.95 }}
                     onClick={handleExportPdf}
                     disabled={isExporting}
-                    className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                    className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                     title="Export PDF"
                 >
                     {isExporting ? (
@@ -535,7 +546,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 <motion.button 
                     whileTap={{ scale: 0.95 }}
                     onClick={handleDeleteEntry} 
-                    className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                    className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
                 >
                     <Trash2 size={18} strokeWidth={2} />
                 </motion.button>
@@ -545,7 +556,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 <motion.button 
                 whileTap={{ scale: 0.95 }}
                 onClick={toggleMode}
-                className="ml-2 w-9 h-9 flex items-center justify-center text-blue-500 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors"
+                className="ml-2 w-9 h-9 flex items-center justify-center text-[var(--accent-500)] bg-[var(--accent-50)] dark:bg-gray-800 dark:text-[var(--accent-400)] hover:bg-[var(--accent-100)] dark:hover:bg-gray-700 rounded-full transition-colors"
                 >
                 {mode === 'edit' ? <Eye size={18} strokeWidth={2} /> : <PenLine size={18} strokeWidth={2} />}
                 </motion.button>
@@ -554,7 +565,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 <motion.button 
                 whileTap={{ scale: 0.97 }}
                 onClick={handleManualDone} 
-                className="ml-2 px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-full shadow-md shadow-blue-200 transition-all text-sm"
+                className="ml-2 px-5 py-2 bg-[var(--accent-500)] hover:brightness-110 text-white font-semibold rounded-full shadow-md shadow-[var(--accent-200)]/50 transition-all text-sm"
                 >
                 Done
                 </motion.button>
@@ -563,7 +574,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
             {/* --- MAIN SCROLL AREA --- */}
             <motion.div 
-            className="flex-1 overflow-y-auto no-scrollbar flex flex-col bg-white relative"
+            className="flex-1 overflow-y-auto no-scrollbar flex flex-col bg-white dark:bg-gray-950 relative transition-colors"
             variants={contentStagger}
             >
             
@@ -574,7 +585,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "18rem" }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="w-full relative group bg-gray-50 flex-shrink-0"
+                    className="w-full relative group bg-gray-50 dark:bg-gray-900 flex-shrink-0"
                 >
                     <BlobImage 
                     key={imgIndex}
@@ -583,7 +594,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     transition={{ duration: 0.3 }}
                     src={images[imgIndex]} 
                     alt="Memory" 
-                    className="w-full h-full object-contain mix-blend-multiply" 
+                    className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" 
                     />
                     
                     {images.length > 1 && (
@@ -591,14 +602,14 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         <motion.button 
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} 
-                        className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 backdrop-blur rounded-full text-gray-800 opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:scale-110"
+                        className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 backdrop-blur rounded-full text-gray-800 dark:text-white opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:scale-110"
                         >
                         <ChevronLeft size={20} />
                         </motion.button>
                         <motion.button 
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setImgIndex((i) => (i + 1) % images.length)} 
-                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 backdrop-blur rounded-full text-gray-800 opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:scale-110"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 backdrop-blur rounded-full text-gray-800 dark:text-white opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:scale-110"
                         >
                         <ChevronLeft size={20} className="rotate-180" />
                         </motion.button>
@@ -618,7 +629,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     <motion.button 
                     whileTap={{ scale: 0.9 }}
                     onClick={handleDeleteImage} 
-                    className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:bg-white"
+                    className="absolute top-4 right-4 p-2 bg-white/80 dark:bg-black/50 backdrop-blur text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:bg-white dark:hover:bg-black"
                     >
                     <Trash2 size={16} />
                     </motion.button>
@@ -631,18 +642,18 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 {/* DATE & TIME HEADER (Things 3 Style) */}
                 <motion.div variants={itemVariants} className="pt-10 pb-6">
                 <div className="flex items-baseline gap-3 mb-1">
-                    <h2 className="text-4xl font-bold text-gray-900 tracking-tight">
+                    <h2 className="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">
                         {currentDate.toLocaleDateString(undefined, { weekday: 'long' })}
                     </h2>
-                    <span className="text-2xl text-gray-400 font-medium">
+                    <span className="text-2xl text-gray-400 dark:text-gray-500 font-medium">
                         {currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
                     </span>
                 </div>
                 
-                <div className="flex items-center gap-4 text-gray-400 text-sm font-medium">
+                <div className="flex items-center gap-4 text-gray-400 dark:text-gray-500 text-sm font-medium">
                     {/* Time Picker - Styled as text but clickable */}
-                    <div className="relative group cursor-pointer hover:text-blue-500 transition-colors flex items-center gap-2">
-                        <Clock size={16} strokeWidth={2.5} className="group-hover:text-blue-500 transition-colors" />
+                    <div className="relative group cursor-pointer hover:text-[var(--accent-500)] transition-colors flex items-center gap-2">
+                        <Clock size={16} strokeWidth={2.5} className="group-hover:text-[var(--accent-500)] transition-colors" />
                         <span className="font-semibold">{displayTime}</span>
                         {/* Invisible Native Input Overlay */}
                         <input 
@@ -653,10 +664,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         />
                     </div>
 
-                    {!isToday && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-bold">Past Entry</span>}
+                    {!isToday && <span className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-bold">Past Entry</span>}
                     
                     {/* Word Count Display */}
-                    <div className="flex items-center gap-1.5 ml-auto text-gray-300">
+                    <div className="flex items-center gap-1.5 ml-auto text-gray-300 dark:text-gray-600">
                         <AlignLeft size={14} strokeWidth={2.5} />
                         <span className="text-xs font-semibold tracking-wide">{wordCount} words</span>
                     </div>
@@ -671,7 +682,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     <motion.button 
                     whileTap={{ scale: 0.95 }}
                     onClick={() => setIsMoodOpen(!isMoodOpen)} 
-                    className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent ${mood ? 'bg-white border-gray-100 text-gray-700 hover:border-blue-200' : 'bg-gray-50 text-gray-400'}`}
+                    className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent ${mood ? 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-200 hover:border-[var(--accent-200)] dark:hover:border-[var(--accent-800)]' : 'bg-gray-50 dark:bg-gray-800 text-gray-400'}`}
                     >
                     <CurrentMoodIcon size={16} className={currentMoodColor} strokeWidth={2.5} />
                     <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
@@ -696,10 +707,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     whileTap={{ scale: 0.95 }}
                     onClick={handleLocation}
                     disabled={loadingLocation}
-                    className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent ${location ? 'bg-white border-gray-100 text-blue-600 hover:border-blue-200' : 'bg-white border-dashed border-gray-200 text-gray-400 hover:border-blue-300 hover:text-blue-500'}`}
+                    className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent ${location ? 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] hover:border-[var(--accent-200)]' : 'bg-white dark:bg-gray-900 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 hover:border-[var(--accent-300)] hover:text-[var(--accent-500)]'}`}
                 >
                     {loadingLocation ? (
-                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-[var(--accent-500)] border-t-transparent rounded-full animate-spin" />
                     ) : (
                     <MapPin size={16} strokeWidth={2.5} />
                     )}
@@ -711,7 +722,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     <motion.div 
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold bg-white border border-gray-100 text-gray-600 shadow-sm"
+                    className="flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-600 dark:text-gray-300 shadow-sm"
                     >
                     <Sun size={16} className="text-orange-400" strokeWidth={2.5} />
                     <span>{weather}</span>
@@ -721,7 +732,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 {/* Add Image Pill */}
                 <motion.label 
                     whileTap={{ scale: 0.95 }}
-                    className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent cursor-pointer ${uploading ? 'bg-gray-100' : 'bg-white border-dashed border-gray-200 text-gray-400 hover:border-blue-300 hover:text-blue-500'}`}
+                    className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent cursor-pointer ${uploading ? 'bg-gray-100 dark:bg-gray-800' : 'bg-white dark:bg-gray-900 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 hover:border-[var(--accent-300)] hover:text-[var(--accent-500)]'}`}
                 >
                     <input 
                     type="file" 
@@ -744,7 +755,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 {/* EDITOR AREA */}
                 <motion.div variants={itemVariants} className="min-h-[300px] relative">
                     {mode === 'edit' ? (
-                        <div className="text-lg text-gray-800 leading-relaxed -ml-4">
+                        <div className="text-lg text-gray-800 dark:text-gray-200 leading-relaxed -ml-4">
                             <MDEditor
                                 value={content}
                                 onChange={setContent}
@@ -756,30 +767,30 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             />
                         </div>
                     ) : (
-                        <div className="prose prose-lg prose-gray max-w-none">
+                        <div className="prose prose-lg prose-gray dark:prose-invert max-w-none">
                             <MDEditor.Markdown source={content} />
                         </div>
                     )}
                     
                     {content.length === 0 && mode === 'edit' && (
-                        <div className="absolute top-2 left-1 text-gray-300 pointer-events-none text-lg">
+                        <div className="absolute top-2 left-1 text-gray-300 dark:text-gray-600 pointer-events-none text-lg">
                             Write about your day...
                         </div>
                     )}
                 </motion.div>
 
-                <div className="h-px bg-gray-100 my-8" />
+                <div className="h-px bg-gray-100 dark:bg-gray-800 my-8" />
 
                 {/* BOTTOM SECTION: TAGS & SLEEP */}
                 <motion.div variants={itemVariants} className="flex flex-col gap-6">
                     <div className="flex flex-col gap-2">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">Tags</label>
+                        <label className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-1">Tags</label>
                         <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
                     </div>
 
                     {todaysSleepSessions.length > 0 && (
                         <div className="flex flex-col gap-2">
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">Sleep Data</label>
+                            <label className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-1">Sleep Data</label>
                             {todaysSleepSessions.map(session => (
                                 <SleepWidget key={session.id} session={session} />
                             ))}
