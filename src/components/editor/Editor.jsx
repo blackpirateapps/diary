@@ -5,7 +5,7 @@ import MDEditor from '@uiw/react-md-editor';
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, useBlobUrl } from '../db'; 
+import { db, useBlobUrl } from '../../db'; 
 
 // --- PDF IMPORTS ---
 import { pdf } from '@react-pdf/renderer';
