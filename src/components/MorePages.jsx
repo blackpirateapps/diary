@@ -1,7 +1,4 @@
-{
-type: uploaded file
-fileName: MorePages.jsx
-fullContent:
+
 import React, { useState, useEffect } from 'react';
 import { 
   ChevronLeft, Settings, Info, Download, Upload, 
