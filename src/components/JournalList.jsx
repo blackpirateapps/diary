@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
-import Calendar from 'react-calendar'; // Requires: npm install react-calendar
-import 'react-calendar/dist/Calendar.css'; // Import default styles
+import React, { useState, useMemo, useEffect } from 'react';
+import Calendar from 'react-calendar'; 
+import 'react-calendar/dist/Calendar.css'; 
 import { 
   Plus, Calendar as CalendarIcon, Search, WifiOff, Settings, Download, Upload,
   X, Tag, MapPin, Smile, Frown, Meh, Heart, Sun, CloudRain,
-  LayoutList, LayoutGrid, Eye
+  LayoutList, LayoutGrid, Eye, CalendarDays
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBlobUrl } from '../db';
@@ -40,7 +40,7 @@ const JournalEntryImage = ({ src, className = "w-full h-full object-cover" }) =>
 
 const JournalList = ({
   entries,
-  appName, // NEW PROP
+  appName, 
   onEdit,
   onCreate,
   onAddOld,
@@ -50,14 +50,22 @@ const JournalList = ({
   isImporting,
   onOpenFlashback
 }) => {
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid' | 'calendar'
+  const [viewMode, setViewMode] = useState('list'); 
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState({ mood: null, tag: null, location: null });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
-  // Calendar specific state
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  // --- CALENDAR STATE (PERSISTENT) ---
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const saved = localStorage.getItem('journal_selected_date');
+    return saved ? new Date(saved) : new Date();
+  });
+
+  // Save date whenever it changes
+  useEffect(() => {
+    localStorage.setItem('journal_selected_date', selectedDate.toISOString());
+  }, [selectedDate]);
 
   const importInputRef = React.useRef(null);
 
@@ -100,6 +108,18 @@ const JournalList = ({
     setSearchTerm('');
     setActiveFilters({ mood: null, tag: null, location: null });
     setIsSearchOpen(false);
+  };
+
+  // --- HANDLERS ---
+  const handleCreateNew = () => {
+    // If in Calendar mode, create for SELECTED date. Otherwise, create for TODAY.
+    const dateToUse = viewMode === 'calendar' ? selectedDate : new Date();
+    onCreate(dateToUse);
+  };
+
+  const jumpToToday = () => {
+    const today = new Date();
+    setSelectedDate(today);
   };
 
   // --- ANIMATION VARIANTS ---
@@ -232,15 +252,17 @@ const JournalList = ({
     <div className="space-y-4 pb-24">
       {/* HEADER */}
       <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 backdrop-blur-md z-20 border-b border-gray-200/50">
-        <div className="flex justify-between items-start gap-2">
+        
+        {/* MODIFIED LAYOUT: TITLE ROW -> BUTTON ROW */}
+        <div className="flex flex-col gap-3">
           
-          {/* LEFT: TITLE (Now has more space) */}
+          {/* Row 1: App Name */}
           <motion.div 
-            initial={{ opacity: 0, x: -10 }} 
-            animate={{ opacity: 1, x: 0 }} 
-            className="min-w-0 flex-1 pr-2"
+            initial={{ opacity: 0, y: -10 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            className="w-full"
           >
-            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight truncate">{appName}</h1>
+            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight leading-tight break-words">{appName}</h1>
             <p className="text-gray-500 text-sm mt-1 flex items-center gap-2 font-medium">
               {entries.length} memories
               {isOffline && (
@@ -251,11 +273,11 @@ const JournalList = ({
             </p>
           </motion.div>
           
-          {/* RIGHT: ACTION ICONS (Removed View Switcher from here) */}
+          {/* Row 2: Actions (Aligned Right) */}
           <motion.div 
-            initial={{ opacity: 0, x: 10 }} 
-            animate={{ opacity: 1, x: 0 }} 
-            className="flex items-center gap-2 mt-1 flex-shrink-0"
+            initial={{ opacity: 0, y: 10 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            className="flex items-center justify-end gap-2 w-full"
           >
             <motion.button 
               whileTap={{ scale: 0.9 }}
@@ -308,7 +330,7 @@ const JournalList = ({
             <motion.button 
               whileTap={{ scale: 0.9 }}
               whileHover={{ scale: 1.05 }}
-              onClick={onCreate}
+              onClick={handleCreateNew} // UPDATED CLICK HANDLER
               className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-full shadow-lg shadow-blue-500/30 active:scale-95 transition-all flex items-center gap-1 text-sm ml-1"
             >
               <Plus size={16} /> New
@@ -347,7 +369,7 @@ const JournalList = ({
                   )}
                 </div>
 
-                {/* View Switcher (Moved here to clean up header) */}
+                {/* View Switcher */}
                 <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">View</span>
                     <div className="bg-gray-200/50 p-1 rounded-lg flex items-center gap-0.5">
@@ -449,6 +471,21 @@ const JournalList = ({
         {/* CALENDAR VIEW */}
         {viewMode === 'calendar' && (
            <div className="animate-slideUp space-y-4">
+             
+             {/* New Header for Calendar Actions */}
+             <div className="flex justify-between items-center px-1">
+                <div className="flex items-center gap-2 text-gray-400 text-xs font-bold uppercase tracking-wider">
+                  <CalendarIcon size={12} />
+                  {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric'})}
+                </div>
+                <button 
+                  onClick={jumpToToday} 
+                  className="flex items-center gap-1 text-blue-500 hover:bg-blue-50 px-2 py-1 rounded-lg text-xs font-bold transition-colors"
+                >
+                  <CalendarDays size={14} /> Today
+                </button>
+             </div>
+
              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 overflow-hidden">
                <Calendar 
                  onChange={setSelectedDate} 
@@ -473,12 +510,6 @@ const JournalList = ({
                     }
                  }}
                />
-             </div>
-             
-             {/* Selected Date Header */}
-             <div className="flex items-center gap-2 text-gray-400 text-xs font-bold uppercase tracking-wider ml-2">
-                <CalendarIcon size={12} />
-                {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric'})}
              </div>
            </div>
         )}
