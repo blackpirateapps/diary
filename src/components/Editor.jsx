@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ChevronLeft, Trash2, Plus, MapPin, Cloud, Clock, Image as ImageIcon,
-  Eye, PenLine, CheckCircle2, Moon, Activity, Download
+  Eye, PenLine, CheckCircle2, Moon, Activity, Download, X, Sun
 } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -38,20 +38,42 @@ const Styles = () => (
   <style>{`
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    /* Things 3-esque Typography & Inputs */
     .native-input {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 17px;
+      font-size: 15px;
       line-height: 1.5;
       color: #374151;
     }
-    input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; filter: invert(0.5); }
-    .wmde-markdown { background-color: transparent !important; color: #374151 !important; font-family: inherit !important; }
-    .wmde-markdown h1 { border-bottom: none !important; font-weight: 800; font-size: 1.8em; margin-top: 1em; color: #111827 !important; }
-    .wmde-markdown h2 { border-bottom: none !important; font-weight: 700; font-size: 1.5em; margin-top: 1em; color: #1f2937 !important; }
+    input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.4; filter: invert(0); }
+    
+    /* MDEditor Customization for Things 3 Look */
+    .wmde-markdown { background-color: transparent !important; color: #374151 !important; font-family: -apple-system, BlinkMacSystemFont, sans-serif !important; font-size: 16px !important; line-height: 1.6 !important; }
+    .w-md-editor { box-shadow: none !important; border: none !important; background-color: transparent !important; }
+    .w-md-editor-toolbar { display: none; } /* Hide toolbar for cleaner look */
+    .w-md-editor-content { background-color: transparent !important; }
+    .wmde-markdown h1 { border-bottom: none !important; font-weight: 700; font-size: 1.6em; margin-top: 1.2em; margin-bottom: 0.5em; color: #111827 !important; letter-spacing: -0.02em; }
+    .wmde-markdown h2 { border-bottom: none !important; font-weight: 600; font-size: 1.3em; margin-top: 1.2em; margin-bottom: 0.5em; color: #1f2937 !important; letter-spacing: -0.01em; }
+    .wmde-markdown blockquote { border-left: 3px solid #e5e7eb !important; color: #6b7280 !important; padding-left: 1em !important; margin-left: 0 !important; }
+    
+    /* Custom Scrollbar for editor area if needed */
+    textarea { caret-color: #3b82f6; }
   `}</style>
 );
 
 // --- HELPERS ---
+const getWeatherLabel = (code) => {
+  if (code === 0) return 'Clear sky';
+  if (code >= 1 && code <= 3) return 'Partly cloudy';
+  if (code >= 45 && code <= 48) return 'Fog';
+  if (code >= 51 && code <= 67) return 'Drizzle/Rain';
+  if (code >= 71 && code <= 77) return 'Snow';
+  if (code >= 80 && code <= 82) return 'Showers';
+  if (code >= 95 && code <= 99) return 'Thunderstorm';
+  return 'Unknown';
+};
+
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     if (file.size > 50 * 1024 * 1024) {
@@ -101,7 +123,7 @@ const formatSleepRange = (startTime, durationHours) => {
   return `${fmt(start)} - ${fmt(end)}`;
 };
 
-// --- PDF HELPER: CONVERT WEBP BLOB TO JPEG DATA URI ---
+// --- PDF HELPER ---
 const blobToJpeg = (blob) => {
   return new Promise((resolve) => {
     if (!(blob instanceof Blob)) {
@@ -139,30 +161,30 @@ const SleepWidget = ({ session }) => {
       : session.movementData?.map((m, i) => ({ time: i, stage: 2 })) || [];
 
   return (
-    <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex flex-col gap-3">
+    <div className="bg-white border border-gray-100 shadow-sm rounded-xl p-4 flex flex-col gap-3 mt-4 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start">
-        <div className="flex items-center gap-2.5">
-          <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-indigo-50 text-indigo-500 rounded-full">
             <Moon size={16} />
           </div>
           <div>
-             <h4 className="text-sm font-bold text-gray-900">Sleep Session</h4>
-             <p className="text-[10px] text-gray-500 font-medium">{formatSleepRange(session.startTime, session.duration)}</p>
+             <h4 className="text-sm font-semibold text-gray-900">Sleep Session</h4>
+             <p className="text-xs text-gray-500 font-medium">{formatSleepRange(session.startTime, session.duration)}</p>
           </div>
         </div>
-        <div className="flex gap-3 text-right">
-           <div>
-              <span className="block text-xs font-bold text-gray-900">{session.duration.toFixed(1)}h</span>
-              <span className="text-[10px] text-gray-400">Duration</span>
+        <div className="flex gap-4 text-right">
+           <div className="flex flex-col items-end">
+              <span className="block text-sm font-semibold text-gray-900">{session.duration.toFixed(1)}h</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Time</span>
            </div>
-           <div>
-              <span className="block text-xs font-bold text-gray-900">{(session.deepSleepPerc * 100).toFixed(0)}%</span>
-              <span className="text-[10px] text-gray-400">Deep</span>
+           <div className="flex flex-col items-end">
+              <span className="block text-sm font-semibold text-gray-900">{(session.deepSleepPerc * 100).toFixed(0)}%</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Deep</span>
            </div>
         </div>
       </div>
 
-      <div className="h-16 w-full bg-white/50 rounded-xl overflow-hidden border border-indigo-50">
+      <div className="h-20 w-full rounded-lg overflow-hidden opacity-80">
         <ResponsiveContainer width="100%" height="100%">
            <AreaChart data={chartData}>
               <defs>
@@ -176,7 +198,7 @@ const SleepWidget = ({ session }) => {
                   type="stepAfter" 
                   dataKey="stage" 
                   stroke="#6366f1" 
-                  strokeWidth={1.5} 
+                  strokeWidth={2} 
                   fill="url(#sleepGradient)" 
               />
            </AreaChart>
@@ -188,14 +210,16 @@ const SleepWidget = ({ session }) => {
 
 // --- ANIMATION VARIANTS ---
 const containerVariants = {
-  hidden: { opacity: 0 },
+  hidden: { opacity: 0, scale: 0.98 },
   visible: { 
     opacity: 1, 
-    transition: { duration: 0.2, ease: "easeOut" }
+    scale: 1,
+    transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } // Apple/Things ease
   },
   exit: { 
     opacity: 0, 
-    transition: { duration: 0.15, ease: "easeIn" } 
+    scale: 0.98,
+    transition: { duration: 0.2, ease: "easeIn" } 
   }
 };
 
@@ -204,16 +228,16 @@ const contentStagger = {
   visible: {
     opacity: 1,
     transition: { 
-        duration: 0.3,
-        delayChildren: 0.05,
+        duration: 0.4,
+        delayChildren: 0.1,
         staggerChildren: 0.05 
     }
   }
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 5 },
-  visible: { opacity: 1, y: 0 }
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } }
 };
 
 // --- MAIN COMPONENT ---
@@ -249,14 +273,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   });
 
   const fileInputRef = useRef(null);
-  const textareaRef = useRef(null);
-
-  useEffect(() => {
-    if (mode === 'edit' && textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, [content, mode]);
 
   const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
     if (isAutoSave && !content.trim() && images.length === 0) return;
@@ -327,39 +343,74 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const handleLocation = async () => {
     if (loadingLocation) return;
     setLoadingLocation(true);
+    
     if (!navigator.geolocation) {
       alert("Geolocation not supported");
       setLoadingLocation(false);
       return;
     }
+
+    const fetchWeather = async (lat, lon) => {
+        try {
+            const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+            if (weatherRes.ok) {
+              const data = await weatherRes.json();
+              // FIX: getWeatherLabel was likely missing or failing
+              const label = getWeatherLabel(data.current_weather.weathercode);
+              const newWeather = `${label}, ${Math.round(data.current_weather.temperature)}°C`;
+              setWeather(newWeather);
+            }
+        } catch (e) {
+            console.error("Weather fetch failed", e);
+        }
+    };
+
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
       setLocationLat(latitude);
       setLocationLng(longitude);
+      
+      // Trigger weather independently so it doesn't block location
+      fetchWeather(latitude, longitude);
+
       try {
-        const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+        // FIX: Added addressdetails=1 and zoom=18 for better precision
+        // FIX: Added User-Agent (sometimes required by OSM, though browser sets it, explicit headers help)
+        const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
+        
         if (locRes.ok) {
           const data = await locRes.json();
           const address = data.address;
-          const street = address.road || address.pedestrian || address.building || '';
-          const city = address.city || address.town || address.village || address.suburb || address.hamlet;
-          const country = address.country;
-          const newLoc = [street, city, country].filter(Boolean).join(', ');
-          setLocation(newLoc);
-        }
-        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
-        if (weatherRes.ok) {
-          const data = await weatherRes.json();
-          const newWeather = `${getWeatherLabel(data.current_weather.weathercode)} ${Math.round(data.current_weather.temperature)}°C`;
-          setWeather(newWeather);
+          
+          // FIX: Better address prioritization
+          const parts = [];
+          if (address.road) parts.push(address.road);
+          else if (address.pedestrian) parts.push(address.pedestrian);
+          else if (address.building) parts.push(address.building);
+          
+          if (address.city) parts.push(address.city);
+          else if (address.town) parts.push(address.town);
+          else if (address.village) parts.push(address.village);
+          else if (address.suburb) parts.push(address.suburb);
+          
+          // If we got valid parts, use them. Only fallback to lat/long if absolutely nothing returns.
+          if (parts.length > 0) {
+              setLocation(parts.join(', '));
+          } else {
+             setLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+          }
+        } else {
+            throw new Error("Location fetch failed");
         }
       } catch (e) {
-        console.error(e);
+        console.error("Reverse geocoding failed", e);
+        // Only set lat/long if we don't already have a location set manually
         if (!location) setLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
       } finally {
         setLoadingLocation(false);
       }
-    }, () => {
+    }, (error) => {
+      console.error(error);
       alert("Unable to retrieve location");
       setLoadingLocation(false);
     });
@@ -381,12 +432,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const handleExportPdf = async () => {
     setIsExporting(true);
     try {
-      // 1. Prepare images: Convert WebP blobs to JPEG Base64
       const pdfImages = await Promise.all(
         images.map(img => blobToJpeg(img))
       );
 
-      // 2. Prepare entry data with compatible images
       const currentEntryData = {
         id: entryId, 
         content, 
@@ -425,296 +474,307 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   return (
     <>
       <Styles />
-      <motion.div 
-        className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden" 
-        data-color-mode="light"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-      >
-        
-        {/* --- HEADER --- */}
-        <div className="px-4 py-3 flex justify-between items-center bg-white/95 backdrop-blur-xl z-30 border-b border-gray-100 absolute top-0 left-0 right-0 h-16">
-          <div className="flex items-center gap-3">
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              onClick={onClose} 
-              className="p-2 -ml-2 text-blue-500 hover:bg-blue-50 rounded-full transition-colors flex items-center gap-1"
-            >
-              <ChevronLeft size={24} />
-              <span className="text-base font-medium">Back</span>
-            </motion.button>
-            <AnimatePresence mode="wait">
-              {saveStatus !== 'idle' && (
-                 <motion.div 
-                   initial={{ opacity: 0, x: -10 }} 
-                   animate={{ opacity: 1, x: 0 }} 
-                   exit={{ opacity: 0 }}
-                   className="text-xs font-medium text-gray-400 flex items-center gap-1"
-                 >
-                    {saveStatus === 'saving' && <span>Saving...</span>}
-                    {saveStatus === 'saved' && <span className="text-green-500 flex items-center gap-1"><CheckCircle2 size={12}/> Saved</span>}
-                 </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {entry?.id && (
-              <motion.button 
-                whileTap={{ scale: 0.9 }}
-                onClick={handleExportPdf}
-                disabled={isExporting}
-                className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
-                title="Export PDF"
-              >
-                {isExporting ? (
-                  <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Download size={20} />
-                )}
-              </motion.button>
-            )}
-
-            {entry?.id && (
-              <motion.button 
-                whileTap={{ scale: 0.9 }}
-                onClick={handleDeleteEntry} 
-                className="p-2 text-red-400 hover:bg-red-50 rounded-full transition-colors"
-              >
-                <Trash2 size={20} />
-              </motion.button>
-            )}
-            
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              onClick={toggleMode}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-xs font-medium"
-            >
-              {mode === 'edit' ? <Eye size={14} /> : <PenLine size={14} />}
-              <span>{mode === 'edit' ? 'Preview' : 'Edit'}</span>
-            </motion.button>
-
-            <motion.button 
-              whileTap={{ scale: 0.95 }}
-              onClick={handleManualDone} 
-              className="px-5 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-lg shadow-blue-500/30 transition-all text-sm"
-            >
-              Done
-            </motion.button>
-          </div>
-        </div>
-
-        {/* --- MAIN SCROLL AREA --- */}
+      <AnimatePresence>
         <motion.div 
-          className="flex-1 overflow-y-auto no-scrollbar pt-16 flex flex-col bg-white"
-          variants={contentStagger}
+            className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden font-sans" 
+            data-color-mode="light"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
         >
-          
-          {/* IMAGE CAROUSEL */}
-          <AnimatePresence>
-            {images.length > 0 && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "18rem" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="w-full relative group bg-gray-50 flex-shrink-0"
-              >
-                <BlobImage 
-                  key={imgIndex}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.3 }}
-                  src={images[imgIndex]} 
-                  alt="Memory" 
-                  className="w-full h-full object-contain" 
-                />
-                
-                <div className="absolute inset-0 -z-10 overflow-hidden">
-                  <BlobImage src={images[imgIndex]} className="w-full h-full object-cover blur-2xl opacity-30" alt="" />
-                </div>
-                
-                {images.length > 1 && (
-                  <>
-                    <motion.button 
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} 
-                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 shadow-lg"
+            
+            {/* --- HEADER --- */}
+            <div className="px-6 py-4 flex justify-between items-center bg-white/90 backdrop-blur-xl z-30 border-b border-gray-100/50 sticky top-0">
+            <div className="flex items-center gap-4">
+                <motion.button 
+                whileTap={{ scale: 0.95 }}
+                onClick={onClose} 
+                className="p-2 -ml-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50/50 rounded-lg transition-all"
+                >
+                <ChevronLeft size={24} strokeWidth={2.5} />
+                </motion.button>
+                <AnimatePresence mode="wait">
+                {saveStatus !== 'idle' && (
+                    <motion.div 
+                    initial={{ opacity: 0, x: -10 }} 
+                    animate={{ opacity: 1, x: 0 }} 
+                    exit={{ opacity: 0 }}
+                    className="text-xs font-semibold tracking-wide uppercase text-gray-300 flex items-center gap-1.5"
                     >
-                      <ChevronLeft size={24} />
-                    </motion.button>
-                    <motion.button 
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => setImgIndex((i) => (i + 1) % images.length)} 
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 shadow-lg"
-                    >
-                      <ChevronLeft size={24} className="rotate-180" />
-                    </motion.button>
-                    
-                    <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
-                      {images.map((_, i) => (
-                        <motion.div 
-                          key={i} 
-                          layout
-                          className={`h-1.5 rounded-full shadow-sm ${i === imgIndex ? 'bg-white w-3' : 'bg-white/50 w-1.5'}`} 
-                        />
-                      ))}
-                    </div>
-                  </>
+                        {saveStatus === 'saving' && <span>Saving...</span>}
+                        {saveStatus === 'saved' && <span className="text-teal-500 flex items-center gap-1"><CheckCircle2 size={12}/> Saved</span>}
+                    </motion.div>
+                )}
+                </AnimatePresence>
+            </div>
+
+            <div className="flex items-center gap-2">
+                {/* PDF Export */}
+                {entry?.id && (
+                <motion.button 
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleExportPdf}
+                    disabled={isExporting}
+                    className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                    title="Export PDF"
+                >
+                    {isExporting ? (
+                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                    <Download size={18} strokeWidth={2} />
+                    )}
+                </motion.button>
+                )}
+
+                {/* Delete */}
+                {entry?.id && (
+                <motion.button 
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleDeleteEntry} 
+                    className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                >
+                    <Trash2 size={18} strokeWidth={2} />
+                </motion.button>
                 )}
                 
+                {/* Edit/Preview Toggle */}
                 <motion.button 
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleDeleteImage} 
-                  className="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur-md text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 shadow-lg"
+                whileTap={{ scale: 0.95 }}
+                onClick={toggleMode}
+                className="ml-2 w-9 h-9 flex items-center justify-center text-blue-500 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors"
                 >
-                  <Trash2 size={16} />
+                {mode === 'edit' ? <Eye size={18} strokeWidth={2} /> : <PenLine size={18} strokeWidth={2} />}
                 </motion.button>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
-          <div className="px-6 flex flex-col gap-6 flex-1 pb-32 max-w-2xl mx-auto w-full">
-            {/* Header Info */}
-            <motion.div variants={itemVariants} className="pt-8 border-b border-gray-100 pb-6">
-              <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight leading-tight">
-                {currentDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-              </h2>
-              <div className="flex items-center gap-3 text-gray-400 text-sm mt-2 font-medium">
-                <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors cursor-pointer group">
-                    <Clock size={14} className="text-gray-400 group-hover:text-blue-500 transition-colors" />
-                    <input 
-                      type="time" 
-                      value={timeString} 
-                      onChange={handleTimeChange}
-                      className="bg-transparent border-none outline-none text-gray-500 font-medium text-xs font-mono cursor-pointer w-[60px]"
-                    />
-                </div>
-                {!isToday && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wide font-bold">Past Entry</span>}
-              </div>
-            </motion.div>
-
-            {/* Metadata Bar */}
-            <motion.div variants={itemVariants} className="flex flex-wrap gap-2">
-              <div className="relative">
+                {/* Done Button */}
                 <motion.button 
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setIsMoodOpen(!isMoodOpen)} 
-                  className={`flex items-center gap-1.5 pl-3 pr-4 py-1.5 rounded-full text-sm font-medium transition-colors ${mood ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}
+                whileTap={{ scale: 0.97 }}
+                onClick={handleManualDone} 
+                className="ml-2 px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-full shadow-md shadow-blue-200 transition-all text-sm"
                 >
-                  <CurrentMoodIcon size={16} className={currentMoodColor} />
-                  <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
+                Done
                 </motion.button>
-                
-                <AnimatePresence>
-                  {isMoodOpen && (
-                    <>
-                      <div className="fixed inset-0 z-20" onClick={() => setIsMoodOpen(false)} />
-                      <motion.div 
-                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                        className="absolute z-30 top-full mt-2"
-                      >
-                         <MoodPopup currentMood={mood} onChange={(m) => { setMood(m); saveData(true); }} onClose={() => setIsMoodOpen(false)} />
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
+            </div>
+            </div>
 
-              <div className="flex items-center bg-gray-50 rounded-full pl-3 pr-2 py-1.5 hover:bg-gray-100 transition-colors">
-                <MapPin size={14} className="text-gray-400 mr-2" />
-                <input 
-                    type="text" 
-                    value={location} 
-                    onChange={e => setLocation(e.target.value)} 
-                    placeholder="Add Location" 
-                    className="bg-transparent text-sm w-full min-w-[120px] outline-none text-gray-600 placeholder-gray-400 native-input truncate" 
-                />
-                <motion.button 
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleLocation} 
-                  disabled={loadingLocation} 
-                  className="p-1 text-blue-500 hover:bg-blue-100 rounded-full transition-colors ml-1"
-                >
-                  {loadingLocation ? <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <Plus size={14} />}
-                </motion.button>
-              </div>
-
-              {weather && (
-                <div className="flex items-center bg-orange-50 text-orange-600 rounded-full px-3 py-1.5 text-sm font-medium">
-                  <Cloud size={14} className="mr-2" />
-                  {weather}
-                </div>
-              )}
-              
-              <TagInput tags={tags} onAdd={t => { setTags([...tags, t]); saveData(true); }} onRemove={t => { setTags(tags.filter(tag => tag !== t)); saveData(true); }} />
-            </motion.div>
+            {/* --- MAIN SCROLL AREA --- */}
+            <motion.div 
+            className="flex-1 overflow-y-auto no-scrollbar flex flex-col bg-white relative"
+            variants={contentStagger}
+            >
             
-            {/* --- EDITOR AREA --- */}
-            <motion.div variants={itemVariants} className="min-h-[200px] flex flex-col gap-4">
-              {mode === 'edit' ? (
-                <>
-                  <textarea
-                    ref={textareaRef}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="Write your thoughts..."
-                    className="w-full resize-none outline-none text-lg text-gray-700 placeholder-gray-300 native-input bg-transparent leading-relaxed"
-                    style={{ minHeight: '150px' }}
-                  />
-                  
-                  {/* SLEEP DATA IN EDIT MODE */}
-                  {todaysSleepSessions.length > 0 && (
-                     <div className="space-y-2">
-                         {todaysSleepSessions.map(session => (
-                             <SleepWidget key={session.id} session={session} />
-                         ))}
-                     </div>
-                  )}
-
-                  {/* Image Upload Button */}
-                  <div className="flex gap-4 border-t border-gray-100 pt-4 mt-auto">
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleImageUpload} 
-                      className="hidden" 
-                      ref={fileInputRef}
+            {/* IMAGE CAROUSEL */}
+            <AnimatePresence>
+                {images.length > 0 && (
+                <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "18rem" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="w-full relative group bg-gray-50 flex-shrink-0"
+                >
+                    <BlobImage 
+                    key={imgIndex}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                    src={images[imgIndex]} 
+                    alt="Memory" 
+                    className="w-full h-full object-contain mix-blend-multiply" 
                     />
-                    <button 
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading}
-                      className="flex items-center gap-2 text-gray-400 hover:text-blue-500 transition-colors text-sm font-medium"
+                    
+                    {images.length > 1 && (
+                    <>
+                        <motion.button 
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} 
+                        className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 backdrop-blur rounded-full text-gray-800 opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:scale-110"
+                        >
+                        <ChevronLeft size={20} />
+                        </motion.button>
+                        <motion.button 
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => setImgIndex((i) => (i + 1) % images.length)} 
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 backdrop-blur rounded-full text-gray-800 opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:scale-110"
+                        >
+                        <ChevronLeft size={20} className="rotate-180" />
+                        </motion.button>
+                        
+                        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
+                        {images.map((_, i) => (
+                            <motion.div 
+                            key={i} 
+                            layout
+                            className={`h-1.5 rounded-full transition-all duration-300 ${i === imgIndex ? 'bg-white w-4 shadow-sm' : 'bg-white/40 w-1.5'}`} 
+                            />
+                        ))}
+                        </div>
+                    </>
+                    )}
+                    
+                    <motion.button 
+                    whileTap={{ scale: 0.9 }}
+                    onClick={handleDeleteImage} 
+                    className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:bg-white"
                     >
-                      <ImageIcon size={18} />
-                      {uploading ? 'Compressing...' : 'Add Photo'}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-col gap-6">
-                    <div className="prose prose-gray max-w-none">
-                      <MDEditor.Markdown source={content || '*No content yet...*'} className="wmde-markdown" />
-                    </div>
+                    <Trash2 size={16} />
+                    </motion.button>
+                </motion.div>
+                )}
+            </AnimatePresence>
 
-                    {/* SLEEP DATA IN PREVIEW MODE */}
-                    {todaysSleepSessions.length > 0 && (
-                        <div className="space-y-2 pt-4 border-t border-gray-100">
-                             {todaysSleepSessions.map(session => (
-                                 <SleepWidget key={session.id} session={session} />
-                             ))}
+            <div className="px-8 pb-32 max-w-3xl mx-auto w-full flex flex-col">
+                
+                {/* DATE & TIME HEADER (Things 3 Style) */}
+                <motion.div variants={itemVariants} className="pt-10 pb-6">
+                <div className="flex items-baseline gap-3 mb-1">
+                    <h2 className="text-4xl font-bold text-gray-900 tracking-tight">
+                        {currentDate.toLocaleDateString(undefined, { weekday: 'long' })}
+                    </h2>
+                    <span className="text-2xl text-gray-400 font-medium">
+                        {currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
+                    </span>
+                </div>
+                
+                <div className="flex items-center gap-4 text-gray-400 text-sm font-medium">
+                    <div className="flex items-center gap-2 hover:text-blue-500 transition-colors cursor-pointer group px-2 -ml-2 py-1 rounded-md hover:bg-gray-50">
+                        <Clock size={16} strokeWidth={2.5} className="group-hover:text-blue-500" />
+                        <input 
+                        type="time" 
+                        value={timeString} 
+                        onChange={handleTimeChange}
+                        className="bg-transparent border-none outline-none text-gray-500 font-semibold group-hover:text-blue-500 cursor-pointer w-[60px] native-input"
+                        />
+                    </div>
+                    {!isToday && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-bold">Past Entry</span>}
+                </div>
+                </motion.div>
+
+                {/* METADATA BAR (Pills) */}
+                <motion.div variants={itemVariants} className="flex flex-wrap gap-3 mb-8">
+                
+                {/* Mood Pill */}
+                <div className="relative">
+                    <motion.button 
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsMoodOpen(!isMoodOpen)} 
+                    className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent ${mood ? 'bg-white border-gray-100 text-gray-700 hover:border-blue-200' : 'bg-gray-50 text-gray-400'}`}
+                    >
+                    <CurrentMoodIcon size={16} className={currentMoodColor} strokeWidth={2.5} />
+                    <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
+                    </motion.button>
+                    <AnimatePresence>
+                    {isMoodOpen && (
+                        <MoodPopup 
+                        moods={MOODS} 
+                        currentMood={mood} 
+                        onSelect={(m) => { setMood(m); setIsMoodOpen(false); saveData(true); }} 
+                        onClose={() => setIsMoodOpen(false)} 
+                        />
+                    )}
+                    </AnimatePresence>
+                </div>
+
+                {/* Location Pill */}
+                <motion.button 
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleLocation}
+                    disabled={loadingLocation}
+                    className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent ${location ? 'bg-white border-gray-100 text-blue-600 hover:border-blue-200' : 'bg-white border-dashed border-gray-200 text-gray-400 hover:border-blue-300 hover:text-blue-500'}`}
+                >
+                    {loadingLocation ? (
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                    <MapPin size={16} strokeWidth={2.5} />
+                    )}
+                    <span className="truncate max-w-[200px]">{location || 'Add Location'}</span>
+                </motion.button>
+
+                {/* Weather Pill (Auto-shows if present) */}
+                {weather && (
+                    <motion.div 
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold bg-white border border-gray-100 text-gray-600 shadow-sm"
+                    >
+                    <Sun size={16} className="text-orange-400" strokeWidth={2.5} />
+                    <span>{weather}</span>
+                    </motion.div>
+                )}
+
+                {/* Add Image Pill */}
+                <motion.label 
+                    whileTap={{ scale: 0.95 }}
+                    className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent cursor-pointer ${uploading ? 'bg-gray-100' : 'bg-white border-dashed border-gray-200 text-gray-400 hover:border-blue-300 hover:text-blue-500'}`}
+                >
+                    <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={handleImageUpload} 
+                    disabled={uploading}
+                    ref={fileInputRef}
+                    />
+                    {uploading ? (
+                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                    <ImageIcon size={16} strokeWidth={2.5} />
+                    )}
+                    <span>{uploading ? 'Compressing...' : 'Add Photo'}</span>
+                </motion.label>
+                
+                </motion.div>
+
+                {/* EDITOR AREA */}
+                <motion.div variants={itemVariants} className="min-h-[300px] relative">
+                    {mode === 'edit' ? (
+                        <div className="text-lg text-gray-800 leading-relaxed -ml-4">
+                            <MDEditor
+                                value={content}
+                                onChange={setContent}
+                                preview="edit"
+                                hideToolbar={true}
+                                height="100%"
+                                visiableDragbar={false}
+                                className="w-full"
+                            />
+                        </div>
+                    ) : (
+                        <div className="prose prose-lg prose-gray max-w-none">
+                            <MDEditor.Markdown source={content} />
                         </div>
                     )}
-                </div>
-              )}
-            </motion.div>
+                    
+                    {content.length === 0 && mode === 'edit' && (
+                        <div className="absolute top-2 left-1 text-gray-300 pointer-events-none text-lg">
+                            Write about your day...
+                        </div>
+                    )}
+                </motion.div>
 
-          </div>
+                <div className="h-px bg-gray-100 my-8" />
+
+                {/* BOTTOM SECTION: TAGS & SLEEP */}
+                <motion.div variants={itemVariants} className="flex flex-col gap-6">
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">Tags</label>
+                        <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
+                    </div>
+
+                    {todaysSleepSessions.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">Sleep Data</label>
+                            {todaysSleepSessions.map(session => (
+                                <SleepWidget key={session.id} session={session} />
+                            ))}
+                        </div>
+                    )}
+                </motion.div>
+                
+            </div>
+            </motion.div>
         </motion.div>
-      </motion.div>
+      </AnimatePresence>
     </>
   );
 };
