@@ -3,7 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db'; 
 import { SleepPage } from './components/SleepPage';
 import { WhatsAppPage } from './components/WhatsAppPage';
-import MeditationPage from './components/MeditationPage'; // NEW IMPORT
+import MeditationPage from './components/MeditationPage'; 
+import YearInReviewPage from './components/YearInReviewPage'; // NEW IMPORT
 import Editor from './components/Editor';
 import JournalList from './components/JournalList';
 import StatsPage from './components/StatsPage';
@@ -18,7 +19,7 @@ import {
   Home,
   Map as MapIcon, 
   Trash2,
-  Menu // New Icon for 'More'
+  Menu 
 } from 'lucide-react';
 
 const App = () => {
@@ -216,7 +217,8 @@ const App = () => {
             
             {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
             {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
-            {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />} 
+            {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />}
+            {currentRoute === 'year-review' && <YearInReviewPage navigate={navigate} />}
             
             {currentRoute === 'settings' && (
               <SettingsPage 

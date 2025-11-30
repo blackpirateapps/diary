@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   ChevronLeft, Settings, Info, Download, Upload, 
-  ChevronRight, Github, Mail, Shield, Smartphone, Moon, MessageCircle, Flower2
+  ChevronRight, Github, Mail, Shield, Smartphone, Moon, MessageCircle, Flower2, BookOpen
 } from 'lucide-react';
 
 // --- SHARED HEADER COMPONENT ---
@@ -44,9 +44,9 @@ export const MoreMenu = ({ navigate }) => {
            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-2">Tools</h3>
            <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100">
              <MenuItem icon={Moon} label="Sleep Insights" onClick={() => navigate('sleep')} />
-             <MenuItem icon={MessageCircle} label="Chat Analytics" onClick={() => navigate('whatsapp')} />
-             {/* NEW ITEM */}
              <MenuItem icon={Flower2} label="Meditation" onClick={() => navigate('meditation')} />
+             <MenuItem icon={BookOpen} label="Year in Review (PDF)" onClick={() => navigate('year-review')} />
+             <MenuItem icon={MessageCircle} label="Chat Analytics" onClick={() => navigate('whatsapp')} />
            </div>
         </div>
         
