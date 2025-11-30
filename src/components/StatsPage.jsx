@@ -8,7 +8,7 @@ import CalendarHeatmap from 'react-calendar-heatmap';
 import 'react-calendar-heatmap/dist/styles.css';
 import { 
   Trophy, TrendingUp, Calendar as CalendarIcon, 
-  Clock, Activity, Moon, ChevronDown
+  Clock, Activity, Moon, ChevronDown, Leaf
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -79,6 +79,7 @@ const StatsPage = ({ entries }) => {
   const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear());
 
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
+  const meditationSessions = useLiveQuery(() => db.meditation_sessions.toArray(), []) || [];
 
   // --- FILTERING LOGIC ---
   const dateRange = useMemo(() => {
@@ -97,6 +98,12 @@ const StatsPage = ({ entries }) => {
       .filter(s => new Date(s.startTime) >= dateRange)
       .sort((a, b) => a.startTime - b.startTime);
   }, [sleepSessions, dateRange]);
+
+  const filteredMeditation = useMemo(() => {
+    return meditationSessions
+      .filter(m => new Date(m.startTime) >= dateRange)
+      .sort((a, b) => a.startTime - b.startTime);
+  }, [meditationSessions, dateRange]);
 
   // --- DATA PROCESSING ---
 
@@ -163,7 +170,6 @@ const StatsPage = ({ entries }) => {
     let maxDay = groupedData[0];
 
     // Format data for Recharts
-    // For BarChart with multiple bars, we need keys like range0, range1, range2...
     const chartData = groupedData.map(day => {
         totalDur += day.totalDuration;
         
@@ -192,6 +198,36 @@ const StatsPage = ({ entries }) => {
         maxSessions: maxSessionsPerDay
     };
   }, [filteredSleep]);
+
+  // 4. Meditation Stats
+  const meditationStats = useMemo(() => {
+    if (filteredMeditation.length === 0) return null;
+
+    const dailyGroups = {};
+    let totalSeconds = 0;
+
+    filteredMeditation.forEach(session => {
+      const dateKey = new Date(session.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      
+      if (!dailyGroups[dateKey]) {
+        dailyGroups[dateKey] = { date: dateKey, minutes: 0 };
+      }
+      // db stores duration in seconds
+      const mins = session.duration / 60;
+      dailyGroups[dateKey].minutes += mins;
+      totalSeconds += session.duration;
+    });
+
+    const chartData = Object.values(dailyGroups).sort((a,b) => new Date(a.date) - new Date(b.date));
+    const totalMinutes = Math.floor(totalSeconds / 60);
+
+    return {
+      totalMinutes,
+      chartData
+    };
+
+  }, [filteredMeditation]);
+
 
   // --- HEATMAP YEARS ---
   const availableYears = useMemo(() => {
@@ -408,66 +444,50 @@ const StatsPage = ({ entries }) => {
         ) : (
           <div className="bg-white p-6 rounded-2xl border border-dashed border-gray-300 text-center">
             <Moon size={24} className="mx-auto text-gray-300 mb-2" />
-            <p className="text-sm text-gray-400">No sleep data found for this period.</p>
+            <p className="text-sm text-gray-400">No sleep data found</p>
           </div>
         )}
-
-        {/* 4. MOOD & VOLUME */}
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 mb-4">
-            <Activity size={18} className="text-blue-500" />
-            <h2 className="text-lg font-bold text-gray-900">Mood & Volume</h2>
-          </div>
-          <div className="h-48 w-full -ml-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={moodVolumeData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
-                <YAxis yAxisId="left" hide />
-                <YAxis yAxisId="right" orientation="right" hide />
-                <Tooltip 
-                  contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                />
-                <Area yAxisId="left" type="monotone" dataKey="mood" stroke="#3b82f6" fill="url(#colorSleep)" strokeWidth={2} name="Mood" />
-                <Area yAxisId="right" type="monotone" dataKey="words" stroke="#10b981" fill="#10b981" fillOpacity={0.1} strokeWidth={2} name="Words" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* 5. TIME OF DAY */}
-        {timeOfDayData.length > 0 && (
+        
+        {/* 4. MEDITATION ANALYTICS */}
+        {meditationStats ? (
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-4">
-              <Clock size={18} className="text-orange-500" />
-              <h2 className="text-lg font-bold text-gray-900">Time of Day</h2>
+              <Leaf size={18} className="text-teal-500" />
+              <h2 className="text-lg font-bold text-gray-900">Mindfulness</h2>
             </div>
-            <div className="h-48 flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={timeOfDayData}
-                    innerRadius={50}
-                    outerRadius={70}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {timeOfDayData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{borderRadius: '12px'}} />
-                </PieChart>
-              </ResponsiveContainer>
+
+            <div className="flex items-center justify-between bg-teal-50 p-4 rounded-xl mb-6">
+              <div>
+                <span className="block text-xs text-gray-500 font-bold uppercase">Total Time</span>
+                <span className="text-xl font-bold text-teal-700">{meditationStats.totalMinutes} min</span>
+              </div>
+              <div className="text-right">
+                <span className="block text-xs text-gray-500 font-bold uppercase">Sessions</span>
+                <span className="text-xl font-bold text-teal-700">{filteredMeditation.length}</span>
+              </div>
             </div>
-            <div className="flex justify-center gap-4 mt-2 flex-wrap">
-              {timeOfDayData.map((entry, index) => (
-                <div key={entry.name} className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <span className="text-xs text-gray-500 font-medium">{entry.name} ({entry.value})</span>
-                </div>
-              ))}
+
+            <div className="h-48 w-full -ml-2">
+               <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={meditationStats.chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
+                    <YAxis hide />
+                    <Tooltip 
+                      cursor={{fill: '#f0fdfa'}}
+                      contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                      labelStyle={{color:'#6b7280', fontSize:'12px', marginBottom:'4px'}}
+                      formatter={(val) => [`${val.toFixed(1)} mins`, 'Duration']}
+                    />
+                    <Bar dataKey="minutes" fill="#2dd4bf" radius={[4, 4, 0, 0]} barSize={20} />
+                  </BarChart>
+               </ResponsiveContainer>
             </div>
+          </div>
+        ) : (
+          <div className="bg-white p-6 rounded-2xl border border-dashed border-gray-300 text-center">
+            <Leaf size={24} className="mx-auto text-gray-300 mb-2" />
+            <p className="text-sm text-gray-400">No meditation data found</p>
           </div>
         )}
 

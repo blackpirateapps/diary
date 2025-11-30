@@ -25,6 +25,14 @@ db.version(3).stores({
   chat_analytics: 'id, name' 
 });
 
+// Version 4: Added Meditation Sessions (NEW)
+db.version(4).stores({
+  entries: '++id, date, mood, *tags',
+  sleep_sessions: 'id, startTime',
+  chat_analytics: 'id, name',
+  meditation_sessions: '++id, startTime, duration' 
+});
+
 // --- HELPER: IMAGE URL HOOK ---
 export const useBlobUrl = (imageFile) => {
   const [url, setUrl] = useState('');
@@ -76,6 +84,7 @@ export const exportToZip = async () => {
   const entries = await db.entries.toArray();
   const sleepSessions = await db.sleep_sessions.toArray();
   const chats = await db.chat_analytics.toArray();
+  const meditations = await db.meditation_sessions.toArray(); // NEW
   
   // 2. Process Journal Images (Convert to Blobs or Filenames)
   const cleanEntries = entries.map(entry => {
@@ -119,6 +128,11 @@ export const exportToZip = async () => {
 
   if (chats.length > 0) {
       zip.file("chat_data.json", JSON.stringify(chats, null, 2));
+  }
+  
+  // NEW: Export Meditation Data
+  if (meditations.length > 0) {
+      zip.file("meditation_data.json", JSON.stringify(meditations, null, 2));
   }
 
   // 4. Generate and Download
@@ -178,6 +192,17 @@ export const importFromZip = async (file) => {
       if (Array.isArray(chats) && chats.length > 0) {
           await db.chat_analytics.bulkPut(chats);
           console.log(`Imported ${chats.length} chat analytics.`);
+      }
+  }
+  
+  // 4. Parse Meditation Data (NEW)
+  const medFile = zip.file("meditation_data.json");
+  if (medFile) {
+      const medStr = await medFile.async("string");
+      const medData = JSON.parse(medStr);
+      if (Array.isArray(medData) && medData.length > 0) {
+          await db.meditation_sessions.bulkPut(medData);
+          console.log(`Imported ${medData.length} meditation sessions.`);
       }
   }
 

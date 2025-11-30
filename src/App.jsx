@@ -3,13 +3,13 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db'; 
 import { SleepPage } from './components/SleepPage';
 import { WhatsAppPage } from './components/WhatsAppPage';
+import MeditationPage from './components/MeditationPage'; // NEW IMPORT
 import Editor from './components/Editor';
 import JournalList from './components/JournalList';
 import StatsPage from './components/StatsPage';
 import MediaGallery from './components/MediaGallery';
 import FlashbackPage from './components/FlashbackPage';
 import MapPage from './components/MapPage';
-// NEW IMPORT
 import { MoreMenu, SettingsPage, AboutPage } from './components/MorePages';
 
 import {
@@ -213,9 +213,11 @@ const App = () => {
             
             {/* NEW PAGES */}
             {currentRoute === 'more' && <MoreMenu navigate={navigate} />}
-            {/* NEW ROUTE */}
-    {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
-    {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
+            
+            {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
+            {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
+            {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />} 
+            
             {currentRoute === 'settings' && (
               <SettingsPage 
                 navigate={navigate} 
