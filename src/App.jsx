@@ -1,7 +1,4 @@
-{
-type: uploaded file
-fileName: App.jsx
-fullContent:
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db'; 
@@ -371,4 +368,3 @@ const App = () => {
 };
 
 export default App;
-}

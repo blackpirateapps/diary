@@ -322,4 +322,3 @@ export const AboutPage = ({ navigate }) => {
     </div>
   );
 };
-}
