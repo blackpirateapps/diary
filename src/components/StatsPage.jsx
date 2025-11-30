@@ -8,7 +8,7 @@ import CalendarHeatmap from 'react-calendar-heatmap';
 import 'react-calendar-heatmap/dist/styles.css';
 import { 
   Trophy, TrendingUp, Calendar as CalendarIcon, 
-  Clock, Activity, Moon, ChevronDown, Leaf
+  Clock, Activity, Moon, ChevronDown, Leaf, AlignLeft
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -228,7 +228,6 @@ const StatsPage = ({ entries }) => {
 
   }, [filteredMeditation]);
 
-
   // --- HEATMAP YEARS ---
   const availableYears = useMemo(() => {
     const years = new Set(entries.map(e => new Date(e.date).getFullYear()));
@@ -326,11 +325,78 @@ const StatsPage = ({ entries }) => {
           `}</style>
         </div>
 
-        {/* 3. SLEEP ANALYTICS */}
+        {/* 3. WORD COUNT & MOOD ANALYTICS (Restored) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          {/* Word Count */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2 mb-4">
+              <AlignLeft size={18} className="text-blue-500" />
+              <h2 className="text-lg font-bold text-gray-900">Word Volume</h2>
+            </div>
+            <div className="h-48 w-full -ml-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={moodVolumeData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{fontSize: 10}} tickLine={false} axisLine={false} />
+                  <YAxis hide />
+                  <Tooltip 
+                    cursor={{fill: '#f3f4f6'}}
+                    contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                    labelStyle={{color:'#6b7280', fontSize:'12px', marginBottom:'4px'}}
+                    formatter={(val, name, props) => [val, `Mood: ${props.payload.mood}`]}
+                  />
+                  <Bar dataKey="words" fill="#60A5FA" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Time of Day */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2 mb-4">
+              <Activity size={18} className="text-purple-500" />
+              <h2 className="text-lg font-bold text-gray-900">Posting Time</h2>
+            </div>
+            <div className="h-48 w-full flex items-center justify-center">
+               <ResponsiveContainer width="100%" height="100%">
+                 <PieChart>
+                   <Pie
+                     data={timeOfDayData}
+                     cx="50%"
+                     cy="50%"
+                     innerRadius={40}
+                     outerRadius={70}
+                     paddingAngle={5}
+                     dataKey="value"
+                   >
+                     {timeOfDayData.map((entry, index) => (
+                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                     ))}
+                   </Pie>
+                   <Tooltip 
+                     contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                     itemStyle={{color: '#374151', fontWeight: '600'}}
+                   />
+                 </PieChart>
+               </ResponsiveContainer>
+            </div>
+            <div className="flex justify-center gap-3 mt-2">
+              {timeOfDayData.map((entry, index) => (
+                <div key={index} className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                  <span className="text-[10px] text-gray-500">{entry.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 4. SLEEP ANALYTICS */}
         {sleepStats ? (
           <div className="space-y-4">
             
-            {/* 3a. Sleep Duration Graph (Aggregated) */}
+            {/* 4a. Sleep Duration Graph */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-2 mb-4">
                 <Moon size={18} className="text-indigo-500" />
@@ -377,7 +443,7 @@ const StatsPage = ({ entries }) => {
               </div>
             </div>
 
-            {/* 3b. Sleep Schedule (Multi-bar Support) */}
+            {/* 4b. Sleep Schedule */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-2 mb-4">
                 <Clock size={18} className="text-purple-500" />
@@ -422,7 +488,6 @@ const StatsPage = ({ entries }) => {
                         return null;
                       }}
                     />
-                    {/* Render dynamic bars based on max sessions found in period */}
                     {[...Array(sleepStats.maxSessions)].map((_, i) => (
                         <Bar 
                             key={i}
@@ -448,7 +513,7 @@ const StatsPage = ({ entries }) => {
           </div>
         )}
         
-        {/* 4. MEDITATION ANALYTICS */}
+        {/* 5. MEDITATION ANALYTICS (NEW) */}
         {meditationStats ? (
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-4">
