@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ChevronLeft, Trash2, MapPin, Clock, Image as ImageIcon,
@@ -44,15 +43,21 @@ const Styles = () => (
     
     /* Things 3-esque Typography & Inputs */
     .native-input {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: inherit;
       font-size: 15px;
       line-height: 1.5;
-      color: #374151;
+      color: #111827;
     }
     .dark .native-input { color: #e5e7eb; }
     
     /* MDEditor Customization for Things 3 Look */
-    .wmde-markdown { background-color: transparent !important; color: #374151 !important; font-family: -apple-system, BlinkMacSystemFont, sans-serif !important; font-size: 17px !important; line-height: 1.6 !important; }
+    .wmde-markdown { 
+      background-color: transparent !important; 
+      color: #111827 !important; /* Darker gray for better contrast in Light Mode */
+      font-family: inherit !important; 
+      font-size: 17px; /* Default size, but allows override */
+      line-height: 1.6;
+    }
     .dark .wmde-markdown { color: #d1d5db !important; }
     
     .w-md-editor { box-shadow: none !important; border: none !important; background-color: transparent !important; }
@@ -60,18 +65,18 @@ const Styles = () => (
     .w-md-editor-content { background-color: transparent !important; }
     
     /* Headers */
-    .wmde-markdown h1 { border-bottom: none !important; font-weight: 700; font-size: 1.6em; margin-top: 1.2em; margin-bottom: 0.5em; color: #111827 !important; letter-spacing: -0.02em; }
+    .wmde-markdown h1 { border-bottom: none !important; font-weight: 800; font-size: 1.6em; margin-top: 1.2em; margin-bottom: 0.5em; color: #111827 !important; letter-spacing: -0.02em; }
     .dark .wmde-markdown h1 { color: #f9fafb !important; }
     
-    .wmde-markdown h2 { border-bottom: none !important; font-weight: 600; font-size: 1.3em; margin-top: 1.2em; margin-bottom: 0.5em; color: #1f2937 !important; letter-spacing: -0.01em; }
+    .wmde-markdown h2 { border-bottom: none !important; font-weight: 700; font-size: 1.3em; margin-top: 1.2em; margin-bottom: 0.5em; color: #1f2937 !important; letter-spacing: -0.01em; }
     .dark .wmde-markdown h2 { color: #f3f4f6 !important; }
     
     /* Blockquotes */
-    .wmde-markdown blockquote { border-left: 3px solid var(--accent-200) !important; color: #6b7280 !important; padding-left: 1em !important; margin-left: 0 !important; }
+    .wmde-markdown blockquote { border-left: 3px solid var(--accent-200) !important; color: #4b5563 !important; padding-left: 1em !important; margin-left: 0 !important; font-style: italic; }
     .dark .wmde-markdown blockquote { border-left: 3px solid var(--accent-800) !important; color: #9ca3af !important; }
     
     /* Links */
-    .wmde-markdown a { color: var(--accent-500) !important; text-decoration: none !important; }
+    .wmde-markdown a { color: var(--accent-500) !important; text-decoration: none !important; font-weight: 500; }
     .wmde-markdown a:hover { text-decoration: underline !important; }
 
     textarea { caret-color: var(--accent-500); }
@@ -259,7 +264,7 @@ const itemVariants = {
 // --- ZEN MODE HOOK ---
 const useZenSettings = () => {
   const [settings, setSettings] = useState({
-      fontFamily: 'Inter',
+      fontFamily: 'inherit',
       fontSize: 18,
       fontWeight: '400',
       lineHeight: 1.6
@@ -523,11 +528,24 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     return (
         <AnimatePresence>
             <motion.div 
-                className="fixed inset-0 z-[60] bg-white dark:bg-gray-950 flex flex-col items-center animate-slideUp"
+                className="fixed inset-0 z-[60] bg-white dark:bg-gray-950 flex flex-col items-center animate-slideUp zen-container"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
             >
+                {/* Custom Style Block for Zen Settings */}
+                <style>{`
+                  .zen-container .wmde-markdown {
+                    font-family: ${zenSettings.fontFamily}, sans-serif !important;
+                    font-size: ${zenSettings.fontSize}px !important;
+                    font-weight: ${zenSettings.fontWeight} !important;
+                    line-height: ${zenSettings.lineHeight} !important;
+                  }
+                  /* Also scale headers relative to base size in Zen Mode */
+                  .zen-container .wmde-markdown h1 { font-size: 1.5em !important; }
+                  .zen-container .wmde-markdown h2 { font-size: 1.25em !important; }
+                `}</style>
+
                 <div className="w-full max-w-2xl px-6 pt-6 pb-2">
                     <button 
                         onClick={handleZenBack}
@@ -540,18 +558,14 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 
                 <div className="flex-1 w-full max-w-2xl px-6 overflow-y-auto no-scrollbar">
                     <div className="min-h-[80vh] py-8">
-                        <textarea
+                       <MDEditor
                             value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            className="w-full h-full bg-transparent border-none resize-none focus:ring-0 text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-700"
-                            placeholder="Type..."
-                            autoFocus
-                            style={{
-                                fontFamily: zenSettings.fontFamily,
-                                fontSize: `${zenSettings.fontSize}px`,
-                                fontWeight: zenSettings.fontWeight,
-                                lineHeight: zenSettings.lineHeight
-                            }}
+                            onChange={setContent}
+                            preview="edit"
+                            hideToolbar={true}
+                            height="100%"
+                            visiableDragbar={false}
+                            className="w-full"
                         />
                     </div>
                 </div>
