@@ -498,4 +498,3 @@ const StatsPage = ({ entries, isDarkMode }) => {
 };
 
 export default StatsPage;
-}
