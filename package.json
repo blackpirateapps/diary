@@ -26,6 +26,7 @@
     "dompurify": "latest", 
     "@react-pdf/renderer": "latest", 
     "html-to-image": "latest", 
+    "react-calendar": "latest",
     "file-saver": "latest"
   },
   "devDependencies": {
