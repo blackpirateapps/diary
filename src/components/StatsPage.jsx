@@ -1,4 +1,8 @@
-import React, { useMemo } from 'react'; // Removed useState, useEffect
+{
+type: uploaded file
+fileName: StatsPage.jsx
+fullContent:
+import React, { useState, useMemo } from 'react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, 
@@ -15,7 +19,7 @@ import { db } from '../db';
 
 const COLORS = ['#60A5FA', '#34D399', '#F87171', '#FBBF24', '#A78BFA'];
 
-// Helper functions (calculateStreak, etc) remain the same...
+// --- HELPER FUNCTIONS ---
 const calculateStreak = (entries) => {
   if (!entries.length) return 0;
   const sortedDates = [...new Set(entries.map(e => new Date(e.date).toDateString()))]
@@ -58,21 +62,27 @@ const formatAxisTime = (val) => {
   return `${Math.floor(displayHour)} ${suffix}`;
 };
 
-// --- UPDATED COMPONENT ---
-const StatsPage = ({ entries, isDarkMode }) => { // Accepting isDarkMode prop
-  const [selectedPeriod, setSelectedPeriod] = React.useState('month'); 
-  const [heatmapYear, setHeatmapYear] = React.useState(new Date().getFullYear());
+const StatsPage = ({ entries, isDarkMode }) => {
+  const [selectedPeriod, setSelectedPeriod] = useState('month'); 
+  const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear());
 
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
   const meditationSessions = useLiveQuery(() => db.meditation_sessions.toArray(), []) || [];
 
-  // --- THEME CONSTANTS (Calculated directly from prop) ---
+  // --- THEME STYLES ---
   const themeStyles = useMemo(() => {
     return {
-      grid: isDarkMode ? '#374151' : '#E5E7EB', // Gray-700 vs Gray-200
-      text: isDarkMode ? '#9CA3AF' : '#6B7280', // Gray-400 vs Gray-500
-      tooltipBg: isDarkMode ? '#1F2937' : '#FFFFFF', // Gray-800 vs White
-      tooltipColor: isDarkMode ? '#F3F4F6' : '#111827', // Gray-100 vs Gray-900
+      // Grid lines: Subtle gray in both modes
+      grid: isDarkMode ? '#374151' : '#E5E7EB', 
+      // Axis Text: Muted text
+      text: isDarkMode ? '#9CA3AF' : '#6B7280', 
+      // Card Background: Matches the Tailwind bg-white/dark:bg-gray-900 classes
+      cardBg: isDarkMode ? '#111827' : '#FFFFFF',
+      // Tooltip Background
+      tooltipBg: isDarkMode ? '#1F2937' : '#FFFFFF', 
+      // Tooltip Text
+      tooltipColor: isDarkMode ? '#F3F4F6' : '#111827',
+      // Tooltip Border
       tooltipBorder: isDarkMode ? '#374151' : '#E5E7EB'
     };
   }, [isDarkMode]);
@@ -175,7 +185,6 @@ const StatsPage = ({ entries, isDarkMode }) => { // Accepting isDarkMode prop
 
   return (
     <div className="pb-24 animate-slideUp text-gray-900 dark:text-gray-100 transition-colors">
-      {/* HEADER */}
       <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 transition-colors">
         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Insights</h1>
         <div className="flex p-1 bg-gray-200/50 dark:bg-gray-800 rounded-xl mt-4 mb-2">
@@ -253,7 +262,6 @@ const StatsPage = ({ entries, isDarkMode }) => { // Accepting isDarkMode prop
               />
             </div>
           </div>
-          {/* Custom Heatmap CSS applied dynamically based on dark mode container */}
           <style>{`
             .react-calendar-heatmap text { font-size: 8px; fill: ${themeStyles.text}; }
             .react-calendar-heatmap .color-empty { fill: ${isDarkMode ? '#374151' : '#F3F4F6'}; rx: 2px; }
@@ -283,7 +291,8 @@ const StatsPage = ({ entries, isDarkMode }) => { // Accepting isDarkMode prop
                     itemStyle={{ color: themeStyles.tooltipColor }}
                     formatter={(val, name, props) => [val, `Mood: ${props.payload.mood}`]}
                   />
-                  <Bar dataKey="words" fill="var(--accent-400)" radius={[4, 4, 0, 0]} />
+                  {/* UPDATED: Uses --accent-500 now, which is defined in App.jsx */}
+                  <Bar dataKey="words" fill="var(--accent-500)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -306,7 +315,8 @@ const StatsPage = ({ entries, isDarkMode }) => { // Accepting isDarkMode prop
                      outerRadius={70}
                      paddingAngle={5}
                      dataKey="value"
-                     stroke={themeStyles.tooltipBg} // Creates the gap color matching the background
+                     // UPDATED: Stroke now matches cardBg (dark gray in dark mode) to look transparent
+                     stroke={themeStyles.cardBg} 
                    >
                      {timeOfDayData.map((entry, index) => (
                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -349,8 +359,9 @@ const StatsPage = ({ entries, isDarkMode }) => { // Accepting isDarkMode prop
                   <AreaChart data={sleepStats.chartData}>
                     <defs>
                       <linearGradient id="colorSleep" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                        {/* UPDATED: Gradient now uses accent color variable */}
+                        <stop offset="5%" stopColor="var(--accent-500)" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="var(--accent-500)" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={themeStyles.grid} />
@@ -362,7 +373,8 @@ const StatsPage = ({ entries, isDarkMode }) => { // Accepting isDarkMode prop
                       itemStyle={{ color: themeStyles.tooltipColor }}
                       formatter={(val) => [formatDecimalHour(val), 'Total Duration']}
                     />
-                    <Area type="monotone" dataKey="totalDuration" stroke="#6366f1" fillOpacity={1} fill="url(#colorSleep)" strokeWidth={2} />
+                    {/* UPDATED: Area now uses accent color variable */}
+                    <Area type="monotone" dataKey="totalDuration" stroke="var(--accent-500)" fillOpacity={1} fill="url(#colorSleep)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -418,7 +430,8 @@ const StatsPage = ({ entries, isDarkMode }) => { // Accepting isDarkMode prop
                         <Bar 
                             key={i}
                             dataKey={`range${i}`} 
-                            fill="#8b5cf6" 
+                            // UPDATED: Bar now uses accent color variable
+                            fill="var(--accent-500)" 
                             radius={[4, 4, 4, 4]} 
                             barSize={12} 
                             isAnimationActive={false}
@@ -489,3 +502,4 @@ const StatsPage = ({ entries, isDarkMode }) => { // Accepting isDarkMode prop
 };
 
 export default StatsPage;
+}
