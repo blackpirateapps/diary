@@ -1,7 +1,4 @@
-{
-type: uploaded file
-fileName: Editor.jsx
-fullContent:
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ChevronLeft, Trash2, MapPin, Clock, Image as ImageIcon,
@@ -895,4 +892,3 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 };
 
 export default Editor;
-}
