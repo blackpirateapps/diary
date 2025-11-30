@@ -11,7 +11,7 @@ import StatsPage from './components/StatsPage';
 import MediaGallery from './components/MediaGallery';
 import FlashbackPage from './components/FlashbackPage';
 import MapPage from './components/MapPage';
-import { MoreMenu, SettingsPage, AboutPage, ThemesPage } from './components/MorePages'; // Updated Import
+import { MoreMenu, SettingsPage, AboutPage, ThemesPage } from './components/MorePages';
 
 import {
   BarChart2,
