@@ -1,7 +1,3 @@
-{
-type: uploaded file
-fileName: StatsPage.jsx
-fullContent:
 import React, { useState, useMemo } from 'react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, 
