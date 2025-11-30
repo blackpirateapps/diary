@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: App.jsx
+fullContent:
 import React, { useState, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db'; 
@@ -38,6 +42,34 @@ const App = () => {
   // THEME STATE
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('app_theme') === 'dark');
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('app_accent') || 'blue');
+
+  // --- GLOBAL FONT LOADER (FOR ZEN MODE) ---
+  useEffect(() => {
+    const loadFont = () => {
+      const saved = localStorage.getItem('zen_settings');
+      if (saved) {
+        const { googleFontUrl } = JSON.parse(saved);
+        if (googleFontUrl && googleFontUrl.startsWith('http')) {
+           // Remove old link if exists
+           const oldLink = document.getElementById('zen-font-link');
+           if (oldLink) oldLink.remove();
+
+           const link = document.createElement('link');
+           link.id = 'zen-font-link';
+           link.rel = 'stylesheet';
+           link.href = googleFontUrl;
+           document.head.appendChild(link);
+        }
+      }
+    };
+    
+    // Load on mount
+    loadFont();
+
+    // Listen for changes from SettingsPage
+    window.addEventListener('zen-settings-changed', loadFont);
+    return () => window.removeEventListener('zen-settings-changed', loadFont);
+  }, []);
 
   // --- THEME ENGINE EFFECT ---
   useEffect(() => {
@@ -339,3 +371,4 @@ const App = () => {
 };
 
 export default App;
+}

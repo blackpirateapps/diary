@@ -1,9 +1,13 @@
+{
+type: uploaded file
+fileName: Editor.jsx
+fullContent:
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ChevronLeft, Trash2, MapPin, Clock, Image as ImageIcon,
   Eye, PenLine, CheckCircle2, Moon, Download, AlignLeft,
   // Mood Icons to match Popup
-  CloudRain, Frown, Meh, Sun, Smile, Heart
+  CloudRain, Frown, Meh, Sun, Smile, Heart, Maximize2
 } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -255,6 +259,28 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } }
 };
 
+// --- ZEN MODE HOOK ---
+const useZenSettings = () => {
+  const [settings, setSettings] = useState({
+      fontFamily: 'Inter',
+      fontSize: 18,
+      fontWeight: '400',
+      lineHeight: 1.6
+  });
+
+  useEffect(() => {
+    const load = () => {
+      const saved = localStorage.getItem('zen_settings');
+      if (saved) setSettings(JSON.parse(saved));
+    };
+    load();
+    window.addEventListener('zen-settings-changed', load);
+    return () => window.removeEventListener('zen-settings-changed', load);
+  }, []);
+
+  return settings;
+};
+
 // --- MAIN COMPONENT ---
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [entryId] = useState(entry?.id || Date.now().toString());
@@ -278,6 +304,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [saveStatus, setSaveStatus] = useState('idle');
   const [isExporting, setIsExporting] = useState(false);
+
+  // --- ZEN MODE STATE ---
+  const [isZenMode, setIsZenMode] = useState(false);
+  const zenSettings = useZenSettings();
 
   // --- FETCH SLEEP DATA ---
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
@@ -433,6 +463,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     onClose(); 
   };
 
+  const handleZenBack = () => {
+    saveData(true);
+    setIsZenMode(false);
+  }
+
   const handleDeleteEntry = () => {
     if (entry?.id && window.confirm('Delete this entry?')) onDelete(entry.id);
     else if (!entry?.id) onClose();
@@ -486,6 +521,48 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const timeString = currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   const displayTime = currentDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
+  // --- RENDER ZEN MODE OVERLAY ---
+  if (isZenMode) {
+    return (
+        <AnimatePresence>
+            <motion.div 
+                className="fixed inset-0 z-[60] bg-white dark:bg-gray-950 flex flex-col items-center animate-slideUp"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+            >
+                <div className="w-full max-w-2xl px-6 pt-6 pb-2">
+                    <button 
+                        onClick={handleZenBack}
+                        className="flex items-center gap-2 text-gray-400 hover:text-[var(--accent-500)] transition-colors"
+                    >
+                        <ChevronLeft size={24} />
+                        <span className="text-sm font-medium">Back</span>
+                    </button>
+                </div>
+                
+                <div className="flex-1 w-full max-w-2xl px-6 overflow-y-auto no-scrollbar">
+                    <div className="min-h-[80vh] py-8">
+                        <textarea
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            className="w-full h-full bg-transparent border-none resize-none focus:ring-0 text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-700"
+                            placeholder="Type..."
+                            autoFocus
+                            style={{
+                                fontFamily: zenSettings.fontFamily,
+                                fontSize: `${zenSettings.fontSize}px`,
+                                fontWeight: zenSettings.fontWeight,
+                                lineHeight: zenSettings.lineHeight
+                            }}
+                        />
+                    </div>
+                </div>
+            </motion.div>
+        </AnimatePresence>
+    );
+  }
+
   return (
     <>
       <Styles />
@@ -524,6 +601,17 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             </div>
 
             <div className="flex items-center gap-2">
+                
+                {/* ZEN MODE BUTTON */}
+                <motion.button 
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsZenMode(true)}
+                    className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-[var(--accent-500)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 rounded-full transition-colors"
+                    title="Enter Zen Mode"
+                >
+                    <Maximize2 size={18} strokeWidth={2} />
+                </motion.button>
+
                 {/* PDF Export */}
                 {entry?.id && (
                 <motion.button 
@@ -807,3 +895,4 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 };
 
 export default Editor;
+}

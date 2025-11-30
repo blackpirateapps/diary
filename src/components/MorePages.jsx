@@ -1,7 +1,12 @@
-import React from 'react';
+{
+type: uploaded file
+fileName: MorePages.jsx
+fullContent:
+import React, { useState, useEffect } from 'react';
 import { 
   ChevronLeft, Settings, Info, Download, Upload, 
-  ChevronRight, Github, Mail, Shield, Smartphone, Moon, MessageCircle, Flower2, BookOpen, PenTool, Palette, Check
+  ChevronRight, Github, Mail, Moon, MessageCircle, Flower2, 
+  BookOpen, Palette, Check, Type, Sliders, Monitor
 } from 'lucide-react';
 
 // --- SHARED HEADER COMPONENT ---
@@ -128,24 +133,47 @@ export const ThemesPage = ({ navigate, isDarkMode, setIsDarkMode, accentColor, s
 
 // --- PAGE: SETTINGS ---
 export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport, importInputRef }) => {
+  // State for Zen Mode settings
+  const [zenSettings, setZenSettings] = useState(() => {
+    const saved = localStorage.getItem('zen_settings');
+    return saved ? JSON.parse(saved) : {
+      fontFamily: 'Inter',
+      googleFontUrl: '',
+      fontSize: 18,
+      fontWeight: '400',
+      lineHeight: 1.6
+    };
+  });
+
+  // Save Zen settings whenever they change
+  useEffect(() => {
+    localStorage.setItem('zen_settings', JSON.stringify(zenSettings));
+    // Trigger a custom event so App.jsx or Editor can react immediately
+    window.dispatchEvent(new Event('zen-settings-changed'));
+  }, [zenSettings]);
+
   const handleNameChange = (e) => {
     const newName = e.target.value;
     setAppName(newName);
     localStorage.setItem('app_name', newName);
   };
 
+  const handleZenChange = (key, value) => {
+    setZenSettings(prev => ({ ...prev, [key]: value }));
+  };
+
   return (
     <div className="pb-24 animate-slideUp">
       <PageHeader title="Settings" onBack={() => navigate('more')} />
       
-      <div className="p-4 space-y-6">
+      <div className="p-4 space-y-8">
         {/* PERSONALIZATION */}
         <div>
-          <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Personalization</h3>
+          <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">General</h3>
           <div className="bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800 p-4">
             <div className="flex items-center gap-3 mb-2">
                <div className="p-2 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-500)] rounded-lg">
-                 <PenTool size={20} />
+                 <Settings size={20} />
                </div>
                <span className="font-medium text-gray-700 dark:text-gray-200">Journal Name</span>
             </div>
@@ -156,6 +184,96 @@ export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport
               placeholder="e.g. My Life"
               className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--accent-500)]/20 focus:border-[var(--accent-500)] transition-all dark:text-white"
             />
+          </div>
+        </div>
+
+        {/* ZEN MODE CONFIGURATION */}
+        <div>
+          <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Zen Mode</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800 p-4 space-y-4">
+            
+            {/* Font Family */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Type size={16} className="text-gray-400" />
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Font Family</label>
+              </div>
+              <input 
+                type="text" 
+                value={zenSettings.fontFamily}
+                onChange={(e) => handleZenChange('fontFamily', e.target.value)}
+                placeholder="e.g. Inter, Times New Roman"
+                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--accent-500)] dark:text-white mb-2"
+              />
+              <input 
+                type="text" 
+                value={zenSettings.googleFontUrl}
+                onChange={(e) => handleZenChange('googleFontUrl', e.target.value)}
+                placeholder="Google Fonts URL (e.g. https://fonts.googleapis.com...)"
+                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--accent-500)] dark:text-white"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">Paste a URL from Google Fonts to load it.</p>
+            </div>
+
+            {/* Font Size */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                   <Type size={16} className="text-gray-400" />
+                   <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Size</label>
+                </div>
+                <span className="text-xs font-bold text-gray-500">{zenSettings.fontSize}px</span>
+              </div>
+              <input 
+                type="range" 
+                min="12" 
+                max="32" 
+                step="1"
+                value={zenSettings.fontSize}
+                onChange={(e) => handleZenChange('fontSize', Number(e.target.value))}
+                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
+              />
+            </div>
+
+            {/* Font Weight */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-1 rounded bg-gray-100 dark:bg-gray-800"><Type size={12} className="text-gray-500" /></div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Weight</label>
+              </div>
+              <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
+                 {['300', '400', '600', '700'].map(w => (
+                   <button
+                     key={w}
+                     onClick={() => handleZenChange('fontWeight', w)}
+                     className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all ${zenSettings.fontWeight === w ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' : 'text-gray-400'}`}
+                   >
+                     {w === '300' ? 'Light' : w === '400' ? 'Reg' : w === '600' ? 'Semi' : 'Bold'}
+                   </button>
+                 ))}
+              </div>
+            </div>
+
+             {/* Density (Line Height) */}
+             <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                   <Sliders size={16} className="text-gray-400" />
+                   <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Density</label>
+                </div>
+                <span className="text-xs font-bold text-gray-500">{zenSettings.lineHeight}x</span>
+              </div>
+              <input 
+                type="range" 
+                min="1.0" 
+                max="2.5" 
+                step="0.1"
+                value={zenSettings.lineHeight}
+                onChange={(e) => handleZenChange('lineHeight', Number(e.target.value))}
+                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
+              />
+            </div>
+
           </div>
         </div>
 
@@ -204,3 +322,4 @@ export const AboutPage = ({ navigate }) => {
     </div>
   );
 };
+}
