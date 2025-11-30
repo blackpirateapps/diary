@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  ChevronLeft, Trash2, Plus, MapPin, Cloud, Clock, Image as ImageIcon,
-  Eye, PenLine, CheckCircle2, Moon, Activity, Download, X, Sun
+  ChevronLeft, Trash2, MapPin, Clock, Image as ImageIcon,
+  Eye, PenLine, CheckCircle2, Moon, Download, AlignLeft,
+  // Mood Icons to match Popup
+  CloudRain, Frown, Meh, Sun, Smile, Heart
 } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -20,17 +22,18 @@ import MoodPopup from './MoodPopup';
 import TagInput from './TagInput';
 
 // --- CONFIGURATION ---
+// Synchronized with MoodPopup.jsx icons/colors for consistency
 const MOODS = [
-  { value: 1, icon: Cloud, color: 'text-gray-400', label: 'Awful' },
-  { value: 2, icon: Cloud, color: 'text-blue-400', label: 'Bad' },
-  { value: 3, icon: Cloud, color: 'text-blue-500', label: 'Sad' },
-  { value: 4, icon: Cloud, color: 'text-indigo-400', label: 'Meh' },
-  { value: 5, icon: Cloud, color: 'text-indigo-500', label: 'Okay' },
-  { value: 6, icon: Cloud, color: 'text-yellow-500', label: 'Good' },
-  { value: 7, icon: Cloud, color: 'text-orange-500', label: 'Great' },
-  { value: 8, icon: Cloud, color: 'text-orange-600', label: 'Happy' },
-  { value: 9, icon: Cloud, color: 'text-pink-500', label: 'Loved' },
-  { value: 10, icon: Cloud, color: 'text-red-500', label: 'Amazing' }
+  { value: 1, icon: CloudRain, color: 'text-gray-400', label: 'Awful' },
+  { value: 2, icon: CloudRain, color: 'text-blue-400', label: 'Bad' },
+  { value: 3, icon: Frown, color: 'text-blue-500', label: 'Sad' },
+  { value: 4, icon: Meh, color: 'text-indigo-400', label: 'Meh' },
+  { value: 5, icon: Meh, color: 'text-indigo-500', label: 'Okay' },
+  { value: 6, icon: Sun, color: 'text-yellow-500', label: 'Good' },
+  { value: 7, icon: Sun, color: 'text-orange-500', label: 'Great' },
+  { value: 8, icon: Smile, color: 'text-orange-600', label: 'Happy' },
+  { value: 9, icon: Heart, color: 'text-pink-500', label: 'Loved' },
+  { value: 10, icon: Heart, color: 'text-red-500', label: 'Amazing' }
 ];
 
 // --- STYLES ---
@@ -46,10 +49,9 @@ const Styles = () => (
       line-height: 1.5;
       color: #374151;
     }
-    input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.4; filter: invert(0); }
     
     /* MDEditor Customization for Things 3 Look */
-    .wmde-markdown { background-color: transparent !important; color: #374151 !important; font-family: -apple-system, BlinkMacSystemFont, sans-serif !important; font-size: 16px !important; line-height: 1.6 !important; }
+    .wmde-markdown { background-color: transparent !important; color: #374151 !important; font-family: -apple-system, BlinkMacSystemFont, sans-serif !important; font-size: 17px !important; line-height: 1.6 !important; }
     .w-md-editor { box-shadow: none !important; border: none !important; background-color: transparent !important; }
     .w-md-editor-toolbar { display: none; } /* Hide toolbar for cleaner look */
     .w-md-editor-content { background-color: transparent !important; }
@@ -274,6 +276,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const fileInputRef = useRef(null);
 
+  // Word Count Calculation
+  const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
+
   const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
     if (isAutoSave && !content.trim() && images.length === 0) return;
     setSaveStatus('saving');
@@ -355,7 +360,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
             if (weatherRes.ok) {
               const data = await weatherRes.json();
-              // FIX: getWeatherLabel was likely missing or failing
               const label = getWeatherLabel(data.current_weather.weathercode);
               const newWeather = `${label}, ${Math.round(data.current_weather.temperature)}°C`;
               setWeather(newWeather);
@@ -367,22 +371,19 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
+      
       setLocationLat(latitude);
       setLocationLng(longitude);
       
-      // Trigger weather independently so it doesn't block location
       fetchWeather(latitude, longitude);
 
       try {
-        // FIX: Added addressdetails=1 and zoom=18 for better precision
-        // FIX: Added User-Agent (sometimes required by OSM, though browser sets it, explicit headers help)
         const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
         
         if (locRes.ok) {
           const data = await locRes.json();
           const address = data.address;
           
-          // FIX: Better address prioritization
           const parts = [];
           if (address.road) parts.push(address.road);
           else if (address.pedestrian) parts.push(address.pedestrian);
@@ -393,7 +394,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           else if (address.village) parts.push(address.village);
           else if (address.suburb) parts.push(address.suburb);
           
-          // If we got valid parts, use them. Only fallback to lat/long if absolutely nothing returns.
           if (parts.length > 0) {
               setLocation(parts.join(', '));
           } else {
@@ -404,7 +404,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         }
       } catch (e) {
         console.error("Reverse geocoding failed", e);
-        // Only set lat/long if we don't already have a location set manually
         if (!location) setLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
       } finally {
         setLoadingLocation(false);
@@ -467,9 +466,13 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   };
 
-  const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Cloud;
+  const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Meh;
   const currentMoodColor = MOODS.find(m => m.value === mood)?.color || 'text-gray-500';
+  
+  // Clean time formatting
   const timeString = currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  // Display string (e.g. 10:30 PM)
+  const displayTime = currentDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
   return (
     <>
@@ -637,16 +640,26 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 </div>
                 
                 <div className="flex items-center gap-4 text-gray-400 text-sm font-medium">
-                    <div className="flex items-center gap-2 hover:text-blue-500 transition-colors cursor-pointer group px-2 -ml-2 py-1 rounded-md hover:bg-gray-50">
-                        <Clock size={16} strokeWidth={2.5} className="group-hover:text-blue-500" />
+                    {/* Time Picker - Styled as text but clickable */}
+                    <div className="relative group cursor-pointer hover:text-blue-500 transition-colors flex items-center gap-2">
+                        <Clock size={16} strokeWidth={2.5} className="group-hover:text-blue-500 transition-colors" />
+                        <span className="font-semibold">{displayTime}</span>
+                        {/* Invisible Native Input Overlay */}
                         <input 
-                        type="time" 
-                        value={timeString} 
-                        onChange={handleTimeChange}
-                        className="bg-transparent border-none outline-none text-gray-500 font-semibold group-hover:text-blue-500 cursor-pointer w-[60px] native-input"
+                            type="time" 
+                            value={timeString} 
+                            onChange={handleTimeChange}
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                         />
                     </div>
+
                     {!isToday && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-bold">Past Entry</span>}
+                    
+                    {/* Word Count Display */}
+                    <div className="flex items-center gap-1.5 ml-auto text-gray-300">
+                        <AlignLeft size={14} strokeWidth={2.5} />
+                        <span className="text-xs font-semibold tracking-wide">{wordCount} words</span>
+                    </div>
                 </div>
                 </motion.div>
 
@@ -666,9 +679,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     <AnimatePresence>
                     {isMoodOpen && (
                         <MoodPopup 
-                        moods={MOODS} 
                         currentMood={mood} 
-                        onSelect={(m) => { setMood(m); setIsMoodOpen(false); saveData(true); }} 
+                        onChange={(val) => { 
+                            setMood(val); 
+                            setIsMoodOpen(false); 
+                            saveData(true); 
+                        }} 
                         onClose={() => setIsMoodOpen(false)} 
                         />
                     )}
