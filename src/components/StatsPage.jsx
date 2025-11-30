@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useMemo } from 'react'; // Removed useState, useEffect
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, 
@@ -15,21 +15,7 @@ import { db } from '../db';
 
 const COLORS = ['#60A5FA', '#34D399', '#F87171', '#FBBF24', '#A78BFA'];
 
-// Helper hook to detect theme changes for Recharts
-const useThemeDetector = () => {
-  const [isDark, setIsDark] = useState(false);
-  useEffect(() => {
-    const checkTheme = () => setIsDark(document.documentElement.classList.contains('dark'));
-    checkTheme();
-    // Use MutationObserver to detect class changes on <html>
-    const observer = new MutationObserver(checkTheme);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-  return isDark;
-};
-
-// ... (calculateStreak, formatDecimalHour, normalizeTime, formatAxisTime remain the same)
+// Helper functions (calculateStreak, etc) remain the same...
 const calculateStreak = (entries) => {
   if (!entries.length) return 0;
   const sortedDates = [...new Set(entries.map(e => new Date(e.date).toDateString()))]
@@ -72,19 +58,24 @@ const formatAxisTime = (val) => {
   return `${Math.floor(displayHour)} ${suffix}`;
 };
 
-const StatsPage = ({ entries }) => {
-  const [selectedPeriod, setSelectedPeriod] = useState('month'); 
-  const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear());
-  const isDark = useThemeDetector(); // Hooks for Recharts styling
+// --- UPDATED COMPONENT ---
+const StatsPage = ({ entries, isDarkMode }) => { // Accepting isDarkMode prop
+  const [selectedPeriod, setSelectedPeriod] = React.useState('month'); 
+  const [heatmapYear, setHeatmapYear] = React.useState(new Date().getFullYear());
 
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
   const meditationSessions = useLiveQuery(() => db.meditation_sessions.toArray(), []) || [];
 
-  // Theme Constants
-  const gridColor = isDark ? '#374151' : '#f0f0f0'; // Gray-700 vs Gray-100
-  const textColor = isDark ? '#9ca3af' : '#6b7280'; // Gray-400 vs Gray-500
-  const tooltipBg = isDark ? '#1f2937' : '#ffffff'; // Gray-800 vs White
-  const tooltipText = isDark ? '#f3f4f6' : '#111827';
+  // --- THEME CONSTANTS (Calculated directly from prop) ---
+  const themeStyles = useMemo(() => {
+    return {
+      grid: isDarkMode ? '#374151' : '#E5E7EB', // Gray-700 vs Gray-200
+      text: isDarkMode ? '#9CA3AF' : '#6B7280', // Gray-400 vs Gray-500
+      tooltipBg: isDarkMode ? '#1F2937' : '#FFFFFF', // Gray-800 vs White
+      tooltipColor: isDarkMode ? '#F3F4F6' : '#111827', // Gray-100 vs Gray-900
+      tooltipBorder: isDarkMode ? '#374151' : '#E5E7EB'
+    };
+  }, [isDarkMode]);
 
   // --- FILTERING LOGIC ---
   const dateRange = useMemo(() => {
@@ -110,7 +101,7 @@ const StatsPage = ({ entries }) => {
       .sort((a, b) => a.startTime - b.startTime);
   }, [meditationSessions, dateRange]);
 
-  // --- DATA PROCESSING (Same as before) ---
+  // --- DATA PROCESSING ---
   const moodVolumeData = useMemo(() => {
     return filteredEntries.map(e => ({
       date: new Date(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
@@ -184,6 +175,7 @@ const StatsPage = ({ entries }) => {
 
   return (
     <div className="pb-24 animate-slideUp text-gray-900 dark:text-gray-100 transition-colors">
+      {/* HEADER */}
       <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 transition-colors">
         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Insights</h1>
         <div className="flex p-1 bg-gray-200/50 dark:bg-gray-800 rounded-xl mt-4 mb-2">
@@ -261,10 +253,10 @@ const StatsPage = ({ entries }) => {
               />
             </div>
           </div>
+          {/* Custom Heatmap CSS applied dynamically based on dark mode container */}
           <style>{`
-            .react-calendar-heatmap text { font-size: 8px; fill: #9ca3af; }
-            .react-calendar-heatmap .color-empty { fill: #f3f4f6; rx: 2px; }
-            .dark .react-calendar-heatmap .color-empty { fill: #374151; }
+            .react-calendar-heatmap text { font-size: 8px; fill: ${themeStyles.text}; }
+            .react-calendar-heatmap .color-empty { fill: ${isDarkMode ? '#374151' : '#F3F4F6'}; rx: 2px; }
             .react-calendar-heatmap .color-scale-4 { fill: var(--accent-500); rx: 2px; }
           `}</style>
         </div>
@@ -281,14 +273,14 @@ const StatsPage = ({ entries }) => {
             <div className="h-48 w-full -ml-2">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={moodVolumeData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                  <XAxis dataKey="date" tick={{fontSize: 10, fill: textColor}} tickLine={false} axisLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={themeStyles.grid} />
+                  <XAxis dataKey="date" tick={{fontSize: 10, fill: themeStyles.text}} tickLine={false} axisLine={false} />
                   <YAxis hide />
                   <Tooltip 
-                    cursor={{fill: isDark ? '#374151' : '#f3f4f6'}}
-                    contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: tooltipBg}}
-                    labelStyle={{color: textColor, fontSize:'12px', marginBottom:'4px'}}
-                    itemStyle={{ color: tooltipText }}
+                    cursor={{fill: isDarkMode ? '#374151' : '#f3f4f6'}}
+                    contentStyle={{borderRadius: '12px', border: `1px solid ${themeStyles.tooltipBorder}`, boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: themeStyles.tooltipBg}}
+                    labelStyle={{color: themeStyles.text, fontSize:'12px', marginBottom:'4px'}}
+                    itemStyle={{ color: themeStyles.tooltipColor }}
                     formatter={(val, name, props) => [val, `Mood: ${props.payload.mood}`]}
                   />
                   <Bar dataKey="words" fill="var(--accent-400)" radius={[4, 4, 0, 0]} />
@@ -314,14 +306,15 @@ const StatsPage = ({ entries }) => {
                      outerRadius={70}
                      paddingAngle={5}
                      dataKey="value"
+                     stroke={themeStyles.tooltipBg} // Creates the gap color matching the background
                    >
                      {timeOfDayData.map((entry, index) => (
                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                      ))}
                    </Pie>
                    <Tooltip 
-                     contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: tooltipBg}}
-                     itemStyle={{color: tooltipText, fontWeight: '600'}}
+                     contentStyle={{borderRadius: '12px', border: `1px solid ${themeStyles.tooltipBorder}`, boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: themeStyles.tooltipBg}}
+                     itemStyle={{color: themeStyles.tooltipColor, fontWeight: '600'}}
                    />
                  </PieChart>
                </ResponsiveContainer>
@@ -360,13 +353,13 @@ const StatsPage = ({ entries }) => {
                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                    <XAxis dataKey="date" tick={{fontSize: 10, fill: textColor}} tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={themeStyles.grid} />
+                    <XAxis dataKey="date" tick={{fontSize: 10, fill: themeStyles.text}} tickLine={false} axisLine={false} />
                     <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
                     <Tooltip 
-                      contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: tooltipBg}}
-                      labelStyle={{color: textColor, fontSize:'12px', marginBottom:'4px'}}
-                      itemStyle={{ color: tooltipText }}
+                      contentStyle={{borderRadius: '12px', border: `1px solid ${themeStyles.tooltipBorder}`, boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: themeStyles.tooltipBg}}
+                      labelStyle={{color: themeStyles.text, fontSize:'12px', marginBottom:'4px'}}
+                      itemStyle={{ color: themeStyles.tooltipColor }}
                       formatter={(val) => [formatDecimalHour(val), 'Total Duration']}
                     />
                     <Area type="monotone" dataKey="totalDuration" stroke="#6366f1" fillOpacity={1} fill="url(#colorSleep)" strokeWidth={2} />
@@ -385,30 +378,30 @@ const StatsPage = ({ entries }) => {
               <div className="h-56 w-full -ml-2">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={sleepStats.chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                    <XAxis dataKey="date" tick={{fontSize: 10, fill: textColor}} tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={themeStyles.grid} />
+                    <XAxis dataKey="date" tick={{fontSize: 10, fill: themeStyles.text}} tickLine={false} axisLine={false} />
                     <YAxis 
                       domain={[18, 34]} 
                       tickFormatter={formatAxisTime} 
                       width={45} 
-                      tick={{fontSize: 10, fill: textColor}} 
+                      tick={{fontSize: 10, fill: themeStyles.text}} 
                       tickLine={false} 
                       axisLine={false}
                       allowDataOverflow={false} 
                     />
                     <Tooltip 
-                      cursor={{fill: isDark ? '#374151' : '#f3f4f6'}}
-                      contentStyle={{backgroundColor: tooltipBg}}
+                      cursor={{fill: isDarkMode ? '#374151' : '#f3f4f6'}}
+                      contentStyle={{backgroundColor: themeStyles.tooltipBg, border: `1px solid ${themeStyles.tooltipBorder}`, color: themeStyles.tooltipColor}}
                       content={({ active, payload, label }) => {
                         if (active && payload && payload.length) {
                           return (
-                            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700">
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-bold">{label}</p>
+                            <div className="p-3 rounded-xl shadow-lg border" style={{ backgroundColor: themeStyles.tooltipBg, borderColor: themeStyles.tooltipBorder }}>
+                              <p className="text-xs mb-2 font-bold" style={{ color: themeStyles.text }}>{label}</p>
                               {payload.map((entry, idx) => {
                                 const [start, end] = entry.value;
                                 return (
                                   <div key={idx} className="mb-1 last:mb-0">
-                                    <p className="text-xs font-medium text-gray-800 dark:text-gray-200">
+                                    <p className="text-xs font-medium" style={{ color: themeStyles.tooltipColor }}>
                                       <span className="text-purple-500 mr-1">●</span>
                                       {formatAxisTime(start)} - {formatAxisTime(end)}
                                     </p>
@@ -431,7 +424,7 @@ const StatsPage = ({ entries }) => {
                             isAnimationActive={false}
                         />
                     ))}
-                    <ReferenceLine y={24} stroke={gridColor} strokeDasharray="3 3" label={{ value: 'Midnight', fontSize: 9, fill: textColor, position: 'insideTopLeft' }} />
+                    <ReferenceLine y={24} stroke={themeStyles.grid} strokeDasharray="3 3" label={{ value: 'Midnight', fontSize: 9, fill: themeStyles.text, position: 'insideTopLeft' }} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -468,14 +461,14 @@ const StatsPage = ({ entries }) => {
             <div className="h-48 w-full -ml-2">
                <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={meditationStats.chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                    <XAxis dataKey="date" tick={{fontSize: 10, fill: textColor}} tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={themeStyles.grid} />
+                    <XAxis dataKey="date" tick={{fontSize: 10, fill: themeStyles.text}} tickLine={false} axisLine={false} />
                     <YAxis hide />
                     <Tooltip 
-                      cursor={{fill: '#f0fdfa'}}
-                      contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: tooltipBg}}
-                      labelStyle={{color: textColor, fontSize:'12px', marginBottom:'4px'}}
-                      itemStyle={{ color: tooltipText }}
+                      cursor={{fill: isDarkMode ? '#115e59' : '#f0fdfa'}} // Dark mode teal shade
+                      contentStyle={{borderRadius: '12px', border: `1px solid ${themeStyles.tooltipBorder}`, boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: themeStyles.tooltipBg}}
+                      labelStyle={{color: themeStyles.text, fontSize:'12px', marginBottom:'4px'}}
+                      itemStyle={{ color: themeStyles.tooltipColor }}
                       formatter={(val) => [`${val.toFixed(1)} mins`, 'Duration']}
                     />
                     <Bar dataKey="minutes" fill="#2dd4bf" radius={[4, 4, 0, 0]} barSize={20} />

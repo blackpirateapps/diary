@@ -250,7 +250,10 @@ const App = () => {
               />
             )}
             {currentRoute === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
-            {currentRoute === 'stats' && <StatsPage entries={entries} />}
+            
+            {/* UPDATED: Passing isDarkMode prop here */}
+            {currentRoute === 'stats' && <StatsPage entries={entries} isDarkMode={isDarkMode} />}
+            
             {currentRoute === 'media' && <MediaGallery entries={entries} />}
             
             {/* NEW PAGES */}
