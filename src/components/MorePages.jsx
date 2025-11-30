@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   ChevronLeft, Settings, Info, Download, Upload, 
-  ChevronRight, Github, Mail, Shield, Smartphone, Moon, MessageCircle, Flower2, BookOpen
+  ChevronRight, Github, Mail, Shield, Smartphone, Moon, MessageCircle, Flower2, BookOpen, PenTool
 } from 'lucide-react';
 
 // --- SHARED HEADER COMPONENT ---
@@ -71,12 +71,44 @@ export const MoreMenu = ({ navigate }) => {
 };
 
 // --- PAGE: SETTINGS ---
-export const SettingsPage = ({ navigate, onExport, onImport, importInputRef }) => {
+export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport, importInputRef }) => {
+  
+  const handleNameChange = (e) => {
+    const newName = e.target.value;
+    setAppName(newName);
+    localStorage.setItem('app_name', newName);
+  };
+
   return (
     <div className="pb-24 animate-slideUp">
       <PageHeader title="Settings" onBack={() => navigate('more')} />
       
       <div className="p-4 space-y-6">
+        
+        {/* PERSONALIZATION */}
+        <div>
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-2">Personalization</h3>
+          <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 p-4">
+            <div className="flex items-center gap-3 mb-2">
+               <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                 <PenTool size={20} />
+               </div>
+               <span className="font-medium text-gray-700">Journal Name</span>
+            </div>
+            <input 
+              type="text" 
+              value={appName}
+              onChange={handleNameChange}
+              placeholder="e.g. My Life, Captain's Log"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            />
+            <p className="text-[10px] text-gray-400 mt-2 ml-1">
+              This name will appear on the main journal page.
+            </p>
+          </div>
+        </div>
+
+        {/* DATA */}
         <div>
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-2">Data Management</h3>
           <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100">

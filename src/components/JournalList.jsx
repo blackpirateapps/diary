@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import Calendar from 'react-calendar'; // Requires: npm install react-calendar
 import 'react-calendar/dist/Calendar.css'; // Import default styles
 import { 
   Plus, Calendar as CalendarIcon, Search, WifiOff, Settings, Download, Upload,
   X, Tag, MapPin, Smile, Frown, Meh, Heart, Sun, CloudRain,
-  LayoutList, LayoutGrid, ChevronRight, ChevronLeft
+  LayoutList, LayoutGrid, Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBlobUrl } from '../db';
@@ -40,6 +40,7 @@ const JournalEntryImage = ({ src, className = "w-full h-full object-cover" }) =>
 
 const JournalList = ({
   entries,
+  appName, // NEW PROP
   onEdit,
   onCreate,
   onAddOld,
@@ -232,12 +233,14 @@ const JournalList = ({
       {/* HEADER */}
       <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 backdrop-blur-md z-20 border-b border-gray-200/50">
         <div className="flex justify-between items-start gap-2">
+          
+          {/* LEFT: TITLE (Now has more space) */}
           <motion.div 
             initial={{ opacity: 0, x: -10 }} 
             animate={{ opacity: 1, x: 0 }} 
-            className="min-w-0 flex-1"
+            className="min-w-0 flex-1 pr-2"
           >
-            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight truncate">Journal</h1>
+            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight truncate">{appName}</h1>
             <p className="text-gray-500 text-sm mt-1 flex items-center gap-2 font-medium">
               {entries.length} memories
               {isOffline && (
@@ -248,37 +251,17 @@ const JournalList = ({
             </p>
           </motion.div>
           
+          {/* RIGHT: ACTION ICONS (Removed View Switcher from here) */}
           <motion.div 
             initial={{ opacity: 0, x: 10 }} 
             animate={{ opacity: 1, x: 0 }} 
             className="flex items-center gap-2 mt-1 flex-shrink-0"
           >
-            {/* View Switcher */}
-            <div className="bg-gray-200/50 p-1 rounded-lg flex items-center gap-0.5 mr-1">
-              <button 
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <LayoutList size={16} />
-              </button>
-              <button 
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <LayoutGrid size={16} />
-              </button>
-              <button 
-                onClick={() => setViewMode('calendar')}
-                className={`p-1.5 rounded-md transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <CalendarIcon size={16} />
-              </button>
-            </div>
-
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsSearchOpen(!isSearchOpen)}
               className={`p-2 rounded-full transition-colors ${isSearchOpen || searchTerm ? 'bg-blue-100 text-blue-600 ring-2 ring-blue-500/20' : 'bg-white text-gray-500 shadow-sm hover:bg-gray-50'}`}
+              title="Search & Views"
             >
               <Search size={20} />
             </motion.button>
@@ -335,16 +318,18 @@ const JournalList = ({
         
         <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
 
-        {/* SEARCH & FILTER BAR (Hidden in Calendar Mode) */}
+        {/* SEARCH & FILTER & VIEW TOGGLE (Expandable Area) */}
         <AnimatePresence>
-          {viewMode !== 'calendar' && (isSearchOpen || searchTerm || activeFilters.mood || activeFilters.tag || activeFilters.location) && (
+          {(isSearchOpen || searchTerm || activeFilters.mood || activeFilters.tag || activeFilters.location) && (
             <motion.div 
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-4 space-y-3 pb-2">
+              <div className="mt-4 space-y-4 pb-2">
+                
+                {/* Search Input */}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                   <input 
@@ -362,6 +347,32 @@ const JournalList = ({
                   )}
                 </div>
 
+                {/* View Switcher (Moved here to clean up header) */}
+                <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">View</span>
+                    <div className="bg-gray-200/50 p-1 rounded-lg flex items-center gap-0.5">
+                        <button 
+                            onClick={() => setViewMode('list')}
+                            className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            <LayoutList size={14} /> List
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('grid')}
+                            className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            <LayoutGrid size={14} /> Grid
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('calendar')}
+                            className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            <CalendarIcon size={14} /> Calendar
+                        </button>
+                    </div>
+                </div>
+
+                {/* Filter Chips Horizontal Scroll */}
                 <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                   {(activeFilters.mood || activeFilters.tag || activeFilters.location) && (
                     <motion.button 
@@ -445,7 +456,6 @@ const JournalList = ({
                  className="w-full border-none font-sans"
                  tileClassName={({ date, view }) => {
                    if (view !== 'month') return null;
-                   // Check if this date has any entries
                    const hasEntry = entries.some(e => new Date(e.date).toDateString() === date.toDateString());
                    return hasEntry ? 'has-journal-entry' : null;
                  }}
@@ -453,7 +463,6 @@ const JournalList = ({
                     if (view !== 'month') return null;
                     const dayEntries = entries.filter(e => new Date(e.date).toDateString() === date.toDateString());
                     if (dayEntries.length > 0) {
-                      // Get highest mood color or default
                       return (
                         <div className="flex justify-center mt-1 gap-0.5">
                            {dayEntries.slice(0, 3).map((e, i) => (
@@ -484,7 +493,7 @@ const JournalList = ({
           {filteredEntries.length === 0 ? (
              <motion.div variants={itemVariants} className="col-span-full text-center py-20 flex flex-col items-center">
                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-300">
-                 {viewMode === 'calendar' ? <CalendarIcon size={24} /> : <Search size={24} />}
+                 {viewMode === 'calendar' ? <CalendarIcon size={24} /> : <Eye size={24} />}
                </div>
                <p className="text-gray-400 font-medium">
                  {viewMode === 'calendar' ? 'No entries for this day.' : 'No entries found.'}
@@ -560,7 +569,6 @@ const JournalList = ({
         .react-calendar__tile--active div {
           background-color: white !important; 
         }
-        /* Hide neighbor days for cleaner look */
         .react-calendar__month-view__days__day--neighboringMonth {
           color: #e5e7eb;
         }

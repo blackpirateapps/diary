@@ -4,7 +4,7 @@ import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db';
 import { SleepPage } from './components/SleepPage';
 import { WhatsAppPage } from './components/WhatsAppPage';
 import MeditationPage from './components/MeditationPage'; 
-import YearInReviewPage from './components/YearInReviewPage'; // NEW IMPORT
+import YearInReviewPage from './components/YearInReviewPage'; 
 import Editor from './components/Editor';
 import JournalList from './components/JournalList';
 import StatsPage from './components/StatsPage';
@@ -23,7 +23,11 @@ import {
 } from 'lucide-react';
 
 const App = () => {
-  // --- ROUTING LOGIC (REPLACES SIMPLE STATE) ---
+  // --- APP PREFERENCES STATE ---
+  // Load name from local storage or default to 'Journal'
+  const [appName, setAppName] = useState(() => localStorage.getItem('app_name') || 'Journal');
+
+  // --- ROUTING LOGIC ---
   const getHash = () => window.location.hash.replace('#', '') || 'journal';
   const [currentRoute, setCurrentRoute] = useState(getHash());
 
@@ -198,6 +202,7 @@ const App = () => {
             {currentRoute === 'journal' && (
               <JournalList
                 entries={entries}
+                appName={appName} // PASSING THE NAME
                 onEdit={openEditEditor}
                 onCreate={() => openNewEditor()}
                 onAddOld={() => dateInputRef.current?.showPicker()}
@@ -223,6 +228,8 @@ const App = () => {
             {currentRoute === 'settings' && (
               <SettingsPage 
                 navigate={navigate} 
+                appName={appName} // PASS VALUE
+                setAppName={setAppName} // PASS SETTER
                 onExport={handleExport} 
                 onImport={() => fileInputRef.current?.click()}
                 importInputRef={fileInputRef} 
@@ -252,7 +259,7 @@ const App = () => {
           
           <button onClick={() => { navigate('journal'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'journal' && !showFlashback ? 'text-blue-600' : 'text-gray-400'}`}>
             <Home size={22} strokeWidth={currentRoute === 'journal' ? 2.5 : 2} />
-            <span className="text-[10px] font-medium">Journal</span>
+            <span className="text-[10px] font-medium">{appName.length > 8 ? 'Journal' : appName}</span>
           </button>
           
           <button onClick={() => { navigate('map'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'map' ? 'text-blue-600' : 'text-gray-400'}`}>
@@ -270,7 +277,6 @@ const App = () => {
             <span className="text-[10px] font-medium">Media</span>
           </button>
 
-          {/* NEW MORE TAB */}
           <button onClick={() => { navigate('more'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${isMoreRoute ? 'text-blue-600' : 'text-gray-400'}`}>
             <Menu size={22} strokeWidth={isMoreRoute ? 2.5 : 2} />
             <span className="text-[10px] font-medium">More</span>
