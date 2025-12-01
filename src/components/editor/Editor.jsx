@@ -1,11 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlignLeft, ChevronLeft, Trash2 } from 'lucide-react';
-import MDEditor from '@uiw/react-md-editor';
-import "@uiw/react-md-editor/markdown-editor.css";
-import "@uiw/react-markdown-preview/markdown.css";
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, useBlobUrl } from '../../db'; 
+import { db, useBlobUrl } from '../db'; 
+
+// --- LEXICAL IMPORTS ---
+import { LexicalComposer } from '@lexical/react/LexicalComposer';
+import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
+import { ContentEditable } from '@lexical/react/LexicalContentEditable';
+import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
+import { ListPlugin } from '@lexical/react/LexicalListPlugin';
+import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
+import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { TRANSFORMERS, $convertFromMarkdownString, $convertToMarkdownString } from '@lexical/markdown';
+import { HeadingNode, QuoteNode } from '@lexical/rich-text';
+import { ListNode, ListItemNode } from '@lexical/list';
+import { LinkNode } from '@lexical/link';
+import { CodeNode } from '@lexical/code';
+import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
 // --- PDF IMPORTS ---
 import { pdf } from '@react-pdf/renderer';
@@ -18,6 +31,7 @@ import EditorHeader from './EditorHeader';
 import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
 import SleepWidget from './SleepWidget';
+import ToolbarPlugin from './ToolbarPlugin'; // <--- NEW TOOLBAR
 import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtils';
 
 // --- HELPERS FOR LOCAL IMAGE RENDERING ---
@@ -43,19 +57,29 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } }
 };
 
-// --- CUSTOM HOOKS ---
-const useZenSettings = () => {
-  const [settings, setSettings] = useState({ fontFamily: 'inherit', fontSize: 18, fontWeight: '400', lineHeight: 1.6 });
+// --- LEXICAL SYNC PLUGINS ---
+const MarkdownInitPlugin = ({ content }) => {
+  const [editor] = useLexicalComposerContext();
   useEffect(() => {
-    const load = () => {
-      const saved = localStorage.getItem('zen_settings');
-      if (saved) setSettings(JSON.parse(saved));
-    };
-    load();
-    window.addEventListener('zen-settings-changed', load);
-    return () => window.removeEventListener('zen-settings-changed', load);
-  }, []);
-  return settings;
+    editor.update(() => {
+      // Load initial content
+      $convertFromMarkdownString(content, TRANSFORMERS);
+    });
+  }, []); 
+  return null;
+};
+
+const MarkdownSyncPlugin = ({ onChange }) => {
+  return (
+    <OnChangePlugin
+      onChange={(editorState) => {
+        editorState.read(() => {
+          const markdown = $convertToMarkdownString(TRANSFORMERS);
+          onChange(markdown);
+        });
+      }}
+    />
+  );
 };
 
 // --- MAIN COMPONENT ---
@@ -81,7 +105,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [saveStatus, setSaveStatus] = useState('idle');
   const [isExporting, setIsExporting] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
-  const zenSettings = useZenSettings();
+  
+  // Settings for Zen mode (pulled for consistency if needed, though ZenOverlay fetches its own)
+  const [zenSettings] = useState(() => {
+     const saved = localStorage.getItem('zen_settings');
+     return saved ? JSON.parse(saved) : {};
+  });
 
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
   const todaysSleepSessions = sleepSessions.filter(session => 
@@ -166,6 +195,32 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     } catch (err) { alert("PDF Failed"); } finally { setIsExporting(false); }
   };
 
+  // --- LEXICAL CONFIG ---
+  const initialConfig = {
+    namespace: 'MainEditor',
+    theme: {
+      paragraph: 'mb-4',
+      heading: {
+        h1: 'text-3xl font-bold mb-4 mt-6',
+        h2: 'text-2xl font-bold mb-3 mt-5',
+        h3: 'text-xl font-bold mb-2 mt-4',
+      },
+      list: {
+        ul: 'list-disc ml-5 mb-4',
+        ol: 'list-decimal ml-5 mb-4',
+      },
+      quote: 'border-l-4 border-gray-300 pl-4 italic my-4 text-gray-500',
+      text: {
+        bold: 'font-bold',
+        italic: 'italic',
+        underline: 'underline',
+      }
+    },
+    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode],
+    onError: (error) => console.error(error),
+    editable: mode === 'edit'
+  };
+
   // --- RENDER ---
   return (
     <>
@@ -192,7 +247,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
             <motion.div className="flex-1 overflow-y-auto no-scrollbar flex flex-col bg-white dark:bg-gray-950 relative transition-colors" variants={contentStagger}>
                 
-                {/* Image Carousel Inline Logic (Brief enough to keep, or extract if preferred) */}
                 <AnimatePresence>
                     {images.length > 0 && (
                         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "18rem" }} exit={{ opacity: 0, height: 0 }} className="w-full relative group bg-gray-50 dark:bg-gray-900 flex-shrink-0">
@@ -232,14 +286,35 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     />
 
                     <motion.div variants={itemVariants} className="min-h-[300px] relative">
-                        {mode === 'edit' ? (
-                            <div className="text-lg text-gray-800 dark:text-gray-200 leading-relaxed -ml-4">
-                                <MDEditor value={content} onChange={setContent} preview="edit" hideToolbar={true} height="100%" visiableDragbar={false} className="w-full" />
-                            </div>
-                        ) : (
-                            <div className="prose prose-lg prose-gray dark:prose-invert max-w-none"><MDEditor.Markdown source={content} /></div>
-                        )}
-                        {content.length === 0 && mode === 'edit' && <div className="absolute top-2 left-1 text-gray-300 dark:text-gray-600 pointer-events-none text-lg">Write about your day...</div>}
+                         <LexicalComposer initialConfig={initialConfig}>
+                           {/* Render Toolbar only if in Edit Mode */}
+                           {mode === 'edit' && <ToolbarPlugin />}
+
+                           <RichTextPlugin
+                             contentEditable={
+                               <ContentEditable 
+                                 className="outline-none text-lg text-gray-800 dark:text-gray-200 leading-relaxed min-h-[300px]" 
+                               />
+                             }
+                             placeholder={
+                               <div className="absolute top-0 left-0 text-gray-300 dark:text-gray-600 pointer-events-none text-lg select-none">
+                                 Write about your day...
+                               </div>
+                             }
+                             ErrorBoundary={LexicalErrorBoundary}
+                           />
+                           
+                           <HistoryPlugin />
+                           <ListPlugin />
+                           <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+                           
+                           {/* Sync Logic */}
+                           <MarkdownInitPlugin content={content} />
+                           <MarkdownSyncPlugin onChange={setContent} />
+                         </LexicalComposer>
+
+                         {/* Overlay for Preview Mode to prevent interaction if needed, though Editable=false handles most */}
+                         {mode === 'preview' && <div className="absolute inset-0 z-10" />}
                     </motion.div>
 
                     <div className="h-px bg-gray-100 dark:bg-gray-800 my-8" />
