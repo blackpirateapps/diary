@@ -2,7 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlignLeft, ChevronLeft, Trash2 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, useBlobUrl } from '../db'; 
+
+// --- FIXED IMPORT PATHS ---
+import { db, useBlobUrl } from '../../db'; // Go up two levels to find db
+import EntryPdfDocument from '../EntryPdfDocument'; // Go up one level to components
+import TagInput from '../TagInput'; // Go up one level to components
 
 // --- LEXICAL IMPORTS ---
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
@@ -23,15 +27,13 @@ import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 // --- PDF IMPORTS ---
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
-import EntryPdfDocument from './EntryPdfDocument';
 
-// --- SUB COMPONENTS ---
-import TagInput from './TagInput';
+// --- SUB COMPONENTS (Local to ./editor folder) ---
 import EditorHeader from './EditorHeader';
 import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
 import SleepWidget from './SleepWidget';
-import ToolbarPlugin from './ToolbarPlugin'; // <--- NEW TOOLBAR
+import ToolbarPlugin from './ToolbarPlugin';
 import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtils';
 
 // --- HELPERS FOR LOCAL IMAGE RENDERING ---
@@ -62,7 +64,6 @@ const MarkdownInitPlugin = ({ content }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
     editor.update(() => {
-      // Load initial content
       $convertFromMarkdownString(content, TRANSFORMERS);
     });
   }, []); 
@@ -106,7 +107,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
   
-  // Settings for Zen mode (pulled for consistency if needed, though ZenOverlay fetches its own)
   const [zenSettings] = useState(() => {
      const saved = localStorage.getItem('zen_settings');
      return saved ? JSON.parse(saved) : {};
@@ -214,6 +214,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         bold: 'font-bold',
         italic: 'italic',
         underline: 'underline',
+        code: 'bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 font-mono text-sm text-pink-500',
       }
     },
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode],
