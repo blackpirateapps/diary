@@ -16,7 +16,7 @@ import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
 import { CodeNode } from '@lexical/code';
-import { ErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
+import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'; // <--- FIXED IMPORT
 
 // --- HELPER: INITIALIZE EDITOR WITH MARKDOWN ---
 // This plugin runs once when Zen Mode opens to load your existing text
@@ -137,7 +137,7 @@ const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
                     Start writing...
                   </div>
                 }
-                ErrorBoundary={ErrorBoundary}
+                ErrorBoundary={LexicalErrorBoundary} // <--- FIXED USAGE
               />
               
               {/* Plugins */}
