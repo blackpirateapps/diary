@@ -4,7 +4,7 @@ import {
   Loader2, Eye, EyeOff, Trash2, DownloadCloud, UploadCloud 
 } from 'lucide-react';
 import { S3Client, PutObjectCommand, ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
-import { motion, AnimatePresence } from 'framer-motion'; // <--- ADDED THIS IMPORT
+import { motion, AnimatePresence } from 'framer-motion';
 import { exportToZip, importFromZip } from '../db'; 
 
 // --- HELPER: R2 CLIENT ---
@@ -60,11 +60,14 @@ const CloudBackup = () => {
       // 2. Upload to R2
       setMessage('Uploading to Cloudflare R2...');
       const client = createR2Client(creds);
+      
+      // FIX: Explicitly passing ContentLength solves the "Stream of unknown length" warning
       const command = new PutObjectCommand({
         Bucket: creds.bucketName,
         Key: fileName,
         Body: blob,
-        ContentType: 'application/zip'
+        ContentType: 'application/zip',
+        ContentLength: blob.size 
       });
 
       await client.send(command);
@@ -74,7 +77,12 @@ const CloudBackup = () => {
     } catch (error) {
       console.error(error);
       setStatus('error');
-      setMessage(`Upload failed: ${error.message}. Check CORS?`);
+      // Helpful error message for CORS
+      if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+        setMessage('Network Error: Check R2 CORS Policy settings.');
+      } else {
+        setMessage(`Upload failed: ${error.message}`);
+      }
     }
   };
 
@@ -96,7 +104,11 @@ const CloudBackup = () => {
     } catch (error) {
       console.error(error);
       setStatus('error');
-      setMessage('Failed to list backups. Check credentials.');
+      if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+        setMessage('Network Error: Check R2 CORS Policy settings.');
+      } else {
+        setMessage('Failed to list backups. Check credentials.');
+      }
     }
   };
 
