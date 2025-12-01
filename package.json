@@ -26,7 +26,6 @@
     "@react-pdf/renderer": "latest", 
     "html-to-image": "latest", 
     "lexical": "latest",
-    "react-calendar": "latest",
     "@lexical/react": "latest",
     "@lexical/rich-text": "latest",
     "@lexical/history": "latest",
