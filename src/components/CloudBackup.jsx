@@ -54,20 +54,23 @@ const CloudBackup = () => {
 
     try {
       // 1. Export Data
-      const blob = await exportToZip();
+      const blob = await exportToZip(); // This returns a Blob
       const fileName = `journal_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
 
-      // 2. Upload to R2
+      // 2. Prepare Upload Body (Convert Blob to Uint8Array)
+      // This fixes the "getReader is not a function" error by avoiding Streams
+      const arrayBuffer = await blob.arrayBuffer();
+      const body = new Uint8Array(arrayBuffer);
+
       setMessage('Uploading to Cloudflare R2...');
       const client = createR2Client(creds);
       
-      // FIX: Explicitly passing ContentLength solves the "Stream of unknown length" warning
       const command = new PutObjectCommand({
         Bucket: creds.bucketName,
         Key: fileName,
-        Body: blob,
+        Body: body,
         ContentType: 'application/zip',
-        ContentLength: blob.size 
+        ContentLength: body.length // Explicit length prevents "unknown length" warnings
       });
 
       await client.send(command);
@@ -77,7 +80,7 @@ const CloudBackup = () => {
     } catch (error) {
       console.error(error);
       setStatus('error');
-      // Helpful error message for CORS
+      // Helpful error message for common CORS issues
       if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
         setMessage('Network Error: Check R2 CORS Policy settings.');
       } else {
