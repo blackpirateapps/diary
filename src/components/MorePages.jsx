@@ -5,7 +5,7 @@ import {
   ChevronRight, Github, Mail, Moon, MessageCircle, Flower2, 
   BookOpen, Palette, Check, Type, Sliders, Monitor
 } from 'lucide-react';
-
+import CloudBackup from './CloudBackup';
 // --- SHARED HEADER COMPONENT ---
 const PageHeader = ({ title, onBack }) => (
   <div className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center gap-3 transition-colors">
@@ -273,6 +273,13 @@ export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport
 
           </div>
         </div>
+{/* CLOUD BACKUP SECTION */}
+        <div>
+          <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Cloud Sync</h3>
+          <CloudBackup />
+        </div>
+
+
 
         {/* DATA */}
         <div>
