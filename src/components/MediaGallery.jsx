@@ -1,21 +1,21 @@
 import React, { useState, useMemo } from 'react';
-import { Image as ImageIcon, X, Calendar, MapPin, ChevronLeft } from 'lucide-react';
+import { Image as ImageIcon, Calendar, MapPin, ChevronLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useBlobUrl } from '../db'; // NEW IMPORT
+import { useBlobUrl } from '../db'; 
 
 // --- HELPER COMPONENTS ---
 
 // 1. Grid Item Helper
 const GalleryItem = ({ image, onClick }) => {
-  const url = useBlobUrl(image.src); // Generate URL from Blob
+  const url = useBlobUrl(image.src); 
   
   return (
     <motion.button
-      layoutId={`img-${image.id}`} // Shared layout ID for smooth transition
+      layoutId={`img-${image.id}`} 
       onClick={onClick}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.95 }}
-      className="aspect-square rounded-2xl overflow-hidden bg-gray-100 relative group cursor-pointer border border-transparent hover:border-black/5"
+      className="aspect-square rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 relative group cursor-pointer border border-transparent hover:border-black/5 dark:hover:border-white/10"
     >
       {url ? (
         <img
@@ -25,11 +25,11 @@ const GalleryItem = ({ image, onClick }) => {
           className="w-full h-full object-cover transition-transform duration-700"
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-100">
+        <div className="w-full h-full flex items-center justify-center text-gray-300 dark:text-gray-600 bg-gray-100 dark:bg-gray-800">
            <ImageIcon size={24} />
         </div>
       )}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 dark:group-hover:bg-white/5 transition-colors duration-300" />
     </motion.button>
   );
 };
@@ -62,7 +62,7 @@ const MediaGallery = ({ entries }) => {
       const dateObj = new Date(entry.date);
       
       return [...acc, ...imgs.map((src, index) => ({
-        src, // This is now a Blob or a Base64 string
+        src, 
         id: `${entry.id}-${index}`,
         entryId: entry.id,
         date: dateObj,
@@ -117,17 +117,17 @@ const MediaGallery = ({ entries }) => {
   };
 
   return (
-    <div className="pb-24">
+    <div className="pb-24 bg-[#F3F4F6] dark:bg-gray-950 min-h-screen transition-colors">
       {/* --- STICKY HEADER --- */}
-      <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 backdrop-blur-md z-20 border-b border-gray-200/50">
+      <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 transition-colors">
         <motion.div 
           initial={{ opacity: 0, y: -10 }} 
           animate={{ opacity: 1, y: 0 }}
           className="flex justify-between items-start"
         >
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Media</h1>
-            <p className="text-gray-500 text-sm mt-1 font-medium">
+            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Media</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1 font-medium">
                 {Object.values(galleryData).reduce((acc, year) => 
                     acc + Object.values(year).reduce((c, m) => c + m.length, 0), 0
                 )} photos
@@ -142,9 +142,9 @@ const MediaGallery = ({ entries }) => {
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center justify-center py-20 text-gray-400"
+            className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600"
           >
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-300">
+            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-900 rounded-full flex items-center justify-center mb-4 text-gray-300 dark:text-gray-700">
                 <ImageIcon size={24} />
             </div>
             <p className="font-medium">No photos added yet.</p>
@@ -158,19 +158,18 @@ const MediaGallery = ({ entries }) => {
               animate="show"
               className="space-y-6"
             >
-              <motion.h2 variants={itemVariants} className="text-2xl font-bold text-gray-300 border-b border-gray-100 pb-2 select-none">
+              <motion.h2 variants={itemVariants} className="text-2xl font-bold text-gray-300 dark:text-gray-700 border-b border-gray-100 dark:border-gray-800 pb-2 select-none">
                 {year}
               </motion.h2>
               
               {Object.keys(galleryData[year]).map(month => (
                 <motion.div key={`${year}-${month}`} variants={itemVariants} className="space-y-3">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">
+                  <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-1">
                     {month}
                   </h3>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {galleryData[year][month].map((img) => (
-                      // USE NEW HELPER COMPONENT
                       <GalleryItem 
                         key={img.id} 
                         image={img} 
@@ -192,35 +191,33 @@ const MediaGallery = ({ entries }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex flex-col bg-white"
-            data-color-mode="light"
+            className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-950 transition-colors"
           >
             {/* Modal Header */}
             <motion.div 
               initial={{ y: -20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.1 }}
-              className="px-4 py-3 flex justify-between items-center bg-white/95 backdrop-blur-xl z-30 border-b border-gray-100"
+              className="px-4 py-3 flex justify-between items-center bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl z-30 border-b border-gray-100 dark:border-gray-800"
             >
               <button 
                 onClick={() => setSelectedImage(null)} 
-                className="p-2 -ml-2 text-blue-500 hover:bg-blue-50 rounded-full transition-colors flex items-center gap-1"
+                className="p-2 -ml-2 text-[var(--accent-500)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 rounded-full transition-colors flex items-center gap-1"
               >
                 <ChevronLeft size={24} />
                 <span className="text-base font-medium">Back</span>
               </button>
-              <span className="text-sm font-semibold text-gray-900">Photo Detail</span>
+              <span className="text-sm font-semibold text-gray-900 dark:text-white">Photo Detail</span>
               <div className="w-10" /> 
             </motion.div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto bg-gray-50 flex flex-col items-center justify-center p-4">
+            <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-black/20 flex flex-col items-center justify-center p-4">
               <motion.div 
-                layoutId={`img-${selectedImage.id}`} // Matches the ID above for smooth morphing
-                className="w-full max-w-3xl bg-white rounded-3xl shadow-xl overflow-hidden"
+                layoutId={`img-${selectedImage.id}`} 
+                className="w-full max-w-3xl bg-white dark:bg-gray-900 rounded-3xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-800"
               >
-                <div className="bg-black/5 relative aspect-auto min-h-[300px] flex items-center justify-center">
-                  {/* USE NEW HELPER COMPONENT */}
+                <div className="bg-black/5 dark:bg-black/50 relative aspect-auto min-h-[300px] flex items-center justify-center">
                   <LightboxImage src={selectedImage.src} />
                 </div>
 
@@ -232,25 +229,25 @@ const MediaGallery = ({ entries }) => {
                   className="p-6 space-y-4"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-blue-50 text-blue-600 rounded-full">
+                    <div className="p-2.5 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] rounded-full">
                       <Calendar size={20} />
                     </div>
                     <div>
-                      <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Date Captured</p>
-                      <p className="text-gray-900 font-medium text-lg">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">Date Captured</p>
+                      <p className="text-gray-900 dark:text-white font-medium text-lg">
                         {formatFullDate(selectedImage.date)}
                       </p>
                     </div>
                   </div>
 
                   {selectedImage.location && (
-                    <div className="flex items-center gap-3 pt-2 border-t border-gray-50">
-                      <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-full">
+                    <div className="flex items-center gap-3 pt-2 border-t border-gray-50 dark:border-gray-800">
+                      <div className="p-2.5 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] rounded-full">
                         <MapPin size={20} />
                       </div>
                       <div>
-                        <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Location</p>
-                        <p className="text-gray-900 font-medium">
+                        <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">Location</p>
+                        <p className="text-gray-900 dark:text-white font-medium">
                           {selectedImage.location}
                         </p>
                       </div>
