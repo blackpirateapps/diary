@@ -190,7 +190,7 @@ const App = () => {
   // --- IMPORT/EXPORT HANDLERS ---
   const handleExport = async () => {
     try {
-      await exportToZip();
+      await exportToZip(true);
     } catch (e) {
       alert("Export failed: " + e.message);
     }

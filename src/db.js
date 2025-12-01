@@ -25,7 +25,7 @@ db.version(3).stores({
   chat_analytics: 'id, name' 
 });
 
-// Version 4: Added Meditation Sessions (NEW)
+// Version 4: Added Meditation Sessions
 db.version(4).stores({
   entries: '++id, date, mood, *tags',
   sleep_sessions: 'id, startTime',
@@ -42,10 +42,12 @@ export const useBlobUrl = (imageFile) => {
       setUrl('');
       return;
     }
+    // Handle string (Base64/URL)
     if (typeof imageFile === 'string') {
       setUrl(imageFile);
       return;
     }
+    // Handle Blob/File
     if (imageFile instanceof Blob) {
       const objectUrl = URL.createObjectURL(imageFile);
       setUrl(objectUrl);
@@ -76,7 +78,8 @@ export const migrateFromLocalStorage = async () => {
 };
 
 // --- ZIP EXPORT ---
-export const exportToZip = async () => {
+// UPDATED: Added triggerDownload param to distinguish between Cloud Backup (False) and Manual Export (True)
+export const exportToZip = async (triggerDownload = false) => {
   const zip = new JSZip();
   const imgFolder = zip.folder("images");
   
@@ -84,7 +87,7 @@ export const exportToZip = async () => {
   const entries = await db.entries.toArray();
   const sleepSessions = await db.sleep_sessions.toArray();
   const chats = await db.chat_analytics.toArray();
-  const meditations = await db.meditation_sessions.toArray(); // NEW
+  const meditations = await db.meditation_sessions.toArray(); 
   
   // 2. Process Journal Images (Convert to Blobs or Filenames)
   const cleanEntries = entries.map(entry => {
@@ -92,6 +95,7 @@ export const exportToZip = async () => {
 
     if (entry.images && Array.isArray(entry.images)) {
       entry.images.forEach((img, index) => {
+        // Handle Base64 strings
         if (typeof img === 'string' && img.startsWith('data:')) {
            const arr = img.split(',');
            const mime = arr[0].match(/:(.*?);/)[1];
@@ -105,12 +109,15 @@ export const exportToZip = async () => {
            imgFolder.file(fileName, blob);
            doc.images.push(fileName);
         } 
+        // Handle Blobs (The new standard)
         else if (img instanceof Blob) {
-           const ext = img.type.split('/')[1] || 'jpg';
+           // Try to detect extension, default to webp or jpg
+           const ext = img.type.split('/')[1] || 'webp';
            const fileName = `${entry.id}_${index}.${ext}`;
            imgFolder.file(fileName, img);
            doc.images.push(fileName);
         }
+        // Handle Legacy URLs
         else if (typeof img === 'string') {
           doc.images.push(img);
         }
@@ -130,14 +137,20 @@ export const exportToZip = async () => {
       zip.file("chat_data.json", JSON.stringify(chats, null, 2));
   }
   
-  // NEW: Export Meditation Data
   if (meditations.length > 0) {
       zip.file("meditation_data.json", JSON.stringify(meditations, null, 2));
   }
 
-  // 4. Generate and Download
+  // 4. Generate Blob
   const content = await zip.generateAsync({ type: "blob" });
-  saveAs(content, `journal_backup_${new Date().toISOString().split('T')[0]}.zip`);
+  
+  // Only trigger browser download if explicitly requested (Manual Export button)
+  if (triggerDownload) {
+    saveAs(content, `journal_backup_${new Date().toISOString().split('T')[0]}.zip`);
+  }
+
+  // Return the blob so CloudBackup can read .size and upload it
+  return content;
 };
 
 // --- ZIP IMPORT ---
@@ -158,10 +171,12 @@ export const importFromZip = async (file) => {
         const newImages = [];
         if (entry.images && Array.isArray(entry.images)) {
           for (const imgRef of entry.images) {
+            // Check if it's a file reference in the zip
             if (imgFolder && imgFolder.file(imgRef)) {
               const blob = await imgFolder.file(imgRef).async("blob");
               newImages.push(blob);
             } else {
+              // Otherwise keep it as is (old URL)
               newImages.push(imgRef);
             }
           }
@@ -180,7 +195,6 @@ export const importFromZip = async (file) => {
       const sleepSessions = JSON.parse(sleepStr);
       if (Array.isArray(sleepSessions) && sleepSessions.length > 0) {
           await db.sleep_sessions.bulkPut(sleepSessions);
-          console.log(`Imported ${sleepSessions.length} sleep sessions.`);
       }
   }
 
@@ -191,18 +205,16 @@ export const importFromZip = async (file) => {
       const chats = JSON.parse(chatStr);
       if (Array.isArray(chats) && chats.length > 0) {
           await db.chat_analytics.bulkPut(chats);
-          console.log(`Imported ${chats.length} chat analytics.`);
       }
   }
   
-  // 4. Parse Meditation Data (NEW)
+  // 4. Parse Meditation Data
   const medFile = zip.file("meditation_data.json");
   if (medFile) {
       const medStr = await medFile.async("string");
       const medData = JSON.parse(medStr);
       if (Array.isArray(medData) && medData.length > 0) {
           await db.meditation_sessions.bulkPut(medData);
-          console.log(`Imported ${medData.length} meditation sessions.`);
       }
   }
 
