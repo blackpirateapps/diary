@@ -4,7 +4,7 @@ import 'react-calendar/dist/Calendar.css';
 import { 
   Plus, Calendar as CalendarIcon, Search, WifiOff, Download, Upload,
   X, Tag, MapPin, Smile, Frown, Meh, Heart, Sun, CloudRain,
-  LayoutList, LayoutGrid, Eye, CalendarDays, MoreVertical, Check
+  LayoutList, LayoutGrid, Eye, CalendarDays, MoreVertical
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBlobUrl } from '../db';
@@ -23,19 +23,129 @@ const MOODS = [
   { value: 10, icon: Heart, color: 'text-red-500', label: 'Amazing' },
 ];
 
-const JournalEntryImage = ({ src, className = "w-full h-full object-cover" }) => {
+// --- OPTIMIZED SUB-COMPONENTS ---
+
+const JournalEntryImage = React.memo(({ src, className = "w-full h-full object-cover" }) => {
   const url = useBlobUrl(src);
   if (!url) return <div className={`bg-gray-100 dark:bg-gray-800 animate-pulse ${className}`} />;
   return (
-    <motion.img
-      whileHover={{ scale: 1.05 }}
-      transition={{ duration: 0.5 }}
+    <img
       src={url}
-      className={`${className} opacity-95 group-hover:opacity-100 transition-opacity`}
+      loading="lazy"
+      decoding="async"
+      className={`${className} transition-opacity duration-300`}
       alt="Cover"
     />
   );
-};
+});
+
+// Memoized List Card to prevent re-renders during search/filter
+const ListCard = React.memo(({ entry, onClick, variants }) => {
+  const dateObj = new Date(entry.date);
+  const mainDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const yearTime = dateObj.toLocaleDateString(undefined, { year: 'numeric' }) + ' • ' + dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  
+  return (
+    <motion.div
+      variants={variants}
+      onClick={() => onClick(entry)}
+      whileTap={{ scale: 0.98 }}
+      className="transform-gpu will-change-transform bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-100/50 dark:border-gray-800 cursor-pointer group hover:shadow-md transition-shadow"
+    >
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex flex-col">
+          <span className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-[var(--accent-600)] dark:group-hover:text-[var(--accent-500)] transition-colors tracking-tight">{mainDate}</span>
+          <span className="text-xs text-gray-400 font-medium">{yearTime}</span>
+        </div>
+        {entry.mood && (() => {
+          const moodMeta = MOODS.find(m => m.value === entry.mood);
+          if (!moodMeta) return null;
+          const Icon = moodMeta.icon;
+          return (
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 dark:bg-gray-800 ${moodMeta.color}`}>
+              <Icon size={18} />
+            </div>
+          );
+        })()}
+      </div>
+      
+      <div className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 leading-relaxed mt-2 font-normal" 
+           dangerouslySetInnerHTML={{ __html: entry.content.replace(/<[^>]*>?/gm, ' ') }} />
+
+      {(entry.tags?.length > 0 || entry.location) && (
+        <div className="mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar text-gray-400 dark:text-gray-500">
+          {entry.location && (
+            <div className="flex items-center text-[10px] font-medium bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-1 rounded-md border border-gray-100 dark:border-gray-700 flex-shrink-0">
+              <MapPin size={10} className="mr-1" /> {entry.location}
+            </div>
+          )}
+          {entry.tags?.map(tag => (
+            <div key={tag} className="flex items-center text-[10px] font-medium bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] px-2 py-1 rounded-md border border-[var(--accent-100)] dark:border-gray-700 flex-shrink-0">
+              #{tag}
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {entry.images && entry.images.length > 0 && (
+        <div className="mt-3 h-32 w-full rounded-xl overflow-hidden relative border border-gray-100 dark:border-gray-800">
+          <JournalEntryImage src={entry.images[0]} />
+          {entry.images.length > 1 && (
+            <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+              +{entry.images.length - 1} photos
+            </div>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
+});
+
+// Memoized Grid Card
+const GridCard = React.memo(({ entry, onClick, variants }) => {
+  const hasImage = entry.images && entry.images.length > 0;
+  const dateObj = new Date(entry.date);
+  const day = dateObj.getDate();
+  const month = dateObj.toLocaleDateString(undefined, { month: 'short' });
+
+  return (
+    <motion.div
+      variants={variants}
+      onClick={() => onClick(entry)}
+      whileTap={{ scale: 0.95 }}
+      className="transform-gpu will-change-transform aspect-square rounded-xl overflow-hidden relative border border-gray-200 dark:border-gray-800 shadow-sm bg-white dark:bg-gray-900 cursor-pointer group"
+    >
+      {hasImage ? (
+        <>
+          <JournalEntryImage src={entry.images[0]} className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
+          <div className="absolute bottom-2 left-2 text-white">
+             <span className="text-xl font-bold leading-none block">{day}</span>
+             <span className="text-xs font-medium uppercase opacity-90">{month}</span>
+          </div>
+        </>
+      ) : (
+        <div className="w-full h-full p-3 flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div className="flex flex-col">
+              <span className="text-lg font-bold text-gray-800 dark:text-gray-200 leading-none">{day}</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase">{month}</span>
+            </div>
+            {entry.mood && (() => {
+               const m = MOODS.find(x => x.value === entry.mood);
+               if(m) { const Icon = m.icon; return <Icon size={14} className={m.color} />; }
+            })()}
+          </div>
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-3 leading-tight">
+            {entry.content.replace(/<[^>]*>?/gm, ' ')}
+          </p>
+        </div>
+      )}
+    </motion.div>
+  );
+});
+
+// --- MAIN COMPONENT ---
 
 const JournalList = ({
   entries,
@@ -46,7 +156,6 @@ const JournalList = ({
   onImport,
   onExport,
   isOffline,
-  isImporting,
   onOpenFlashback
 }) => {
   const [viewMode, setViewMode] = useState('list'); 
@@ -72,16 +181,23 @@ const JournalList = ({
   const uniqueLocations = useMemo(() => [...new Set(entries.map(e => e.location).filter(Boolean))], [entries]);
 
   const filteredEntries = useMemo(() => {
+    // If no filters and not calendar, return fast
+    if (viewMode !== 'calendar' && !searchTerm && !activeFilters.mood && !activeFilters.tag && !activeFilters.location) {
+      return entries;
+    }
+
     return entries.filter(entry => {
       if (viewMode === 'calendar') {
         const entryDate = new Date(entry.date).toDateString();
         const selDate = selectedDate.toDateString();
         return entryDate === selDate;
       }
+      
+      const lowerSearch = searchTerm.toLowerCase();
       const matchesSearch = searchTerm === '' || 
-        entry.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (entry.location && entry.location.toLowerCase().includes(searchTerm.toLowerCase()));
+        entry.content.toLowerCase().includes(lowerSearch) ||
+        entry.tags?.some(tag => tag.toLowerCase().includes(lowerSearch)) ||
+        (entry.location && entry.location.toLowerCase().includes(lowerSearch));
 
       const matchesMood = activeFilters.mood ? entry.mood === activeFilters.mood : true;
       const matchesTag = activeFilters.tag ? entry.tags?.includes(activeFilters.tag) : true;
@@ -110,117 +226,14 @@ const JournalList = ({
     setSelectedDate(new Date());
   };
 
-  const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } };
-  const itemVariants = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
-
-  // --- RENDERERS ---
-  const renderListCard = (entry) => {
-    const dateObj = new Date(entry.date);
-    const mainDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    const yearTime = dateObj.toLocaleDateString(undefined, { year: 'numeric' }) + ' • ' + dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-    
-    return (
-      <motion.div
-        layout
-        variants={itemVariants}
-        key={entry.id}
-        onClick={() => onEdit(entry)}
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.98 }}
-        className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-100/50 dark:border-gray-800 cursor-pointer group hover:shadow-md hover:border-gray-200 dark:hover:border-gray-700 transition-all"
-      >
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex flex-col">
-            <span className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-[var(--accent-600)] dark:group-hover:text-[var(--accent-500)] transition-colors tracking-tight">{mainDate}</span>
-            <span className="text-xs text-gray-400 font-medium">{yearTime}</span>
-          </div>
-          {entry.mood && (() => {
-            const moodMeta = MOODS.find(m => m.value === entry.mood);
-            if (!moodMeta) return null;
-            const Icon = moodMeta.icon;
-            return (
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 dark:bg-gray-800 ${moodMeta.color}`}>
-                <Icon size={18} />
-              </div>
-            );
-          })()}
-        </div>
-        
-        <div className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 leading-relaxed mt-2 font-normal" 
-             dangerouslySetInnerHTML={{ __html: entry.content.replace(/<[^>]*>?/gm, ' ') }} />
-
-        {(entry.tags?.length > 0 || entry.location) && (
-          <div className="mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar text-gray-400 dark:text-gray-500">
-            {entry.location && (
-              <div className="flex items-center text-[10px] font-medium bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-1 rounded-md border border-gray-100 dark:border-gray-700 flex-shrink-0">
-                <MapPin size={10} className="mr-1" /> {entry.location}
-              </div>
-            )}
-            {entry.tags?.map(tag => (
-              <div key={tag} className="flex items-center text-[10px] font-medium bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] px-2 py-1 rounded-md border border-[var(--accent-100)] dark:border-gray-700 flex-shrink-0">
-                #{tag}
-              </div>
-            ))}
-          </div>
-        )}
-        
-        {entry.images && entry.images.length > 0 && (
-          <div className="mt-3 h-32 w-full rounded-xl overflow-hidden relative border border-gray-100 dark:border-gray-800">
-            <JournalEntryImage src={entry.images[0]} />
-            {entry.images.length > 1 && (
-              <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                +{entry.images.length - 1} photos
-              </div>
-            )}
-          </div>
-        )}
-      </motion.div>
-    );
+  // Simplified Variants for better performance (removed heavy staggering)
+  const containerVariants = { 
+    hidden: { opacity: 0 }, 
+    show: { opacity: 1, transition: { duration: 0.2 } } 
   };
-
-  const renderGridCard = (entry) => {
-    const hasImage = entry.images && entry.images.length > 0;
-    const dateObj = new Date(entry.date);
-    const day = dateObj.getDate();
-    const month = dateObj.toLocaleDateString(undefined, { month: 'short' });
-
-    return (
-      <motion.div
-        layout
-        variants={itemVariants}
-        key={entry.id}
-        onClick={() => onEdit(entry)}
-        whileTap={{ scale: 0.95 }}
-        className="aspect-square rounded-xl overflow-hidden relative border border-gray-200 dark:border-gray-800 shadow-sm bg-white dark:bg-gray-900 cursor-pointer group"
-      >
-        {hasImage ? (
-          <>
-            <JournalEntryImage src={entry.images[0]} className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
-            <div className="absolute bottom-2 left-2 text-white">
-               <span className="text-xl font-bold leading-none block">{day}</span>
-               <span className="text-xs font-medium uppercase opacity-90">{month}</span>
-            </div>
-          </>
-        ) : (
-          <div className="w-full h-full p-3 flex flex-col justify-between">
-            <div className="flex justify-between items-start">
-              <div className="flex flex-col">
-                <span className="text-lg font-bold text-gray-800 dark:text-gray-200 leading-none">{day}</span>
-                <span className="text-[10px] font-bold text-gray-400 uppercase">{month}</span>
-              </div>
-              {entry.mood && (() => {
-                 const m = MOODS.find(x => x.value === entry.mood);
-                 if(m) { const Icon = m.icon; return <Icon size={14} className={m.color} />; }
-              })()}
-            </div>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-3 leading-tight">
-              {entry.content.replace(/<[^>]*>?/gm, ' ')}
-            </p>
-          </div>
-        )}
-      </motion.div>
-    );
+  const itemVariants = { 
+    hidden: { opacity: 0, y: 10 }, 
+    show: { opacity: 1, y: 0 } 
   };
 
   return (
@@ -230,7 +243,7 @@ const JournalList = ({
       <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 transition-colors">
         <div className="flex justify-between items-center gap-2 mb-2">
           
-          {/* TITLE LEFT */}
+          {/* TITLE */}
           <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="min-w-0 flex-1 pr-2">
             <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight truncate">{appName}</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm flex items-center gap-2 font-medium">
@@ -239,10 +252,8 @@ const JournalList = ({
             </p>
           </motion.div>
           
-          {/* ACTIONS RIGHT (3 ICONS ONLY) */}
+          {/* ACTIONS */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 flex-shrink-0">
-            
-            {/* 1. Search */}
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsSearchOpen(!isSearchOpen)}
@@ -251,7 +262,6 @@ const JournalList = ({
               <Search size={20} />
             </motion.button>
 
-            {/* 2. New (Respects Calendar Mode) */}
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={handleCreateNew} 
@@ -260,7 +270,6 @@ const JournalList = ({
               <Plus size={20} />
             </motion.button>
 
-            {/* 3. More Menu (Contains View Switcher & Settings) */}
             <div className="relative">
               <motion.button
                 whileTap={{ scale: 0.9 }}
@@ -280,7 +289,6 @@ const JournalList = ({
                       exit={{ opacity: 0, scale: 0.9, y: 10 }}
                       className="absolute right-0 top-12 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 p-2 w-48 z-30 flex flex-col gap-1 origin-top-right"
                     >
-                      {/* VIEW SWITCHER INSIDE MENU */}
                       <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex mb-2">
                         {['list', 'grid', 'calendar'].map(mode => (
                           <button
@@ -318,7 +326,7 @@ const JournalList = ({
         
         <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
 
-        {/* EXPANDABLE SEARCH & FILTERS */}
+        {/* EXPANDABLE SEARCH */}
         <AnimatePresence>
           {(isSearchOpen || searchTerm || activeFilters.mood || activeFilters.tag || activeFilters.location) && (
             <motion.div 
@@ -350,7 +358,7 @@ const JournalList = ({
                     <motion.button 
                       initial={{ scale: 0 }} animate={{ scale: 1 }}
                       onClick={clearFilters} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-xs font-medium whitespace-nowrap"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0"
                     >
                       <X size={12} /> Clear
                     </motion.button>
@@ -363,7 +371,7 @@ const JournalList = ({
                        <button 
                          key={m.value}
                          onClick={() => toggleFilter('mood', m.value)}
-                         className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${isActive ? 'bg-[var(--accent-50)] dark:bg-gray-800 border-[var(--accent-200)] dark:border-gray-700 text-[var(--accent-700)] dark:text-white' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                         className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap flex-shrink-0 ${isActive ? 'bg-[var(--accent-50)] dark:bg-gray-800 border-[var(--accent-200)] dark:border-gray-700 text-[var(--accent-700)] dark:text-white' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                        >
                          <Icon size={12} className={isActive ? 'text-[var(--accent-500)]' : 'text-gray-400'} />
                          {m.label}
@@ -374,7 +382,7 @@ const JournalList = ({
                     <button 
                       key={tag}
                       onClick={() => toggleFilter('tag', tag)}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${activeFilters.tag === tag ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap flex-shrink-0 ${activeFilters.tag === tag ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                     >
                       <Tag size={12} /> #{tag}
                     </button>
@@ -383,7 +391,7 @@ const JournalList = ({
                     <button 
                       key={loc}
                       onClick={() => toggleFilter('location', loc)}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${activeFilters.location === loc ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap flex-shrink-0 ${activeFilters.location === loc ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                     >
                       <MapPin size={12} /> {loc}
                     </button>
@@ -395,10 +403,10 @@ const JournalList = ({
         </AnimatePresence>
       </header>
 
-      {/* MAIN CONTENT AREA */}
+      {/* CONTENT */}
       <div className="px-4">
         
-        {/* CALENDAR VIEW */}
+        {/* CALENDAR */}
         {viewMode === 'calendar' && (
            <div className="animate-slideUp space-y-4">
              <div className="flex justify-between items-center px-1">
@@ -442,7 +450,7 @@ const JournalList = ({
            </div>
         )}
 
-        {/* RESULTS (List/Grid) */}
+        {/* LIST / GRID */}
         <motion.div 
           variants={containerVariants}
           initial="hidden"
@@ -450,7 +458,7 @@ const JournalList = ({
           className={viewMode === 'grid' ? "grid grid-cols-2 md:grid-cols-3 gap-3" : "space-y-3"}
         >
           {filteredEntries.length === 0 ? (
-             <motion.div variants={itemVariants} className="col-span-full text-center py-20 flex flex-col items-center">
+             <div className="col-span-full text-center py-20 flex flex-col items-center animate-fadeIn">
                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-300 dark:text-gray-600">
                  {viewMode === 'calendar' ? <CalendarIcon size={24} /> : <Eye size={24} />}
                </div>
@@ -462,10 +470,12 @@ const JournalList = ({
                    Create entry here
                  </button>
                )}
-             </motion.div>
+             </div>
           ) : (
             filteredEntries.map(entry => (
-              viewMode === 'grid' ? renderGridCard(entry) : renderListCard(entry)
+              viewMode === 'grid' 
+                ? <GridCard key={entry.id} entry={entry} onClick={onEdit} variants={itemVariants} />
+                : <ListCard key={entry.id} entry={entry} onClick={onEdit} variants={itemVariants} />
             ))
           )}
         </motion.div>
