@@ -1,31 +1,55 @@
-import React, { useState, useMemo } from 'react';
-import { Image as ImageIcon, Calendar, MapPin, ChevronLeft } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { 
+  Image as ImageIcon, Calendar, MapPin, ChevronLeft, 
+  Filter, Tag, Smile, X, Heart 
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBlobUrl } from '../db'; 
 
+// --- CONFIGURATION ---
+const MOODS = [
+  { value: 1, label: 'Awful', color: 'text-gray-400' },
+  { value: 2, label: 'Bad', color: 'text-blue-400' },
+  { value: 3, label: 'Sad', color: 'text-blue-500' },
+  { value: 4, label: 'Meh', color: 'text-indigo-400' },
+  { value: 5, label: 'Okay', color: 'text-indigo-500' },
+  { value: 6, label: 'Good', color: 'text-yellow-500' },
+  { value: 7, label: 'Great', color: 'text-orange-500' },
+  { value: 8, label: 'Happy', color: 'text-orange-600' },
+  { value: 9, label: 'Loved', color: 'text-pink-500' },
+  { value: 10, label: 'Amazing', color: 'text-red-500' },
+];
+
+// --- UTILS ---
+const triggerHaptic = () => {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    navigator.vibrate(10); // Light tap
+  }
+};
+
 // --- HELPER COMPONENTS ---
 
-// 1. Grid Item Helper
+// 1. Masonry Item Helper
 const GalleryItem = ({ image, onClick }) => {
   const url = useBlobUrl(image.src); 
   
   return (
     <motion.button
       layoutId={`img-${image.id}`} 
-      onClick={onClick}
+      onClick={() => { triggerHaptic(); onClick(); }}
       whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.95 }}
-      className="aspect-square rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 relative group cursor-pointer border border-transparent hover:border-black/5 dark:hover:border-white/10"
+      whileTap={{ scale: 0.98 }}
+      className="w-full mb-3 break-inside-avoid rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 relative group cursor-pointer border border-transparent hover:border-black/5 dark:hover:border-white/10"
     >
       {url ? (
         <img
           src={url}
           alt="Memory"
           loading="lazy"
-          className="w-full h-full object-cover transition-transform duration-700"
+          className="w-full h-auto object-cover block" // h-auto preserves aspect ratio for Masonry
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-gray-300 dark:text-gray-600 bg-gray-100 dark:bg-gray-800">
+        <div className="w-full aspect-square flex items-center justify-center text-gray-300 dark:text-gray-600 bg-gray-100 dark:bg-gray-800">
            <ImageIcon size={24} />
         </div>
       )}
@@ -52,12 +76,39 @@ const LightboxImage = ({ src }) => {
 
 const MediaGallery = ({ entries }) => {
   const [selectedImage, setSelectedImage] = useState(null);
+  
+  // Filter State
+  const [activeFilter, setActiveFilter] = useState({ type: 'all', value: null });
 
-  // --- DATA PROCESSING ---
+  // --- DERIVED DATA ---
+  
+  // 1. Extract Unique Tags & Moods from entries containing images
+  const { uniqueTags, uniqueMoods } = useMemo(() => {
+    const tags = new Set();
+    const moods = new Set();
+    
+    entries.forEach(e => {
+      if (e.images && e.images.length > 0) {
+        if (e.tags) e.tags.forEach(t => tags.add(t));
+        if (e.mood) moods.add(e.mood);
+      }
+    });
+
+    return {
+      uniqueTags: Array.from(tags).sort(),
+      uniqueMoods: Array.from(moods).sort((a, b) => b - a), // Best moods first
+    };
+  }, [entries]);
+
+  // 2. Filter & Group Data
   const galleryData = useMemo(() => {
-    const allImages = entries.reduce((acc, entry) => {
+    const filteredImages = entries.reduce((acc, entry) => {
       const imgs = Array.isArray(entry.images) ? entry.images : [];
       if (imgs.length === 0) return acc;
+
+      // Apply Filters
+      if (activeFilter.type === 'tag' && !entry.tags?.includes(activeFilter.value)) return acc;
+      if (activeFilter.type === 'mood' && entry.mood !== activeFilter.value) return acc;
       
       const dateObj = new Date(entry.date);
       
@@ -67,16 +118,17 @@ const MediaGallery = ({ entries }) => {
         entryId: entry.id,
         date: dateObj,
         location: entry.location,
-        weather: entry.weather
+        weather: entry.weather,
+        mood: entry.mood
       }))];
     }, []);
 
     // Sort newest first
-    allImages.sort((a, b) => b.date - a.date);
+    filteredImages.sort((a, b) => b.date - a.date);
 
-    // Group
+    // Group by Year -> Month
     const groups = {};
-    allImages.forEach(img => {
+    filteredImages.forEach(img => {
       const year = img.date.getFullYear();
       const month = img.date.toLocaleString('default', { month: 'long' });
       
@@ -87,9 +139,19 @@ const MediaGallery = ({ entries }) => {
     });
 
     return groups;
-  }, [entries]);
+  }, [entries, activeFilter]);
 
   const years = Object.keys(galleryData).sort((a, b) => b - a);
+
+  // --- HANDLERS ---
+  const handleFilterClick = (type, value) => {
+    triggerHaptic();
+    if (activeFilter.type === type && activeFilter.value === value) {
+      setActiveFilter({ type: 'all', value: null }); // Toggle off
+    } else {
+      setActiveFilter({ type, value });
+    }
+  };
 
   const formatFullDate = (date) => {
     return date.toLocaleDateString(undefined, { 
@@ -103,12 +165,7 @@ const MediaGallery = ({ entries }) => {
   // --- ANIMATION VARIANTS ---
   const containerVariants = {
     hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
+    show: { opacity: 1, transition: { staggerChildren: 0.05 } }
   };
 
   const itemVariants = {
@@ -118,25 +175,87 @@ const MediaGallery = ({ entries }) => {
 
   return (
     <div className="pb-24 bg-[#F3F4F6] dark:bg-gray-950 min-h-screen transition-colors">
+      
       {/* --- STICKY HEADER --- */}
-      <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 transition-colors">
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }} 
-          animate={{ opacity: 1, y: 0 }}
-          className="flex justify-between items-start"
-        >
-          <div>
-            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Media</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1 font-medium">
-                {Object.values(galleryData).reduce((acc, year) => 
-                    acc + Object.values(year).reduce((c, m) => c + m.length, 0), 0
-                )} photos
-            </p>
-          </div>
-        </motion.div>
+      <header className="sticky top-0 z-20 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-800/50 transition-colors">
+        <div className="px-6 pt-6 pb-2">
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }} 
+            animate={{ opacity: 1, y: 0 }}
+            className="flex justify-between items-start"
+          >
+            <div>
+              <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Media</h1>
+              <p className="text-gray-500 dark:text-gray-400 text-sm mt-1 font-medium">
+                  {Object.values(galleryData).reduce((acc, year) => 
+                      acc + Object.values(year).reduce((c, m) => c + m.length, 0), 0
+                  )} photos
+              </p>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* --- SMART FILTERS (SCROLLABLE) --- */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-6 pb-3 pt-2">
+          
+          {/* Clear Filter Button (only shows when active) */}
+          <AnimatePresence>
+            {activeFilter.type !== 'all' && (
+              <motion.button
+                initial={{ scale: 0, width: 0 }}
+                animate={{ scale: 1, width: 'auto' }}
+                exit={{ scale: 0, width: 0 }}
+                onClick={() => handleFilterClick('all', null)}
+                className="flex items-center gap-1 pr-3 pl-2 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold border border-red-100 dark:border-red-900 flex-shrink-0"
+              >
+                <X size={14} /> Clear
+              </motion.button>
+            )}
+          </AnimatePresence>
+
+          {/* Mood Filters */}
+          {uniqueMoods.map(moodVal => {
+            const mood = MOODS.find(m => m.value === moodVal);
+            if (!mood) return null;
+            const isActive = activeFilter.type === 'mood' && activeFilter.value === moodVal;
+            return (
+              <button
+                key={`mood-${moodVal}`}
+                onClick={() => handleFilterClick('mood', moodVal)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all flex-shrink-0 ${
+                  isActive 
+                    ? 'bg-[var(--accent-50)] dark:bg-gray-800 border-[var(--accent-500)] text-[var(--accent-600)] dark:text-[var(--accent-400)] shadow-sm' 
+                    : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-700'
+                }`}
+              >
+                <Smile size={12} className={isActive ? 'text-[var(--accent-500)]' : mood.color} />
+                {mood.label}
+              </button>
+            );
+          })}
+
+          {/* Tag Filters */}
+          {uniqueTags.map(tag => {
+            const isActive = activeFilter.type === 'tag' && activeFilter.value === tag;
+            return (
+              <button
+                key={`tag-${tag}`}
+                onClick={() => handleFilterClick('tag', tag)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all flex-shrink-0 ${
+                  isActive 
+                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                    : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-700'
+                }`}
+              >
+                <Tag size={12} className={isActive ? 'fill-current' : ''} />
+                #{tag}
+              </button>
+            );
+          })}
+        </div>
       </header>
 
-      {/* --- GALLERY GRID --- */}
+      {/* --- GALLERY MASONRY --- */}
       <div className="px-6 pt-4 space-y-8">
         {years.length === 0 ? (
           <motion.div 
@@ -145,9 +264,16 @@ const MediaGallery = ({ entries }) => {
             className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600"
           >
             <div className="w-16 h-16 bg-gray-100 dark:bg-gray-900 rounded-full flex items-center justify-center mb-4 text-gray-300 dark:text-gray-700">
-                <ImageIcon size={24} />
+                {activeFilter.type !== 'all' ? <Filter size={24} /> : <ImageIcon size={24} />}
             </div>
-            <p className="font-medium">No photos added yet.</p>
+            <p className="font-medium">
+              {activeFilter.type !== 'all' ? 'No photos match this filter.' : 'No photos added yet.'}
+            </p>
+            {activeFilter.type !== 'all' && (
+              <button onClick={() => setActiveFilter({ type: 'all', null: null })} className="mt-2 text-[var(--accent-500)] text-sm font-bold hover:underline">
+                Clear filters
+              </button>
+            )}
           </motion.div>
         ) : (
           years.map((year) => (
@@ -158,7 +284,7 @@ const MediaGallery = ({ entries }) => {
               animate="show"
               className="space-y-6"
             >
-              <motion.h2 variants={itemVariants} className="text-2xl font-bold text-gray-300 dark:text-gray-700 border-b border-gray-100 dark:border-gray-800 pb-2 select-none">
+              <motion.h2 variants={itemVariants} className="text-2xl font-bold text-gray-300 dark:text-gray-700 border-b border-gray-100 dark:border-gray-800 pb-2 select-none sticky top-32 z-10 mix-blend-difference">
                 {year}
               </motion.h2>
               
@@ -168,7 +294,8 @@ const MediaGallery = ({ entries }) => {
                     {month}
                   </h3>
                   
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {/* MASONRY LAYOUT: Columns instead of Grid */}
+                  <div className="columns-2 md:columns-3 lg:columns-4 gap-3 space-y-3">
                     {galleryData[year][month].map((img) => (
                       <GalleryItem 
                         key={img.id} 
@@ -201,7 +328,7 @@ const MediaGallery = ({ entries }) => {
               className="px-4 py-3 flex justify-between items-center bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl z-30 border-b border-gray-100 dark:border-gray-800"
             >
               <button 
-                onClick={() => setSelectedImage(null)} 
+                onClick={() => { triggerHaptic(); setSelectedImage(null); }} 
                 className="p-2 -ml-2 text-[var(--accent-500)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 rounded-full transition-colors flex items-center gap-1"
               >
                 <ChevronLeft size={24} />
@@ -228,16 +355,32 @@ const MediaGallery = ({ entries }) => {
                   transition={{ delay: 0.2 }}
                   className="p-6 space-y-4"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] rounded-full">
-                      <Calendar size={20} />
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] rounded-full">
+                        <Calendar size={20} />
+                        </div>
+                        <div>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">Date Captured</p>
+                        <p className="text-gray-900 dark:text-white font-medium text-lg">
+                            {formatFullDate(selectedImage.date)}
+                        </p>
+                        </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">Date Captured</p>
-                      <p className="text-gray-900 dark:text-white font-medium text-lg">
-                        {formatFullDate(selectedImage.date)}
-                      </p>
-                    </div>
+                    
+                    {/* Mood Display in Lightbox */}
+                    {selectedImage.mood && (() => {
+                        const m = MOODS.find(x => x.value === selectedImage.mood);
+                        if (!m) return null;
+                        return (
+                            <div className="flex flex-col items-end">
+                                <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">Mood</span>
+                                <div className={`font-bold ${m.color} flex items-center gap-1`}>
+                                    <Smile size={16} /> {m.label}
+                                </div>
+                            </div>
+                        )
+                    })()}
                   </div>
 
                   {selectedImage.location && (
