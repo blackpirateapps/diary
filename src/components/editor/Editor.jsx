@@ -5,8 +5,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 
 // --- FIXED IMPORT PATHS ---
 import { db, useBlobUrl } from '../../db'; // Go up two levels to find db
-import EntryPdfDocument from '../EntryPdfDocument'; // Go up one level to components
-import TagInput from '../TagInput'; // Go up one level to components
+import EntryPdfDocument from './EntryPdfDocument'; // Go up one level to components
+import TagInput from './TagInput'; // Go up one level to components
 
 // --- LEXICAL IMPORTS ---
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
