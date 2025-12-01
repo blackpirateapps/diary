@@ -5,6 +5,7 @@ import { SleepPage } from './components/SleepPage';
 import { WhatsAppPage } from './components/WhatsAppPage';
 import MeditationPage from './components/MeditationPage'; 
 import YearInReviewPage from './components/YearInReviewPage'; 
+import YearInReviewPage from './components/CloudBackup'; 
 
 // --- UPDATED IMPORT PATH ---
 import Editor from './components/editor/Editor'; 
