@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { exportToZip, importFromZip } from '../db'; 
 
 // --- HELPER: R2 CLIENT ---
+// --- HELPER: R2 CLIENT ---
 const createR2Client = (creds) => {
   return new S3Client({
     region: "auto",
@@ -16,6 +17,7 @@ const createR2Client = (creds) => {
       accessKeyId: creds.accessKeyId,
       secretAccessKey: creds.secretAccessKey,
     },
+    forcePathStyle: true, // <--- ADD THIS LINE!
   });
 };
 
