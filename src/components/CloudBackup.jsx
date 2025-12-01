@@ -4,6 +4,7 @@ import {
   Loader2, Eye, EyeOff, Trash2, DownloadCloud, UploadCloud 
 } from 'lucide-react';
 import { S3Client, PutObjectCommand, ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
+import { motion, AnimatePresence } from 'framer-motion'; // <--- ADDED THIS IMPORT
 import { exportToZip, importFromZip } from '../db'; 
 
 // --- HELPER: R2 CLIENT ---
@@ -260,10 +261,15 @@ const CloudBackup = () => {
         {/* STATUS MESSAGE */}
         <AnimatePresence>
           {message && (
-            <div className={`mt-4 p-3 rounded-xl flex items-center gap-3 text-sm font-medium ${status === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className={`mt-4 p-3 rounded-xl flex items-center gap-3 text-sm font-medium ${status === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}
+            >
               {status === 'error' ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
               {message}
-            </div>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
