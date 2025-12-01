@@ -282,7 +282,11 @@ const App = () => {
             )}
             {currentRoute === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
             {currentRoute === 'stats' && <StatsPage entries={entries} isDarkMode={isDarkMode} />}
-            {currentRoute === 'media' && <MediaGallery entries={entries} />}
+            {currentRoute === 'media' && 
+            (<
+            MediaGallery entries={entries}
+            onEdit={openEditEditor}
+             />)}
             
             {/* NEW PAGES */}
             {currentRoute === 'more' && <MoreMenu navigate={navigate} />}
