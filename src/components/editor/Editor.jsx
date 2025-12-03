@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlignLeft, ChevronLeft, Trash2 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -41,12 +41,13 @@ const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: '
 
 // --- PLUGINS ---
 
-// UPDATED: Watches 'content' prop and updates editor if it changes externally (e.g. from Zen Mode)
+// Main Editor Init: Updates when content changes externally (e.g. via Zen Mode)
 const MarkdownInitPlugin = ({ content }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
     editor.update(() => {
       const current = $convertToMarkdownString(TRANSFORMERS);
+      // Only update if significantly different to avoid cursor jumps
       if (current !== content) {
          $convertFromMarkdownString(content || '', TRANSFORMERS);
       }
@@ -97,7 +98,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
   
-  // Ref tracks content for synchronous access
   const contentRef = useRef(content);
   contentRef.current = content;
 
@@ -123,15 +123,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
 
   // --- AUTO SAVE & UNSAVED CHANGES WARNING ---
-
-  // 1. Warn user if they try to refresh/close while saving
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      // Check if status is saving OR if content is different from original entry
       const isDirty = content !== (entry?.content || '');
       if (saveStatus === 'saving' || (isDirty && saveStatus !== 'saved')) {
         e.preventDefault();
-        e.returnValue = ''; // Standard browser trigger for "Leave site?" dialog
+        e.returnValue = ''; 
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -161,7 +158,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     setTimeout(() => setSaveStatus('idle'), 2500);
   }, [entryId, currentDate, mood, location, locationLat, locationLng, weather, tags, images, onSave]);
 
-  // 2. Auto-save trigger with reduced 500ms delay
   useEffect(() => {
     if (content !== (entry?.content || '')) {
       const timer = setTimeout(() => saveData(true), 500);
@@ -170,7 +166,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   }, [content, saveData, entry?.content]);
 
   // --- HANDLERS ---
-  
   const handleZenBack = (finalContent) => {
     if (typeof finalContent === 'string') {
         contentRef.current = finalContent; 
@@ -241,7 +236,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   };
 
   // --- LEXICAL CONFIG ---
-  const initialConfig = {
+  const initialConfig = useMemo(() => ({
     namespace: 'MainEditor',
     theme: {
       paragraph: 'mb-4',
@@ -265,7 +260,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
-  };
+  }), [mode]);
 
   return (
     <>

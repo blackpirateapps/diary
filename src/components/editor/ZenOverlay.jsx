@@ -1,8 +1,7 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
 
-// --- LEXICAL IMPORTS ---
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
@@ -16,32 +15,34 @@ import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
 import { CodeNode } from '@lexical/code';
-import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'; // <--- FIXED IMPORT
+import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
 // --- HELPER: INITIALIZE EDITOR WITH MARKDOWN ---
-// This plugin runs once when Zen Mode opens to load your existing text
+// FIXED: This now runs ONLY ONCE when Zen Mode mounts.
+// It ignores subsequent prop changes to prevent cursor loss while typing.
 const MarkdownInitPlugin = ({ content }) => {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
     editor.update(() => {
-      // Convert the passed Markdown string into Lexical nodes
-      $convertFromMarkdownString(content, TRANSFORMERS);
+      // Initialize content only once
+      $convertFromMarkdownString(content || '', TRANSFORMERS);
     });
-  }, []); // Run only on mount
+  }, []); // <--- Empty dependency array ensures this runs only on mount
 
   return null;
 };
 
 // --- HELPER: SYNC CHANGES BACK TO MARKDOWN ---
-// This plugin watches for typing and updates your app's state
-const MarkdownSyncPlugin = ({ onChange }) => {
+const MarkdownSyncPlugin = ({ onChange, contentRef }) => {
   return (
     <OnChangePlugin
       onChange={(editorState) => {
         editorState.read(() => {
-          // Convert Lexical nodes back to Markdown string
           const markdown = $convertToMarkdownString(TRANSFORMERS);
+          // Sync ref for immediate "Back" button access
+          if (contentRef) contentRef.current = markdown;
+          // Sync state for auto-save
           onChange(markdown);
         });
       }}
@@ -53,8 +54,16 @@ const MarkdownSyncPlugin = ({ onChange }) => {
 const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
   if (!isActive) return null;
 
-  // Lexical Configuration
-  const initialConfig = {
+  // Track latest content locally to bypass React state delay on exit
+  const contentRef = useRef(content);
+  
+  // Ensure ref is synced when component mounts
+  useEffect(() => {
+      contentRef.current = content;
+  }, []);
+
+  // FIXED: Memoize config to prevent re-initialization on re-renders
+  const initialConfig = useMemo(() => ({
     namespace: 'ZenEditor',
     theme: {
       paragraph: 'mb-4',
@@ -74,7 +83,6 @@ const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
         underline: 'underline',
       }
     },
-    // Register the nodes we want to support
     nodes: [
       HeadingNode, 
       QuoteNode, 
@@ -84,7 +92,7 @@ const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
       CodeNode
     ],
     onError: (error) => console.error(error),
-  };
+  }), []); // Empty deps, created once per mount
 
   return (
     <AnimatePresence>
@@ -111,7 +119,7 @@ const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
         {/* TOP BAR */}
         <div className="w-full max-w-2xl px-6 pt-6 pb-2 flex-shrink-0">
           <button 
-            onClick={onBack}
+            onClick={() => onBack(contentRef.current)}
             className="flex items-center gap-2 text-gray-400 hover:text-[var(--accent-500)] transition-colors"
           >
             <ChevronLeft size={24} />
@@ -137,19 +145,17 @@ const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
                     Start writing...
                   </div>
                 }
-                ErrorBoundary={LexicalErrorBoundary} // <--- FIXED USAGE
+                ErrorBoundary={LexicalErrorBoundary}
               />
               
               {/* Plugins */}
               <HistoryPlugin />
               <ListPlugin />
-              
-              {/* This enables Markdown shortcuts (e.g. typing "# " makes a header) */}
               <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
               
-              {/* Our Custom Sync Plugins */}
+              {/* Custom Sync Plugins */}
               <MarkdownInitPlugin content={content} />
-              <MarkdownSyncPlugin onChange={setContent} />
+              <MarkdownSyncPlugin onChange={setContent} contentRef={contentRef} />
               
             </LexicalComposer>
 
