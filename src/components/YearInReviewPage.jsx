@@ -1,42 +1,39 @@
 import React, { useState } from 'react';
-import { Page, Text, View, Document, StyleSheet, PDFDownloadLink, Image, Font } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, PDFDownloadLink, Image } from '@react-pdf/renderer';
 import { ChevronLeft, FileDown, Loader2, Book, User } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 
-// --- 1. CONFIGURATION & STYLES ---
-
-// Register a standard font (Helvetica is built-in, but we define weights for "Markdown" feel)
+// --- 1. STYLES (Ported from EntryPdfDocument) ---
 const styles = StyleSheet.create({
-  // Base Layout
-  page: { 
-    paddingTop: 50, 
-    paddingBottom: 50, 
-    paddingLeft: 50, 
-    paddingRight: 50, 
-    fontFamily: 'Helvetica', 
+  // Base Page
+  page: {
+    padding: 40,
     backgroundColor: '#ffffff',
+    fontFamily: 'Times-Roman',
     fontSize: 11,
-    lineHeight: 1.5,
-    color: '#333'
+    lineHeight: 1.3,
+    color: '#1f2937'
   },
   
-  // Cover Page
+  // Cover Page Specifics
   coverPage: { 
     flex: 1, 
     alignItems: 'center', 
     justifyContent: 'center', 
-    backgroundColor: '#f9fafb' // Light gray
+    backgroundColor: '#ffffff',
+    fontFamily: 'Times-Roman',
   },
   coverTitle: { 
     fontSize: 36, 
-    fontWeight: 'bold', 
+    fontFamily: 'Times-Bold', 
     marginBottom: 20, 
     textAlign: 'center',
     color: '#111827'
   },
   coverAuthor: { 
     fontSize: 18, 
+    fontFamily: 'Times-Italic',
     color: '#4b5563', 
     marginBottom: 10 
   },
@@ -46,59 +43,96 @@ const styles = StyleSheet.create({
     marginTop: 40 
   },
 
-  // Table of Contents
-  tocTitle: { fontSize: 24, marginBottom: 20, fontWeight: 'bold' },
-  tocRow: { flexDirection: 'row', justifyContent: 'space-between', borderBottom: '1px dotted #ccc', marginBottom: 5, paddingBottom: 2 },
-  tocDate: { fontSize: 11 },
-  tocMood: { fontSize: 11, color: '#666' },
-
-  // Entries
-  entryContainer: { 
-    marginBottom: 30, 
-    paddingBottom: 20, 
-    borderBottom: '1px solid #e5e7eb' 
+  // TOC
+  tocTitle: { fontSize: 24, fontFamily: 'Times-Bold', marginBottom: 20 },
+  tocRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    borderBottomWidth: 0.5, 
+    borderBottomColor: '#e5e7eb', 
+    marginBottom: 5, 
+    paddingBottom: 2 
   },
-  
-  // Metadata Header
-  metaHeader: {
+
+  // --- ENTRY STYLING (Direct Match) ---
+  entryContainer: {
+    marginBottom: 25,
+    paddingBottom: 20,
+    borderBottomWidth: 1, // Separator between days
+    borderBottomColor: '#e5e7eb'
+  },
+  header: {
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#9ca3af',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
-    backgroundColor: '#f3f4f6',
-    padding: 8,
-    borderRadius: 4
+    alignItems: 'flex-start'
   },
-  dateText: { fontSize: 14, fontWeight: 'bold', color: '#111827' },
-  metaRow: { flexDirection: 'row', gap: 10, fontSize: 9, color: '#4b5563', marginTop: 4 },
+  headerLeft: { flexDirection: 'column', maxWidth: '70%' },
+  headerRight: { flexDirection: 'column', alignItems: 'flex-end', maxWidth: '30%', marginTop: 6 },
+  date: { fontSize: 22, fontFamily: 'Times-Bold', color: '#111827', marginBottom: 2, lineHeight: 1 },
+  time: { color: '#6b7280', fontSize: 10, fontFamily: 'Times-Roman' },
   
-  // Content (Markdown Mappings)
-  h1: { fontSize: 18, fontWeight: 'bold', marginTop: 15, marginBottom: 8, color: '#111827' },
-  h2: { fontSize: 16, fontWeight: 'bold', marginTop: 12, marginBottom: 6, color: '#374151' },
-  paragraph: { fontSize: 11, marginBottom: 8, textAlign: 'justify' },
-  listItem: { flexDirection: 'row', marginBottom: 4, paddingLeft: 10 },
-  bullet: { width: 10, fontSize: 11 },
-  bold: { fontWeight: 'bold', fontFamily: 'Helvetica-Bold' },
-  italic: { fontStyle: 'italic', fontFamily: 'Helvetica-Oblique' },
-
-  // Images
-  imageSection: { marginTop: 10, marginBottom: 10 },
-  imageWrapper: { marginBottom: 10, alignItems: 'center' },
-  entryImage: { 
-    width: '100%', 
-    maxHeight: 400, 
-    objectFit: 'contain' // PREVENTS CROPPING
+  metaContainer: {
+    flexDirection: 'row',
+    gap: 15,
+    marginBottom: 10,
+    fontSize: 10,
+    color: '#4b5563'
   },
+  metaItem: { flexDirection: 'row', alignItems: 'center' },
 
-  // Sleep Widget (Simulated)
-  sleepBox: {
+  // Body & Markdown
+  body: { marginBottom: 15, textAlign: 'justify' },
+  h1: { fontSize: 16, fontFamily: 'Times-Bold', marginTop: 8, marginBottom: 2, color: '#111827' },
+  h2: { fontSize: 13, fontFamily: 'Times-Bold', marginTop: 6, marginBottom: 2, color: '#374151' },
+  paragraph: { marginBottom: 4 },
+  bold: { fontFamily: 'Times-Bold' },
+  italic: { fontFamily: 'Times-Italic' },
+  listItem: { flexDirection: 'row', marginBottom: 2, paddingLeft: 10 },
+  bullet: { width: 10, fontFamily: 'Times-Bold' },
+
+  // Section Headers
+  sectionTitle: {
+    fontSize: 12,
+    fontFamily: 'Times-Bold',
+    color: '#111827',
     marginTop: 10,
-    padding: 10,
-    border: '1px solid #e0e7ff',
-    backgroundColor: '#eef2ff',
-    borderRadius: 4,
+    marginBottom: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e5e7eb',
+    paddingBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
   },
-  sleepTitle: { fontSize: 10, fontWeight: 'bold', color: '#4338ca', marginBottom: 4 },
-  sleepText: { fontSize: 9, color: '#3730a3' },
+
+  // Sleep Layout
+  sleepContainer: {
+    marginBottom: 8,
+    padding: 8,
+    backgroundColor: '#f9fafb',
+    borderRadius: 4,
+    borderLeftWidth: 2,
+    borderLeftColor: '#6b7280'
+  },
+  sleepRow: { flexDirection: 'row', marginBottom: 1, fontSize: 10 },
+  sleepLabel: { fontFamily: 'Times-Bold', width: 80, color: '#374151' },
+  sleepValue: { fontFamily: 'Times-Roman', color: '#111827' },
+
+  // Gallery Grid
+  galleryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  imageWrapper: {
+    width: '30%',
+    height: 150,
+    marginBottom: 10,
+    borderRadius: 2,
+    backgroundColor: '#f9fafb',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  image: { width: '100%', height: '100%', objectFit: 'contain' },
 
   // Footer
   pageNumber: {
@@ -114,7 +148,11 @@ const styles = StyleSheet.create({
 
 // --- 2. HELPERS ---
 
-// Helper to convert images for PDF
+const formatTime = (dateObj) => {
+  return dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+};
+
+// Data preparation for PDF
 const processEntriesForPdf = async (entries, sleepSessions) => {
   return Promise.all(entries.map(async (entry) => {
     let processedImages = [];
@@ -123,7 +161,7 @@ const processEntriesForPdf = async (entries, sleepSessions) => {
         if (img instanceof Blob) {
           return new Promise((resolve) => {
             const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result); // Get Base64
+            reader.onloadend = () => resolve(reader.result);
             reader.readAsDataURL(img);
           });
         }
@@ -131,7 +169,7 @@ const processEntriesForPdf = async (entries, sleepSessions) => {
       }));
     }
 
-    // Attach Sleep Data for this specific date
+    // Attach Sleep Data
     const entryDate = new Date(entry.date).toDateString();
     const sleep = sleepSessions.filter(s => new Date(s.startTime).toDateString() === entryDate);
 
@@ -139,27 +177,29 @@ const processEntriesForPdf = async (entries, sleepSessions) => {
   }));
 };
 
-const formatSleepRange = (startTime, durationHours) => {
-  const start = new Date(startTime);
-  const end = new Date(startTime + (durationHours * 60 * 60 * 1000));
-  return `${start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - ${end.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
-};
-
-// --- 3. CUSTOM MARKDOWN RENDERER FOR PDF ---
-// Splits text into simple blocks for Headings, Lists, and Paragraphs
+// --- 3. MARKDOWN RENDERER (Updated to match EntryPdf styling) ---
 const MarkdownPdfRenderer = ({ content }) => {
   if (!content) return null;
 
   const lines = content.split('\n');
 
+  // Simple inline parser
+  const parseInlineStyles = (text) => {
+    const parts = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) return <Text key={i} style={styles.bold}>{part.slice(2, -2)}</Text>;
+      if (part.startsWith('*') && part.endsWith('*')) return <Text key={i} style={styles.italic}>{part.slice(1, -1)}</Text>;
+      return <Text key={i}>{part}</Text>;
+    });
+  };
+
   return (
     <View>
       {lines.map((line, index) => {
-        // Headings
         if (line.startsWith('# ')) return <Text key={index} style={styles.h1}>{line.replace('# ', '')}</Text>;
         if (line.startsWith('## ')) return <Text key={index} style={styles.h2}>{line.replace('## ', '')}</Text>;
         
-        // List Items
+        // List styling
         if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
           return (
             <View key={index} style={styles.listItem}>
@@ -169,26 +209,12 @@ const MarkdownPdfRenderer = ({ content }) => {
           );
         }
 
-        // Empty lines
-        if (line.trim() === '') return <View key={index} style={{ height: 8 }} />;
+        if (line.trim() === '') return <View key={index} style={{ height: 4 }} />;
 
-        // Standard Paragraph
         return <Text key={index} style={styles.paragraph}>{parseInlineStyles(line)}</Text>;
       })}
     </View>
   );
-};
-
-// Simple parser for **bold** within lines. 
-// Note: React-PDF Text doesn't support nested Views, but supports nested Text.
-const parseInlineStyles = (text) => {
-  const parts = text.split(/(\*\*.*?\*\*)/g); // Split by bold markers
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <Text key={i} style={styles.bold}>{part.slice(2, -2)}</Text>;
-    }
-    return <Text key={i}>{part}</Text>;
-  });
 };
 
 
@@ -201,88 +227,117 @@ const JournalDocument = ({ year, entries, bookTitle, authorName }) => {
       <Page size="A4" style={styles.coverPage}>
         <View>
           <Text style={styles.coverTitle}>{bookTitle}</Text>
-          <Text style={{...styles.coverTitle, fontSize: 24, fontWeight: 'normal'}}>{year}</Text>
-          <View style={{ width: 100, height: 2, backgroundColor: '#333', marginVertical: 20, alignSelf: 'center' }} />
+          <Text style={{...styles.coverTitle, fontSize: 24, fontFamily: 'Times-Roman'}}>{year}</Text>
+          <View style={{ width: 100, height: 1, backgroundColor: '#333', marginVertical: 20, alignSelf: 'center' }} />
           <Text style={styles.coverAuthor}>{authorName}</Text>
           <Text style={styles.coverYear}>Generated via Journal App</Text>
         </View>
       </Page>
 
-      {/* B. INDEX / TABLE OF CONTENTS */}
+      {/* B. INDEX */}
       <Page size="A4" style={styles.page}>
         <Text style={styles.tocTitle}>Index</Text>
         {entries.map((entry, idx) => (
           <View key={idx} style={styles.tocRow}>
-            <Text style={styles.tocDate}>
-              {new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' })}
+            <Text style={{ fontFamily: 'Times-Bold' }}>
+              {new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
             </Text>
-            <Text style={styles.tocMood}>
-              {entry.mood ? `Mood: ${entry.mood}/10` : ''} • {entry.location || 'No Location'}
+            <Text style={{ fontFamily: 'Times-Italic', color: '#6b7280' }}>
+               {entry.mood || 'No Mood'} • {entry.location || ''}
             </Text>
           </View>
         ))}
-        {/* Page numbering handled by Footer */}
-        <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => (
-          `${pageNumber} / ${totalPages}`
-        )} fixed />
+        <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => (`${pageNumber} / ${totalPages}`)} fixed />
       </Page>
 
-      {/* C. ENTRIES (Auto Pagination) */}
+      {/* C. ENTRIES (Continuous Flow) */}
       <Page size="A4" style={styles.page} wrap>
-        {entries.map((entry, index) => (
-          <View key={index} style={styles.entryContainer} break={index > 0}> 
-            {/* break={true} forces new page per entry if you prefer, or remove it to flow continuously */}
-            
-            {/* 1. Header Block */}
-            <View style={styles.metaHeader} wrap={false}>
-              <View>
-                <Text style={styles.dateText}>
-                  {new Date(entry.date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-                </Text>
-                <View style={styles.metaRow}>
-                   <Text>{new Date(entry.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
-                   {entry.location && <Text>•   {entry.location}</Text>}
-                   {entry.weather && <Text>•   {entry.weather}</Text>}
+        {entries.map((entry, index) => {
+            const dateObj = new Date(entry.date);
+            const dateString = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+            const timeString = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+            return (
+                <View key={index} style={styles.entryContainer} wrap={false}> 
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <View style={styles.headerLeft}>
+                            <Text style={styles.date}>{dateString}</Text>
+                            <Text style={styles.time}>{timeString}</Text>
+                        </View>
+                        {(entry.location || entry.weather) && (
+                            <View style={styles.headerRight}>
+                                <Text style={{ fontFamily: 'Times-Bold', textAlign: 'right' }}>{entry.location}</Text>
+                                {entry.weather && <Text style={{ color: '#6b7280', fontSize: 10, textAlign: 'right' }}>{entry.weather}</Text>}
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Meta (Mood/Tags) */}
+                    <View style={styles.metaContainer}>
+                        <View style={styles.metaItem}>
+                            <Text style={{ fontFamily: 'Times-Bold' }}>Mood: </Text>
+                            <Text>{entry.mood || 'Neutral'}</Text>
+                        </View>
+                        {entry.tags && entry.tags.length > 0 && (
+                            <View style={[styles.metaItem, { marginLeft: 20 }]}>
+                                <Text style={{ fontFamily: 'Times-Bold' }}>Tags: </Text>
+                                <Text>{entry.tags.join(', ')}</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Content */}
+                    <View style={styles.body}>
+                         <MarkdownPdfRenderer content={entry.content} />
+                    </View>
+
+                    {/* Sleep Data (Styled like EntryPdf) */}
+                    {entry.sleep && entry.sleep.length > 0 && (
+                        <View wrap={false} style={{ marginTop: 5 }}>
+                            <Text style={styles.sectionTitle}>Sleep Insights</Text>
+                            {entry.sleep.map((session, sIdx) => {
+                                const start = new Date(session.startTime);
+                                const end = new Date(session.startTime + (session.duration * 60 * 60 * 1000));
+                                
+                                return (
+                                    <View key={sIdx} style={styles.sleepContainer}>
+                                        <View style={styles.sleepRow}>
+                                            <Text style={styles.sleepLabel}>Sleep Time:</Text>
+                                            <Text style={styles.sleepValue}>{formatTime(start)} — {formatTime(end)}</Text>
+                                        </View>
+                                        <View style={styles.sleepRow}>
+                                            <Text style={styles.sleepLabel}>Duration:</Text>
+                                            <Text style={styles.sleepValue}>{session.duration.toFixed(1)} hours</Text>
+                                        </View>
+                                        {session.deepSleepPerc !== undefined && (
+                                            <View style={styles.sleepRow}>
+                                                <Text style={styles.sleepLabel}>Deep Sleep:</Text>
+                                                <Text style={styles.sleepValue}>{(session.deepSleepPerc * 100).toFixed(0)}%</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    )}
+
+                    {/* Images (Grid Layout) */}
+                    {entry.images && entry.images.length > 0 && (
+                        <View wrap={false}>
+                            <Text style={styles.sectionTitle}>Attachments</Text>
+                            <View style={styles.galleryGrid}>
+                                {entry.images.map((imgSrc, iIdx) => (
+                                    <View key={iIdx} style={styles.imageWrapper}>
+                                        <Image src={imgSrc} style={styles.image} />
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
                 </View>
-              </View>
-              {entry.mood && (
-                <View style={{ alignItems: 'flex-end' }}>
-                   <Text style={{ fontSize: 18, fontWeight: 'bold' }}>{entry.mood}</Text>
-                   <Text style={{ fontSize: 9, color: '#6b7280' }}>MOOD</Text>
-                </View>
-              )}
-            </View>
-
-            {/* 2. Sleep Data (If exists) */}
-            {entry.sleep && entry.sleep.length > 0 && (
-               <View style={styles.sleepBox} wrap={false}>
-                  <Text style={styles.sleepTitle}>SLEEP SESSION</Text>
-                  {entry.sleep.map((s, i) => (
-                    <Text key={i} style={styles.sleepText}>
-                      • {formatSleepRange(s.startTime, s.duration)} ({s.duration.toFixed(1)}h)
-                    </Text>
-                  ))}
-               </View>
-            )}
-
-            {/* 3. Markdown Content */}
-            <View style={{ marginTop: 10 }}>
-               <MarkdownPdfRenderer content={entry.content} />
-            </View>
-
-            {/* 4. Images (Full Width, Contained) */}
-            {entry.images && entry.images.length > 0 && (
-              <View style={styles.imageSection}>
-                {entry.images.map((img, i) => (
-                   <View key={i} style={styles.imageWrapper} wrap={false}>
-                      <Image src={img} style={styles.entryImage} />
-                   </View>
-                ))}
-              </View>
-            )}
-            
-          </View>
-        ))}
+            );
+        })}
 
         {/* Footer on Every Page */}
         <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => (
@@ -316,10 +371,10 @@ const YearInReviewPage = ({ navigate }) => {
       // 1. Get Entries
       const rawEntries = await db.entries
         .filter(e => new Date(e.date).getFullYear() === selectedYear)
-        .reverse() // Chronological for book (or reverse if you prefer)
+        .reverse()
         .toArray();
       
-      // Chronological order usually better for reading a book
+      // Chronological order for a book
       rawEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
 
       // 2. Get Sleep Sessions
