@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, User, Trash2, Camera, Heart, Calendar, X, ChevronLeft, MapPin, 
   Cake, Star, Gift, Briefcase, Home, Music, Image as ImageIcon 
@@ -456,10 +456,23 @@ export const PeoplePage = ({ navigate, onEdit }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
+  // --- AUTO-NAVIGATION HANDLER ---
+  useEffect(() => {
+    const jumpId = localStorage.getItem('open_person_id');
+    if (jumpId) {
+      // Small delay to ensure data is loaded if coming from cold start
+      setTimeout(() => {
+        const target = people.find(p => p.id === jumpId);
+        if (target) {
+          setSelectedPerson(target);
+          localStorage.removeItem('open_person_id');
+        }
+      }, 100);
+    }
+  }, [people]);
+
   const handleSave = async (data) => {
     if (!data.name.trim()) return alert("Name is required");
-    
-    // FIX: DIRECTLY USE DATA TO PRESERVE BLOBS
     const personData = { ...data };
     
     if (personData.id) {
