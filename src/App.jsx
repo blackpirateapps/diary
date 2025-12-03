@@ -6,7 +6,6 @@ import { WhatsAppPage } from './components/WhatsAppPage';
 import MeditationPage from './components/MeditationPage'; 
 import YearInReviewPage from './components/YearInReviewPage'; 
 import PrivacyPolicy from './components/PrivacyPolicy';
-// --- UPDATED IMPORT PATH ---
 import Editor from './components/editor/Editor'; 
 
 import JournalList from './components/JournalList';
@@ -22,7 +21,13 @@ import {
   Home,
   Map as MapIcon, 
   Trash2,
-  Menu 
+  Menu,
+  Settings,
+  Book,
+  Moon,
+  MessageCircle,
+  Coffee,
+  Calendar
 } from 'lucide-react';
 
 // --- THEME ENGINE CONSTANTS ---
@@ -49,7 +54,6 @@ const App = () => {
       if (saved) {
         const { googleFontUrl } = JSON.parse(saved);
         if (googleFontUrl && googleFontUrl.startsWith('http')) {
-           // Remove old link if exists
            const oldLink = document.getElementById('zen-font-link');
            if (oldLink) oldLink.remove();
 
@@ -61,11 +65,7 @@ const App = () => {
         }
       }
     };
-    
-    // Load on mount
     loadFont();
-
-    // Listen for changes from SettingsPage
     window.addEventListener('zen-settings-changed', loadFont);
     return () => window.removeEventListener('zen-settings-changed', loadFont);
   }, []);
@@ -75,7 +75,6 @@ const App = () => {
     const root = document.documentElement;
     const colors = ACCENT_COLORS[accentColor] || ACCENT_COLORS.blue;
 
-    // 1. Handle Dark Mode Class
     if (isDarkMode) {
       root.classList.add('dark');
       localStorage.setItem('app_theme', 'dark');
@@ -84,7 +83,6 @@ const App = () => {
       localStorage.setItem('app_theme', 'light');
     }
 
-    // 2. Inject CSS Variables for Accent Colors
     root.style.setProperty('--accent-50', colors[50]);
     root.style.setProperty('--accent-100', colors[100]);
     root.style.setProperty('--accent-200', colors[200]);
@@ -162,7 +160,6 @@ const App = () => {
     }
   };
 
-  // --- EDITOR HANDLING ---
   const openNewEditor = (date = new Date()) => {
     const dateStr = date.toDateString();
     const existing = entries.find(e => new Date(e.date).toDateString() === dateStr);
@@ -187,7 +184,6 @@ const App = () => {
     e.target.value = '';
   };
 
-  // --- IMPORT/EXPORT HANDLERS ---
   const handleExport = async () => {
     try {
       await exportToZip(true);
@@ -226,120 +222,157 @@ const App = () => {
     }
   };
 
-  // Helper to determine if a route belongs to the "More" tab
   const isMoreRoute = ['more', 'settings', 'about', 'themes'].includes(currentRoute);
 
+  // --- SIDEBAR NAV COMPONENT (DESKTOP) ---
+  const SidebarItem = ({ route, icon: Icon, label, activeCheck }) => (
+    <button
+      onClick={() => { navigate(route); setShowFlashback(false); }}
+      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+        activeCheck 
+          ? 'bg-[var(--accent-100)] text-[var(--accent-700)] dark:bg-[var(--accent-900)] dark:text-[var(--accent-300)]' 
+          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+      }`}
+    >
+      <Icon size={18} />
+      {label}
+    </button>
+  );
+
   return (
-    <div className="min-h-screen bg-[#F3F4F6] dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-300">
-      <div className="max-w-xl mx-auto min-h-screen relative pb-16">
+    <div className="min-h-screen bg-[#F3F4F6] dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-300 flex">
+      
+      {/* --- DESKTOP SIDEBAR --- */}
+      <aside className="hidden md:flex flex-col w-64 fixed h-full bg-[#f8f9fa] dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 p-4 z-50">
+        <div className="mb-8 px-2">
+           <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
+              <Book className="text-[var(--accent-500)]" size={24} />
+              {appName}
+           </h1>
+        </div>
         
-        {/* IMPORT SPINNER */}
-        {isImporting && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-slideUp">
-              <div className="w-8 h-8 border-4 border-[var(--accent-500)] border-t-transparent rounded-full animate-spin"></div>
-              <p className="font-semibold text-gray-700 dark:text-gray-200">Processing backup...</p>
-            </div>
-          </div>
-        )}
+        <nav className="space-y-1 flex-1">
+          <SidebarItem route="journal" icon={Home} label="Journal" activeCheck={currentRoute === 'journal'} />
+          <SidebarItem route="map" icon={MapIcon} label="Atlas" activeCheck={currentRoute === 'map'} />
+          <SidebarItem route="stats" icon={BarChart2} label="Insights" activeCheck={currentRoute === 'stats'} />
+          <SidebarItem route="media" icon={Grid} label="Media Gallery" activeCheck={currentRoute === 'media'} />
+          
+          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Wellbeing</div>
+          <SidebarItem route="sleep" icon={Moon} label="Sleep Tracker" activeCheck={currentRoute === 'sleep'} />
+          <SidebarItem route="meditation" icon={Coffee} label="Meditation" activeCheck={currentRoute === 'meditation'} />
+          <SidebarItem route="year-review" icon={Calendar} label="Year in Review" activeCheck={currentRoute === 'year-review'} />
+        </nav>
 
-        {/* ERROR MODAL */}
-        {importError && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl max-w-sm w-full animate-slideUp">
-              <div className="flex items-center gap-3 text-red-500 mb-2">
-                <Trash2 size={24} />
-                <h3 className="font-bold text-lg">Import Failed</h3>
+        <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+           <SidebarItem route="settings" icon={Settings} label="Settings" activeCheck={currentRoute === 'settings'} />
+        </div>
+      </aside>
+
+      {/* --- MAIN CONTENT AREA --- */}
+      <div className="flex-1 w-full min-h-screen md:pl-64 transition-all">
+        <div className="max-w-xl md:max-w-full mx-auto pb-20 md:pb-8 relative min-h-screen">
+          
+          {/* IMPORT SPINNER */}
+          {isImporting && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-slideUp">
+                <div className="w-8 h-8 border-4 border-[var(--accent-500)] border-t-transparent rounded-full animate-spin"></div>
+                <p className="font-semibold text-gray-700 dark:text-gray-200">Processing backup...</p>
               </div>
-              <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">{importError}</p>
-              <button onClick={() => setImportError(null)} className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-white font-medium py-2 rounded-xl">Close</button>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* --- PAGE ROUTING --- */}
-        {showFlashback ? (
-          <FlashbackPage 
-            entries={entries} 
-            onBack={() => setShowFlashback(false)} 
-            onEdit={(entry) => { setShowFlashback(false); openEditEditor(entry); }}
-          />
-        ) : (
-          <>
-            {currentRoute === 'journal' && (
-              <JournalList
-                entries={entries}
-                appName={appName}
-                onEdit={openEditEditor}
-                onCreate={() => openNewEditor()}
-                onAddOld={() => dateInputRef.current?.showPicker()}
-                onImport={handleImport}
-                onExport={handleExport}
-                isOffline={isOffline}
-                isImporting={isImporting}
-                onOpenFlashback={() => setShowFlashback(true)} 
-              />
-            )}
-            {currentRoute === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
-            {currentRoute === 'stats' && <StatsPage entries={entries} isDarkMode={isDarkMode} />}
-            {currentRoute === 'media' && 
-            (<
-            MediaGallery entries={entries}
-            onEdit={openEditEditor}
-             />)}
-            
-            {/* NEW PAGES */}
-            {currentRoute === 'more' && <MoreMenu navigate={navigate} />}
-            
-            {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
-            {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
-            {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />}
-            {currentRoute === 'year-review' && <YearInReviewPage navigate={navigate} />}
-            {currentRoute === 'privacy' && <PrivacyPolicy navigate={navigate} />} {/* <--- ADD THIS */}
-            
-            {/* THEMES PAGE */}
-            {currentRoute === 'themes' && (
-              <ThemesPage 
-                navigate={navigate}
-                isDarkMode={isDarkMode}
-                setIsDarkMode={setIsDarkMode}
-                accentColor={accentColor}
-                setAccentColor={setAccentColor}
-              />
-            )}
-            
-            {currentRoute === 'settings' && (
-              <SettingsPage 
-                navigate={navigate} 
-                appName={appName} 
-                setAppName={setAppName} 
-                onExport={handleExport} 
-                onImport={() => fileInputRef.current?.click()}
-                importInputRef={fileInputRef} 
-              />
-            )}
-            {currentRoute === 'about' && <AboutPage navigate={navigate} />}
-          </>
-        )}
+          {/* ERROR MODAL */}
+          {importError && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl max-w-sm w-full animate-slideUp">
+                <div className="flex items-center gap-3 text-red-500 mb-2">
+                  <Trash2 size={24} />
+                  <h3 className="font-bold text-lg">Import Failed</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">{importError}</p>
+                <button onClick={() => setImportError(null)} className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-white font-medium py-2 rounded-xl">Close</button>
+              </div>
+            </div>
+          )}
 
-        {/* Hidden Inputs */}
-        <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
-        <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".zip,.json" />
-        
-        {isEditorOpen && (
-          <Editor
-            entry={editingEntry}
-            onClose={() => { setIsEditorOpen(false); setEditingEntry(null); }}
-            onSave={handleSaveEntry}
-            onDelete={handleDeleteEntry}
-          />
-        )}
+          {/* PAGE ROUTING */}
+          {showFlashback ? (
+            <FlashbackPage 
+              entries={entries} 
+              onBack={() => setShowFlashback(false)} 
+              onEdit={(entry) => { setShowFlashback(false); openEditEditor(entry); }}
+            />
+          ) : (
+            <>
+              {currentRoute === 'journal' && (
+                <JournalList
+                  entries={entries}
+                  appName={appName}
+                  onEdit={openEditEditor}
+                  onCreate={() => openNewEditor()}
+                  onAddOld={() => dateInputRef.current?.showPicker()}
+                  onImport={handleImport}
+                  onExport={handleExport}
+                  isOffline={isOffline}
+                  isImporting={isImporting}
+                  onOpenFlashback={() => setShowFlashback(true)} 
+                />
+              )}
+              {currentRoute === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
+              {currentRoute === 'stats' && <StatsPage entries={entries} isDarkMode={isDarkMode} />}
+              {currentRoute === 'media' && <MediaGallery entries={entries} onEdit={openEditEditor} />}
+              
+              {/* Additional Pages */}
+              {currentRoute === 'more' && <MoreMenu navigate={navigate} />}
+              {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
+              {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
+              {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />}
+              {currentRoute === 'year-review' && <YearInReviewPage navigate={navigate} />}
+              {currentRoute === 'privacy' && <PrivacyPolicy navigate={navigate} />}
+              
+              {currentRoute === 'themes' && (
+                <ThemesPage 
+                  navigate={navigate}
+                  isDarkMode={isDarkMode}
+                  setIsDarkMode={setIsDarkMode}
+                  accentColor={accentColor}
+                  setAccentColor={setAccentColor}
+                />
+              )}
+              
+              {currentRoute === 'settings' && (
+                <SettingsPage 
+                  navigate={navigate} 
+                  appName={appName} 
+                  setAppName={setAppName} 
+                  onExport={handleExport} 
+                  onImport={() => fileInputRef.current?.click()}
+                  importInputRef={fileInputRef} 
+                />
+              )}
+              {currentRoute === 'about' && <AboutPage navigate={navigate} />}
+            </>
+          )}
+
+          {/* Hidden Inputs */}
+          <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
+          <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".zip,.json" />
+          
+          {isEditorOpen && (
+            <Editor
+              entry={editingEntry}
+              onClose={() => { setIsEditorOpen(false); setEditingEntry(null); }}
+              onSave={handleSaveEntry}
+              onDelete={handleDeleteEntry}
+            />
+          )}
+        </div>
       </div>
 
-      {/* --- BOTTOM NAVIGATION --- */}
-      <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-40 pb-safe transition-colors">
+      {/* --- MOBILE BOTTOM NAVIGATION (Hidden on MD+) --- */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-40 pb-safe transition-colors">
         <div className="max-w-xl mx-auto flex justify-around py-3">
-          
           <button onClick={() => { navigate('journal'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'journal' && !showFlashback ? 'text-[var(--accent-600)]' : 'text-gray-400 dark:text-gray-500'}`}>
             <Home size={22} strokeWidth={currentRoute === 'journal' ? 2.5 : 2} />
             <span className="text-[10px] font-medium">{appName.length > 8 ? 'Journal' : appName}</span>
@@ -364,7 +397,6 @@ const App = () => {
             <Menu size={22} strokeWidth={isMoreRoute ? 2.5 : 2} />
             <span className="text-[10px] font-medium">More</span>
           </button>
-
         </div>
       </nav>
     </div>

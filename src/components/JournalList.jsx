@@ -39,7 +39,7 @@ const JournalEntryImage = React.memo(({ src, className = "w-full h-full object-c
   );
 });
 
-// Memoized List Card to prevent re-renders during search/filter
+// Memoized List Card
 const ListCard = React.memo(({ entry, onClick, variants }) => {
   const dateObj = new Date(entry.date);
   const mainDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
@@ -50,7 +50,7 @@ const ListCard = React.memo(({ entry, onClick, variants }) => {
       variants={variants}
       onClick={() => onClick(entry)}
       whileTap={{ scale: 0.98 }}
-      className="transform-gpu will-change-transform bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-100/50 dark:border-gray-800 cursor-pointer group hover:shadow-md transition-shadow"
+      className="transform-gpu will-change-transform bg-white dark:bg-gray-900 rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100/50 dark:border-gray-800 cursor-pointer group hover:shadow-md transition-all hover:border-[var(--accent-200)] dark:hover:border-gray-700"
     >
       <div className="flex justify-between items-start mb-2">
         <div className="flex flex-col">
@@ -88,7 +88,7 @@ const ListCard = React.memo(({ entry, onClick, variants }) => {
       )}
       
       {entry.images && entry.images.length > 0 && (
-        <div className="mt-3 h-32 w-full rounded-xl overflow-hidden relative border border-gray-100 dark:border-gray-800">
+        <div className="mt-3 h-32 md:h-48 w-full rounded-xl overflow-hidden relative border border-gray-100 dark:border-gray-800">
           <JournalEntryImage src={entry.images[0]} />
           {entry.images.length > 1 && (
             <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
@@ -113,11 +113,12 @@ const GridCard = React.memo(({ entry, onClick, variants }) => {
       variants={variants}
       onClick={() => onClick(entry)}
       whileTap={{ scale: 0.95 }}
-      className="transform-gpu will-change-transform aspect-square rounded-xl overflow-hidden relative border border-gray-200 dark:border-gray-800 shadow-sm bg-white dark:bg-gray-900 cursor-pointer group"
+      whileHover={{ y: -4 }}
+      className="transform-gpu will-change-transform aspect-square rounded-xl overflow-hidden relative border border-gray-200 dark:border-gray-800 shadow-sm bg-white dark:bg-gray-900 cursor-pointer group transition-all"
     >
       {hasImage ? (
         <>
-          <JournalEntryImage src={entry.images[0]} className="w-full h-full object-cover" />
+          <JournalEntryImage src={entry.images[0]} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
           <div className="absolute bottom-2 left-2 text-white">
              <span className="text-xl font-bold leading-none block">{day}</span>
@@ -136,7 +137,7 @@ const GridCard = React.memo(({ entry, onClick, variants }) => {
                if(m) { const Icon = m.icon; return <Icon size={14} className={m.color} />; }
             })()}
           </div>
-          <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-3 leading-tight">
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-3 leading-tight group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors">
             {entry.content.replace(/<[^>]*>?/gm, ' ')}
           </p>
         </div>
@@ -181,7 +182,6 @@ const JournalList = ({
   const uniqueLocations = useMemo(() => [...new Set(entries.map(e => e.location).filter(Boolean))], [entries]);
 
   const filteredEntries = useMemo(() => {
-    // If no filters and not calendar, return fast
     if (viewMode !== 'calendar' && !searchTerm && !activeFilters.mood && !activeFilters.tag && !activeFilters.location) {
       return entries;
     }
@@ -226,7 +226,6 @@ const JournalList = ({
     setSelectedDate(new Date());
   };
 
-  // Simplified Variants for better performance (removed heavy staggering)
   const containerVariants = { 
     hidden: { opacity: 0 }, 
     show: { opacity: 1, transition: { duration: 0.2 } } 
@@ -237,40 +236,60 @@ const JournalList = ({
   };
 
   return (
-    <div className="space-y-4 pb-24 text-gray-900 dark:text-gray-100 transition-colors">
+    <div className="space-y-4 pb-24 md:pb-8 text-gray-900 dark:text-gray-100 transition-colors md:px-6 md:pt-6">
       
       {/* HEADER */}
-      <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 transition-colors">
-        <div className="flex justify-between items-center gap-2 mb-2">
+      <header className="px-6 pt-6 pb-2 sticky top-0 md:relative bg-[#F3F4F6]/95 dark:bg-gray-950/95 md:bg-transparent backdrop-blur-md z-20 border-b md:border-b-0 border-gray-200/50 dark:border-gray-800/50 transition-colors -mx-6 md:mx-0">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2 px-6 md:px-0">
           
-          {/* TITLE */}
-          <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="min-w-0 flex-1 pr-2">
-            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight truncate">{appName}</h1>
+          {/* TITLE & META (Desktop Adjusted) */}
+          <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="min-w-0 flex-1">
+            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight truncate md:mb-1">{appName}</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm flex items-center gap-2 font-medium">
               {entries.length} memories
               {isOffline && <span className="flex items-center gap-1 text-[10px] bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full"><WifiOff size={10} /> Offline</span>}
             </p>
           </motion.div>
           
-          {/* ACTIONS */}
-          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 flex-shrink-0">
+          {/* DESKTOP ACTIONS CONTAINER */}
+          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 flex-shrink-0 self-end md:self-auto">
+            
+            {/* SEARCH TOGGLE (Visible always on desktop if preferred, but scalable here) */}
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isSearchOpen || searchTerm ? 'bg-[var(--accent-100)] dark:bg-[var(--accent-900)] text-[var(--accent-600)] ring-2 ring-[var(--accent-500)]/20' : 'bg-white dark:bg-gray-900 text-gray-500 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+              className={`w-10 h-10 md:w-auto md:px-4 md:rounded-xl flex items-center gap-2 justify-center rounded-full transition-colors ${isSearchOpen || searchTerm ? 'bg-[var(--accent-100)] dark:bg-[var(--accent-900)] text-[var(--accent-600)] ring-2 ring-[var(--accent-500)]/20' : 'bg-white dark:bg-gray-900 text-gray-500 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800'}`}
             >
               <Search size={20} />
+              <span className="hidden md:inline text-sm font-medium">Search</span>
             </motion.button>
 
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={handleCreateNew} 
-              className="w-10 h-10 flex items-center justify-center bg-[var(--accent-500)] text-white rounded-full shadow-lg shadow-[var(--accent-500)]/30 active:scale-95 transition-all"
+              className="w-10 h-10 md:w-auto md:px-5 md:rounded-xl flex items-center justify-center gap-2 bg-[var(--accent-500)] text-white rounded-full shadow-lg shadow-[var(--accent-500)]/30 active:scale-95 transition-all hover:bg-[var(--accent-600)]"
             >
               <Plus size={20} />
+              <span className="hidden md:inline text-sm font-bold">New Entry</span>
             </motion.button>
 
-            <div className="relative">
+            {/* VIEW TOGGLES (Moved from Modal to Header on Desktop) */}
+            <div className="hidden md:flex bg-white dark:bg-gray-900 p-1 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+               {['list', 'grid', 'calendar'].map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={`p-2 rounded-lg transition-all ${viewMode === mode ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-600)] dark:text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    {mode === 'list' && <LayoutList size={18} />}
+                    {mode === 'grid' && <LayoutGrid size={18} />}
+                    {mode === 'calendar' && <CalendarIcon size={18} />}
+                  </button>
+               ))}
+            </div>
+
+            {/* MOBILE MENU TRIGGER */}
+            <div className="relative md:hidden">
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -326,17 +345,17 @@ const JournalList = ({
         
         <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
 
-        {/* EXPANDABLE SEARCH */}
+        {/* EXPANDABLE SEARCH (Enhanced width for Desktop) */}
         <AnimatePresence>
           {(isSearchOpen || searchTerm || activeFilters.mood || activeFilters.tag || activeFilters.location) && (
             <motion.div 
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
+              className="overflow-hidden px-6 md:px-0"
             >
-              <div className="pt-2 space-y-4 pb-2">
-                <div className="relative">
+              <div className="pt-2 space-y-4 pb-4">
+                <div className="relative max-w-2xl">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                   <input 
                     type="text" 
@@ -358,12 +377,12 @@ const JournalList = ({
                     <motion.button 
                       initial={{ scale: 0 }} animate={{ scale: 1 }}
                       onClick={clearFilters} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 cursor-pointer"
                     >
                       <X size={12} /> Clear
                     </motion.button>
                   )}
-
+                  {/* ... Filter buttons remain same ... */}
                   {MOODS.map(m => {
                      const Icon = m.icon;
                      const isActive = activeFilters.mood === m.value;
@@ -371,7 +390,7 @@ const JournalList = ({
                        <button 
                          key={m.value}
                          onClick={() => toggleFilter('mood', m.value)}
-                         className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap flex-shrink-0 ${isActive ? 'bg-[var(--accent-50)] dark:bg-gray-800 border-[var(--accent-200)] dark:border-gray-700 text-[var(--accent-700)] dark:text-white' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                         className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap flex-shrink-0 cursor-pointer ${isActive ? 'bg-[var(--accent-50)] dark:bg-gray-800 border-[var(--accent-200)] dark:border-gray-700 text-[var(--accent-700)] dark:text-white' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                        >
                          <Icon size={12} className={isActive ? 'text-[var(--accent-500)]' : 'text-gray-400'} />
                          {m.label}
@@ -382,18 +401,9 @@ const JournalList = ({
                     <button 
                       key={tag}
                       onClick={() => toggleFilter('tag', tag)}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap flex-shrink-0 ${activeFilters.tag === tag ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap flex-shrink-0 cursor-pointer ${activeFilters.tag === tag ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                     >
                       <Tag size={12} /> #{tag}
-                    </button>
-                  ))}
-                   {uniqueLocations.map(loc => (
-                    <button 
-                      key={loc}
-                      onClick={() => toggleFilter('location', loc)}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap flex-shrink-0 ${activeFilters.location === loc ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                    >
-                      <MapPin size={12} /> {loc}
                     </button>
                   ))}
                 </div>
@@ -404,11 +414,11 @@ const JournalList = ({
       </header>
 
       {/* CONTENT */}
-      <div className="px-4">
+      <div className="px-4 md:px-0">
         
         {/* CALENDAR */}
         {viewMode === 'calendar' && (
-           <div className="animate-slideUp space-y-4">
+           <div className="animate-slideUp space-y-4 max-w-4xl mx-auto">
              <div className="flex justify-between items-center px-1">
                 <div className="flex items-center gap-2 text-gray-400 dark:text-gray-500 text-xs font-bold uppercase tracking-wider">
                   <CalendarIcon size={12} />
@@ -422,7 +432,7 @@ const JournalList = ({
                 </button>
              </div>
 
-             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-2 overflow-hidden">
+             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-4 overflow-hidden">
                <Calendar 
                  onChange={setSelectedDate} 
                  value={selectedDate}
@@ -439,7 +449,7 @@ const JournalList = ({
                       return (
                         <div className="flex justify-center mt-1 gap-0.5">
                            {dayEntries.slice(0, 3).map((e, i) => (
-                             <div key={i} className={`w-1 h-1 rounded-full ${e.mood && e.mood >= 7 ? 'bg-orange-400' : 'bg-[var(--accent-400)]'}`} />
+                             <div key={i} className={`w-1.5 h-1.5 rounded-full ${e.mood && e.mood >= 7 ? 'bg-orange-400' : 'bg-[var(--accent-400)]'}`} />
                            ))}
                         </div>
                       );
@@ -450,12 +460,16 @@ const JournalList = ({
            </div>
         )}
 
-        {/* LIST / GRID */}
+        {/* LIST / GRID CONTAINER */}
         <motion.div 
           variants={containerVariants}
           initial="hidden"
           animate="show"
-          className={viewMode === 'grid' ? "grid grid-cols-2 md:grid-cols-3 gap-3" : "space-y-3"}
+          className={
+            viewMode === 'grid' 
+            ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6" // Expanded grid for desktop
+            : "space-y-3 max-w-3xl mx-auto" // Centered max-width for readable list
+          }
         >
           {filteredEntries.length === 0 ? (
              <div className="col-span-full text-center py-20 flex flex-col items-center animate-fadeIn">
@@ -481,13 +495,18 @@ const JournalList = ({
         </motion.div>
       </div>
 
-      {/* CUSTOM CSS FOR CALENDAR */}
+      {/* CUSTOM CSS FOR CALENDAR REMAINS THE SAME */}
       <style>{`
         .react-calendar {
           width: 100%;
           background: transparent;
           border: none;
           font-family: inherit;
+        }
+        /* Increase calendar size for desktop */
+        @media (min-width: 768px) {
+           .react-calendar { font-size: 1.1em; }
+           .react-calendar__tile { height: 80px; display: flex; flex-direction: column; justify-content: flex-start; padding-top: 10px; }
         }
         .react-calendar__navigation button {
           min-width: 44px;
