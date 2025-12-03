@@ -22,6 +22,10 @@ import { LinkNode } from '@lexical/link';
 import { CodeNode } from '@lexical/code';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
+// --- NEW IMPORTS FOR MENTIONS ---
+import { MentionNode } from './nodes/MentionNode';
+import MentionsPlugin from './MentionsPlugin';
+
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
@@ -245,7 +249,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         code: 'bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 font-mono text-sm text-pink-500',
       }
     },
-    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode],
+    // --- UPDATED NODES ARRAY ---
+    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
   }), [mode]);
@@ -335,6 +340,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         <div className="min-h-[400px] relative">
                              <LexicalComposer initialConfig={initialConfig}>
                                {mode === 'edit' && <ToolbarPlugin />}
+                               
+                               {/* --- ADDED MENTIONS PLUGIN --- */}
+                               <MentionsPlugin />
+                               
                                <RichTextPlugin
                                  contentEditable={
                                    <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
