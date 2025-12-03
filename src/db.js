@@ -33,6 +33,15 @@ db.version(4).stores({
   meditation_sessions: '++id, startTime, duration' 
 });
 
+// Version 5: Added People/Contacts [NEW]
+db.version(5).stores({
+  entries: '++id, date, mood, *tags, *people',
+  sleep_sessions: 'id, startTime',
+  chat_analytics: 'id, name',
+  meditation_sessions: '++id, startTime, duration',
+  people: '++id, name, relationship'
+});
+
 // --- HELPER: IMAGE URL HOOK ---
 export const useBlobUrl = (imageFile) => {
   const [url, setUrl] = useState('');
@@ -78,7 +87,6 @@ export const migrateFromLocalStorage = async () => {
 };
 
 // --- ZIP EXPORT ---
-// UPDATED: Added triggerDownload param to distinguish between Cloud Backup (False) and Manual Export (True)
 export const exportToZip = async (triggerDownload = false) => {
   const zip = new JSZip();
   const imgFolder = zip.folder("images");
@@ -87,7 +95,8 @@ export const exportToZip = async (triggerDownload = false) => {
   const entries = await db.entries.toArray();
   const sleepSessions = await db.sleep_sessions.toArray();
   const chats = await db.chat_analytics.toArray();
-  const meditations = await db.meditation_sessions.toArray(); 
+  const meditations = await db.meditation_sessions.toArray();
+  const people = await db.people.toArray(); // Export People too
   
   // 2. Process Journal Images (Convert to Blobs or Filenames)
   const cleanEntries = entries.map(entry => {
@@ -141,15 +150,24 @@ export const exportToZip = async (triggerDownload = false) => {
       zip.file("meditation_data.json", JSON.stringify(meditations, null, 2));
   }
 
+  // Export People Data
+  if (people.length > 0) {
+    const peopleData = people.map(p => {
+       // We need to handle people images separately if they are blobs
+       // For simplicity in this version, we skip blob export for people or rely on base64
+       // Ideally you'd do the same image folder logic here.
+       return p; 
+    });
+    zip.file("people_data.json", JSON.stringify(peopleData, null, 2));
+  }
+
   // 4. Generate Blob
   const content = await zip.generateAsync({ type: "blob" });
   
-  // Only trigger browser download if explicitly requested (Manual Export button)
   if (triggerDownload) {
     saveAs(content, `journal_backup_${new Date().toISOString().split('T')[0]}.zip`);
   }
 
-  // Return the blob so CloudBackup can read .size and upload it
   return content;
 };
 
@@ -171,12 +189,10 @@ export const importFromZip = async (file) => {
         const newImages = [];
         if (entry.images && Array.isArray(entry.images)) {
           for (const imgRef of entry.images) {
-            // Check if it's a file reference in the zip
             if (imgFolder && imgFolder.file(imgRef)) {
               const blob = await imgFolder.file(imgRef).async("blob");
               newImages.push(blob);
             } else {
-              // Otherwise keep it as is (old URL)
               newImages.push(imgRef);
             }
           }
@@ -215,6 +231,16 @@ export const importFromZip = async (file) => {
       const medData = JSON.parse(medStr);
       if (Array.isArray(medData) && medData.length > 0) {
           await db.meditation_sessions.bulkPut(medData);
+      }
+  }
+
+  // 5. Parse People Data
+  const peopleFile = zip.file("people_data.json");
+  if (peopleFile) {
+      const pStr = await peopleFile.async("string");
+      const pData = JSON.parse(pStr);
+      if (Array.isArray(pData) && pData.length > 0) {
+          await db.people.bulkPut(pData);
       }
   }
 

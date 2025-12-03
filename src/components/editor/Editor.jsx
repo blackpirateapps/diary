@@ -22,6 +22,10 @@ import { LinkNode } from '@lexical/link';
 import { CodeNode } from '@lexical/code';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
+// --- NEW IMPORTS FOR MENTIONS ---
+import MentionsPlugin from './MentionsPlugin';
+import { MentionNode } from './nodes/MentionNode';
+
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
@@ -67,7 +71,6 @@ const MarkdownSyncPlugin = ({ onChange }) => {
 };
 
 // --- ANIMATION VARIANTS ---
-// Updated for a subtle modal pop-up effect on desktop
 const containerVariants = {
   hidden: { opacity: 0, scale: 0.95, y: 20 },
   visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
@@ -245,7 +248,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         code: 'bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 font-mono text-sm text-pink-500',
       }
     },
-    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode],
+    // ADD MENTION NODE HERE
+    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
   }), [mode]);
@@ -262,7 +266,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       />
 
       <AnimatePresence>
-        {/* Backdrop for Desktop */}
         <motion.div 
             className="fixed inset-0 bg-black/5 dark:bg-black/50 backdrop-blur-sm z-40 hidden lg:block"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -280,13 +283,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               onDone={() => { saveData(false); onClose(); }} entryId={entry?.id}
             />
 
-            {/* Split Layout for Desktop */}
             <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
                 
-                {/* LEFT: Main Editor Area */}
                 <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col order-2 lg:order-1">
                     
-                    {/* Cover Image Style */}
                     <AnimatePresence>
                         {images.length > 0 && (
                             <motion.div 
@@ -310,10 +310,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         )}
                     </AnimatePresence>
 
-                    {/* Editor Content Container */}
                     <div className="flex-1 w-full max-w-4xl mx-auto px-6 py-8 lg:px-12 lg:py-12">
                         
-                        {/* Title / Date Area (Mobile Only - Hidden on Desktop Sidebar) */}
                         <div className="lg:hidden mb-6">
                             <div className="flex items-baseline gap-3 mb-1">
                                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{currentDate.toLocaleDateString(undefined, { weekday: 'long' })}</h2>
@@ -321,7 +319,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             </div>
                         </div>
 
-                        {/* Mobile Metadata Bar (Hidden on Desktop) */}
                         <div className="lg:hidden mb-8">
                              <MetadataBar 
                                 mood={mood} setMood={setMood} isMoodOpen={isMoodOpen} setIsMoodOpen={setIsMoodOpen} onSave={saveData}
@@ -331,17 +328,21 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             />
                         </div>
 
-                        {/* Lexical Editor */}
+                        {/* LEXICAL EDITOR */}
                         <div className="min-h-[400px] relative">
                              <LexicalComposer initialConfig={initialConfig}>
                                {mode === 'edit' && <ToolbarPlugin />}
+                               
+                               {/* ADD MENTIONS PLUGIN */}
+                               <MentionsPlugin />
+
                                <RichTextPlugin
                                  contentEditable={
                                    <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
                                  }
                                  placeholder={
                                    <div className="absolute top-16 lg:top-14 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
-                                     Start writing here...
+                                     Start writing here... (Type @ to mention)
                                    </div>
                                  }
                                  ErrorBoundary={LexicalErrorBoundary}
@@ -357,10 +358,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     </div>
                 </main>
 
-                {/* RIGHT: Sidebar (Desktop Only) */}
                 <aside className="w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto order-1 lg:order-2">
                     
-                    {/* Date Block */}
                     <div className="mb-8 hidden lg:block">
                         <div className="flex items-center gap-2 text-[var(--accent-500)] mb-2 font-medium">
                             <Calendar size={18} />
@@ -382,10 +381,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         </div>
                     </div>
 
-                    {/* Metadata Sidebar Implementation */}
                     <div className="flex flex-col gap-6">
-                        
-                        {/* Re-using Metadata Bar logic but strictly for sidebar layout if LG */}
                         <div className="hidden lg:block">
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Context</label>
                             <MetadataBar 
@@ -396,13 +392,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             />
                         </div>
 
-                        {/* Tags */}
                         <div>
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
                             <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
                         </div>
 
-                        {/* Sleep */}
                         {todaysSleepSessions.length > 0 && (
                             <div>
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Sleep Data</label>
@@ -410,7 +404,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             </div>
                         )}
                         
-                        {/* Mobile: Bottom Filler */}
                         <div className="lg:hidden h-20"></div>
                     </div>
                 </aside>

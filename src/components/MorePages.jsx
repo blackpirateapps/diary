@@ -2,13 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   ChevronLeft, Settings, Info, Download, Upload, 
   ChevronRight, Github, Mail, Moon, MessageCircle, Flower2, 
-  BookOpen, Palette, Check, Type, Sliders, Monitor, Shield
+  BookOpen, Palette, Check, Type, Sliders, Monitor, Shield,
+  Users // New Icon
 } from 'lucide-react';
 import CloudBackup from './CloudBackup';
 import GoogleBackup from './GoogleBackup';
-// Note: PrivacyPolicy component is typically rendered by App.jsx based on route, 
-// so we don't import it here directly to avoid circular dependency, 
-// but we link to it via navigate('privacy').
 
 // --- SHARED HEADER COMPONENT ---
 const PageHeader = ({ title, onBack }) => (
@@ -41,7 +39,7 @@ const MenuItem = ({ icon: Icon, label, onClick, isDestructive }) => (
 // --- PAGE: MORE MENU ---
 export const MoreMenu = ({ navigate }) => {
   return (
-    <div className="pb-24">
+    <div className="pb-24 animate-slideUp">
       <PageHeader title="More" />
       <div className="p-4 space-y-6">
         
@@ -49,6 +47,8 @@ export const MoreMenu = ({ navigate }) => {
         <div>
            <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Tools</h3>
            <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800">
+             {/* NEW PEOPLE LINK */}
+             <MenuItem icon={Users} label="People & Contacts" onClick={() => navigate('people')} />
              <MenuItem icon={Moon} label="Sleep Insights" onClick={() => navigate('sleep')} />
              <MenuItem icon={Flower2} label="Meditation" onClick={() => navigate('meditation')} />
              <MenuItem icon={BookOpen} label="Year in Review (PDF)" onClick={() => navigate('year-review')} />
@@ -71,7 +71,13 @@ export const MoreMenu = ({ navigate }) => {
   );
 };
 
-// --- PAGE: THEMES ---
+// ... ThemesPage, SettingsPage, AboutPage remain unchanged ...
+// Since I can't partially edit file content here easily, assume the rest of this file is preserved
+// You only need to copy the existing exports (ThemesPage, SettingsPage, AboutPage) from your previous version 
+// and paste them below the MoreMenu component.
+// For brevity in this response, I am only providing the modified MoreMenu.
+// Make sure to include the other exports when you save this file!
+
 export const ThemesPage = ({ navigate, isDarkMode, setIsDarkMode, accentColor, setAccentColor }) => {
   const colors = [
     { id: 'blue', color: '#3b82f6', label: 'Ocean' },
@@ -132,9 +138,7 @@ export const ThemesPage = ({ navigate, isDarkMode, setIsDarkMode, accentColor, s
   );
 };
 
-// --- PAGE: SETTINGS ---
 export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport, importInputRef }) => {
-  // State for Zen Mode settings
   const [zenSettings, setZenSettings] = useState(() => {
     const saved = localStorage.getItem('zen_settings');
     return saved ? JSON.parse(saved) : {
@@ -146,10 +150,8 @@ export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport
     };
   });
 
-  // Save Zen settings whenever they change
   useEffect(() => {
     localStorage.setItem('zen_settings', JSON.stringify(zenSettings));
-    // Trigger a custom event so App.jsx or Editor can react immediately
     window.dispatchEvent(new Event('zen-settings-changed'));
   }, [zenSettings]);
 
@@ -301,7 +303,6 @@ export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport
   );
 };
 
-// --- PAGE: ABOUT ---
 export const AboutPage = ({ navigate }) => {
   return (
     <div className="pb-24 animate-slideUp">
@@ -328,7 +329,6 @@ export const AboutPage = ({ navigate }) => {
             <Mail size={20} className="text-gray-700 dark:text-gray-200" />
             <span className="text-gray-700 dark:text-gray-200 font-medium">Contact Support</span>
           </a>
-          {/* NEW PRIVACY LINK */}
           <button 
             onClick={() => navigate('privacy')}
             className="w-full bg-white dark:bg-gray-900 p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"

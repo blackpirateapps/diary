@@ -8,6 +8,9 @@ import YearInReviewPage from './components/YearInReviewPage';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import Editor from './components/editor/Editor'; 
 
+// --- NEW IMPORTS ---
+import { PeoplePage } from './components/PeoplePage';
+
 import JournalList from './components/JournalList';
 import StatsPage from './components/StatsPage';
 import MediaGallery from './components/MediaGallery';
@@ -28,7 +31,8 @@ import {
   MessageCircle,
   Coffee,
   Calendar,
-  History
+  History,
+  Users // New Icon
 } from 'lucide-react';
 
 // --- THEME ENGINE CONSTANTS ---
@@ -223,7 +227,7 @@ const App = () => {
     }
   };
 
-  const isMoreRoute = ['more', 'settings', 'about', 'themes'].includes(currentRoute);
+  const isMoreRoute = ['more', 'settings', 'about', 'themes', 'people'].includes(currentRoute);
 
   // --- SIDEBAR NAV COMPONENT (DESKTOP) ---
   const SidebarItem = ({ route, icon: Icon, label, activeCheck, onClick }) => (
@@ -273,6 +277,7 @@ const App = () => {
           <SidebarItem route="whatsapp" icon={MessageCircle} label="Chat Analytics" activeCheck={currentRoute === 'whatsapp'} />
 
           <div className="pt-4 pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Wellbeing</div>
+          <SidebarItem route="people" icon={Users} label="People" activeCheck={currentRoute === 'people'} />
           <SidebarItem route="sleep" icon={Moon} label="Sleep Insights" activeCheck={currentRoute === 'sleep'} />
           <SidebarItem route="meditation" icon={Coffee} label="Meditation" activeCheck={currentRoute === 'meditation'} />
           <SidebarItem route="year-review" icon={Calendar} label="Year in Review" activeCheck={currentRoute === 'year-review'} />
@@ -335,7 +340,6 @@ const App = () => {
                   isOffline={isOffline}
                   isImporting={isImporting}
                   onOpenFlashback={() => setShowFlashback(true)}
-                  // Pass route so JournalList can conditionally default to calendar/tags (requires JournalList update to support these props fully, but routing works)
                   initialView={currentRoute === 'calendar' ? 'calendar' : 'list'}
                 />
               )}
@@ -348,6 +352,7 @@ const App = () => {
               {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
               {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
               {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />}
+              {currentRoute === 'people' && <PeoplePage navigate={navigate} />}
               {currentRoute === 'year-review' && <YearInReviewPage navigate={navigate} />}
               {currentRoute === 'privacy' && <PrivacyPolicy navigate={navigate} />}
               
