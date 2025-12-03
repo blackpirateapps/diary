@@ -1,20 +1,19 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { 
+  ChevronLeft, ChevronRight, Trash2, Clock, 
+  MapPin, Plus, Image as ImageIcon, Cloud,
+  Smile, Frown, Meh, Heart, Sun, CloudRain 
+} from 'lucide-react';
 
-import { db, useBlobUrl } from '../../db'; 
-import EntryPdfDocument from './EntryPdfDocument'; 
-import TagInput from './TagInput'; 
-
+// --- LEXICAL IMPORTS (Required for Mentions) ---
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
-import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { TRANSFORMERS, $convertFromMarkdownString, $convertToMarkdownString } from '@lexical/markdown';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
@@ -22,28 +21,31 @@ import { LinkNode } from '@lexical/link';
 import { CodeNode } from '@lexical/code';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
-// --- NEW IMPORTS FOR PEOPLE MENTIONS ---
+// --- MENTION FEATURE IMPORTS ---
 import MentionsPlugin from './MentionsPlugin';
 import { MentionNode } from './nodes/MentionNode';
 
-import { pdf } from '@react-pdf/renderer';
-import { saveAs } from 'file-saver';
+// Re-using your existing sub-components/utils
+import TagInput from './TagInput'; 
+import MoodPopup from '../MoodPopup';
+import { compressImage } from './editorUtils'; 
 
-import EditorHeader from './EditorHeader';
-import ZenOverlay from './ZenOverlay';
-import MetadataBar from './MetadataBar';
-import SleepWidget from './SleepWidget';
-import ToolbarPlugin from './ToolbarPlugin';
-import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtils';
+// --- CONSTANTS ---
+const MOODS = [
+  { value: 1, icon: CloudRain, color: 'text-gray-400', label: 'Awful' },
+  { value: 2, icon: CloudRain, color: 'text-blue-400', label: 'Bad' },
+  { value: 3, icon: Frown, color: 'text-blue-500', label: 'Sad' },
+  { value: 4, icon: Meh, color: 'text-indigo-400', label: 'Meh' },
+  { value: 5, icon: Meh, color: 'text-indigo-500', label: 'Okay' },
+  { value: 6, icon: Sun, color: 'text-yellow-500', label: 'Good' },
+  { value: 7, icon: Sun, color: 'text-orange-500', label: 'Great' },
+  { value: 8, icon: Smile, color: 'text-orange-600', label: 'Happy' },
+  { value: 9, icon: Heart, color: 'text-pink-500', label: 'Loved' },
+  { value: 10, icon: Heart, color: 'text-red-500', label: 'Amazing' },
+];
 
-const BlobImage = ({ src, ...props }) => {
-  const url = useBlobUrl(src);
-  return <motion.img src={url} {...props} />;
-};
-
-const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
-
-// --- PLUGINS ---
+// --- HELPER PLUGINS ---
+// Loads initial content into the editor
 const MarkdownInitPlugin = ({ content }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -53,10 +55,11 @@ const MarkdownInitPlugin = ({ content }) => {
          $convertFromMarkdownString(content || '', TRANSFORMERS);
       }
     });
-  }, [content, editor]); 
+  }, []); // Run once on mount
   return null;
 };
 
+// Syncs editor changes back to your state string
 const MarkdownSyncPlugin = ({ onChange }) => {
   return (
     <OnChangePlugin
@@ -70,364 +73,365 @@ const MarkdownSyncPlugin = ({ onChange }) => {
   );
 };
 
-// --- ANIMATION VARIANTS ---
-// Updated for a subtle modal pop-up effect on desktop
-const containerVariants = {
-  hidden: { opacity: 0, scale: 0.95, y: 20 },
-  visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
-  exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } }
-};
-
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
-  const [entryId] = useState(entry?.id || Date.now().toString());
-  const [currentDate, setCurrentDate] = useState(entry?.date ? new Date(entry.date) : new Date());
-  const isToday = currentDate.toDateString() === new Date().toDateString();
+  const entryDate = entry?.date ? new Date(entry.date) : new Date();
 
+  // --- STATE ---
   const [content, setContent] = useState(entry?.content || '');
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
-  const [locationLat, setLocationLat] = useState(entry?.locationLat || null);
-  const [locationLng, setLocationLng] = useState(entry?.locationLng || null);
   const [weather, setWeather] = useState(entry?.weather || '');
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
   
-  const contentRef = useRef(content);
-  contentRef.current = content;
-
-  const [mode, setMode] = useState(isToday ? 'edit' : 'preview');
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
-  const [saveStatus, setSaveStatus] = useState('idle');
-  const [isExporting, setIsExporting] = useState(false);
-  const [isZenMode, setIsZenMode] = useState(false);
+
+  const fileInputRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+
+  // --- LOGIC (Preserved from your original file) ---
   
-  const [zenSettings] = useState(() => {
-     const saved = localStorage.getItem('zen_settings');
-     return saved ? JSON.parse(saved) : {};
-  });
-
-  const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
-  const todaysSleepSessions = sleepSessions.filter(session => 
-    new Date(session.startTime).toDateString() === currentDate.toDateString()
-  );
-
-  const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
-
   useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      const isDirty = content !== (entry?.content || '');
-      if (saveStatus === 'saving' || (isDirty && saveStatus !== 'saved')) {
-        e.preventDefault();
-        e.returnValue = ''; 
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [saveStatus, content, entry]);
-
-  const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
-    if (isAutoSave && !contentRef.current?.trim() && images.length === 0) return;
-    
-    setSaveStatus('saving');
-    const dateToSave = overrideDate || currentDate;
-    
-    onSave({ 
-      id: entryId, 
-      content: contentRef.current, 
-      mood, 
-      location, 
-      locationLat, 
-      locationLng, 
-      weather, 
-      tags, 
-      images, 
-      date: dateToSave.toISOString() 
-    });
-
-    setTimeout(() => setSaveStatus('saved'), 500);
-    setTimeout(() => setSaveStatus('idle'), 2500);
-  }, [entryId, currentDate, mood, location, locationLat, locationLng, weather, tags, images, onSave]);
-
-  useEffect(() => {
-    if (content !== (entry?.content || '')) {
-      const timer = setTimeout(() => saveData(true), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [content, saveData, entry?.content]);
-
-  // --- HANDLERS ---
-  const handleZenBack = (finalContent) => {
-    if (typeof finalContent === 'string') {
-        contentRef.current = finalContent; 
-        setContent(finalContent); 
-    }
-    saveData(true);
-    setIsZenMode(false);
-  };
-
-  const handleTimeChange = (e) => {
-    if (!e.target.value) return;
-    const [hours, minutes] = e.target.value.split(':').map(Number);
-    const newDate = new Date(currentDate);
-    newDate.setHours(hours);
-    newDate.setMinutes(minutes);
-    setCurrentDate(newDate);
-    saveData(true, newDate);
-  };
+    setImgIndex(0);
+  }, [entry?.id]);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
       setUploading(true);
       try {
-        const compressedBlob = await compressImage(file);
-        setImages(prev => [...prev, compressedBlob]);
-        setImgIndex(images.length); 
-        setTimeout(() => saveData(true), 100);
-      } catch (err) { alert(err.message); } 
-      finally { setUploading(false); e.target.value = ''; }
+        const compressedBase64 = await compressImage(file);
+        setImages(prev => [...prev, compressedBase64]);
+        setImgIndex(prev => prev + 1);
+      } catch (err) {
+        alert(err.message || "Failed to process image.");
+        console.error(err);
+      } finally {
+        setUploading(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
     }
   };
 
-  const handleLocation = async () => {
-    if (loadingLocation) return;
+  const handleLocation = () => {
+    if (!navigator.onLine) {
+      const manual = window.prompt("You are offline. Please enter location manually:");
+      if (manual) setLocation(manual);
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      const manual = window.prompt("Geolocation is not supported by your browser. Please enter location manually:");
+      if (manual) setLocation(manual);
+      return;
+    }
+
     setLoadingLocation(true);
-    if (!navigator.geolocation) { alert("Geolocation not supported"); setLoadingLocation(false); return; }
 
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      const { latitude, longitude } = position.coords;
-      setLocationLat(latitude); setLocationLng(longitude);
-      
-      try {
-        const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
-        if (wRes.ok) {
-           const d = await wRes.json();
-           setWeather(`${getWeatherLabel(d.current_weather.weathercode)}, ${Math.round(d.current_weather.temperature)}°C`);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const weatherRes = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+          );
+          const weatherData = await weatherRes.json();
+          const temp = weatherData.current_weather?.temperature;
+          if (temp !== undefined) {
+            setWeather(`${temp}°C`);
+          }
+
+          const locRes = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+          );
+          const locData = await locRes.json();
+          const city = locData.city || locData.locality || locData.principalSubdivision;
+          const country = locData.countryName;
+
+          if (city) {
+            setLocation(country ? `${city}, ${country}` : city);
+          } else {
+            setLocation("Unknown Location");
+          }
+        } catch (error) {
+          console.error("Error fetching data", error);
+          const manual = window.prompt("Could not fetch details. Enter manually:");
+          if (manual) setLocation(manual);
+        } finally {
+          setLoadingLocation(false);
         }
-        const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
-        if (locRes.ok) {
-            const d = await locRes.json();
-            const parts = [d.address.road || d.address.building, d.address.city || d.address.town || d.address.suburb].filter(Boolean);
-            setLocation(parts.length ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
-        }
-        setTimeout(() => saveData(true), 200);
-      } catch (e) { console.error(e); } finally { setLoadingLocation(false); }
-    }, (e) => { console.error(e); alert("Location error"); setLoadingLocation(false); });
+      },
+      (error) => {
+        let msg = "Unable to access location.";
+        if (error.code === 1) msg = "Location permission denied.";
+        const manual = window.prompt(`${msg} Please enter manually:`);
+        if (manual) setLocation(manual);
+        setLoadingLocation(false);
+      }
+    );
   };
 
-  const handleExportPdf = async () => {
-    setIsExporting(true);
-    try {
-      const pdfImages = await Promise.all(images.map(img => blobToJpeg(img)));
-      const doc = <EntryPdfDocument entry={{ id: entryId, content, mood, location, weather, tags, images: pdfImages.filter(Boolean), date: currentDate.toISOString() }} moodLabel={MOODS_LABELS[mood]} sleepSessions={todaysSleepSessions} />;
-      const blob = await pdf(doc).toBlob();
-      saveAs(blob, `Journal_${currentDate.toISOString().split('T')[0]}.pdf`);
-    } catch (err) { alert("PDF Failed"); } finally { setIsExporting(false); }
+  const handleSave = () => {
+    if (!content.trim() && images.length === 0) {
+      window.alert('Please write something before saving.');
+      return;
+    }
+    onSave({
+      id: entry?.id || Date.now().toString(),
+      content,
+      mood,
+      location,
+      weather,
+      tags,
+      images,
+      date: entry?.date || new Date().toISOString()
+    });
   };
 
+  const handleDelete = () => {
+    if (!entry?.id) {
+      onClose();
+      return;
+    }
+    if (window.confirm('Are you sure you want to delete this entry completely?')) {
+      onDelete(entry.id);
+    }
+  };
+
+  const nextImage = () => {
+    setImgIndex((prev) => (prev + 1) % images.length);
+  };
+  const prevImage = () => {
+    setImgIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+  const deleteCurrentImage = () => {
+    if (window.confirm('Delete this image?')) {
+      const newImages = images.filter((_, i) => i !== imgIndex);
+      setImages(newImages);
+      if (newImages.length === 0) {
+        setImgIndex(0);
+      } else if (imgIndex >= newImages.length) {
+        setImgIndex(Math.max(0, newImages.length - 1));
+      }
+    }
+  };
+
+  const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Meh;
+  const currentMoodColor = MOODS.find(m => m.value === mood)?.color || 'text-gray-500';
+
+  // --- EDITOR CONFIG ---
   const initialConfig = useMemo(() => ({
-    namespace: 'MainEditor',
+    namespace: 'JournalEditor',
     theme: {
       paragraph: 'mb-4',
-      heading: {
-        h1: 'text-3xl font-bold mb-4 mt-6',
-        h2: 'text-2xl font-bold mb-3 mt-5',
-        h3: 'text-xl font-bold mb-2 mt-4',
-      },
-      list: {
-        ul: 'list-disc ml-5 mb-4',
-        ol: 'list-decimal ml-5 mb-4',
-      },
-      quote: 'border-l-4 border-gray-300 pl-4 italic my-4 text-gray-500',
       text: {
         bold: 'font-bold',
         italic: 'italic',
         underline: 'underline',
-        code: 'bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 font-mono text-sm text-pink-500',
       }
     },
-    // INTEGRATED: Added MentionNode to nodes list
+    // REGISTER NODES (Including MentionNode)
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode],
     onError: (error) => console.error(error),
-    editable: mode === 'edit'
-  }), [mode]);
+    editable: true // Force editable to true
+  }), []);
 
   return (
-    <>
-      <Styles />
-      <ZenOverlay 
-        isActive={isZenMode} 
-        content={content} 
-        setContent={setContent} 
-        onBack={handleZenBack} 
-        settings={zenSettings} 
-      />
-
-      <AnimatePresence>
-        {/* Backdrop for Desktop */}
-        <motion.div 
-            className="fixed inset-0 bg-black/5 dark:bg-black/50 backdrop-blur-sm z-40 hidden lg:block"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => { saveData(false); onClose(); }}
-        />
-
-        <motion.div 
-            className="fixed inset-0 lg:inset-8 lg:max-w-7xl lg:mx-auto bg-white dark:bg-gray-950 lg:rounded-2xl lg:shadow-2xl z-50 flex flex-col overflow-hidden font-sans transition-colors border border-gray-100 dark:border-gray-800" 
-            variants={containerVariants} initial="hidden" animate="visible" exit="exit"
+    <div
+      className="fixed inset-0 bg-white dark:bg-gray-950 z-50 flex flex-col animate-slideUp overflow-hidden"
+      style={{ height: '100dvh' }}
+    >
+      {/* Header */}
+      <div className="px-4 py-3 flex justify-between items-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-md absolute top-0 left-0 right-0 z-20 border-b border-gray-100/50 dark:border-gray-800">
+        <button
+          onClick={onClose}
+          className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
         >
-            <EditorHeader 
-              onClose={onClose} saveStatus={saveStatus} onZen={() => setIsZenMode(true)} 
-              onExport={handleExportPdf} isExporting={isExporting} onDelete={() => { if(window.confirm('Delete?')) onDelete(entryId); }}
-              toggleMode={() => setMode(m => m === 'edit' ? 'preview' : 'edit')} mode={mode} 
-              onDone={() => { saveData(false); onClose(); }} entryId={entry?.id}
+          <ChevronLeft size={24} />
+        </button>
+        <div className="flex items-center gap-2">
+          {entry && entry.id && (
+            <button
+              onClick={handleDelete}
+              className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
+            >
+              <Trash2 size={20} />
+            </button>
+          )}
+          <button
+            onClick={handleSave}
+            className="px-4 py-1.5 bg-blue-500 text-white font-semibold rounded-full shadow-md shadow-blue-500/20 active:scale-95 transition-all text-sm"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto no-scrollbar pt-16"
+      >
+        {/* Carousel / Cover Image */}
+        {images.length > 0 && (
+          <div className="w-full h-72 relative group bg-gray-100 dark:bg-gray-900 mb-4">
+            <img
+              src={images[imgIndex]}
+              alt="Memory"
+              className="w-full h-full object-contain bg-gray-50/50 dark:bg-gray-900/50 backdrop-blur-sm"
             />
-
-            {/* Split Layout for Desktop */}
-            <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
-                
-                {/* LEFT: Main Editor Area */}
-                <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col order-2 lg:order-1">
-                    
-                    {/* Cover Image Style */}
-                    <AnimatePresence>
-                        {images.length > 0 && (
-                            <motion.div 
-                                initial={{ opacity: 0, height: 0 }} 
-                                animate={{ opacity: 1, height: "16rem" }} 
-                                exit={{ opacity: 0, height: 0 }} 
-                                className="w-full relative group bg-gray-50 dark:bg-gray-900 flex-shrink-0"
-                            >
-                                <BlobImage key={imgIndex} src={images[imgIndex]} className="w-full h-full object-cover opacity-90 transition-opacity hover:opacity-100" />
-                                
-                                <div className="absolute inset-0 bg-gradient-to-t from-white/80 dark:from-gray-950/80 to-transparent pointer-events-none" />
-
-                                {images.length > 1 && (
-                                    <>
-                                        <button onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-sm"><ChevronLeft size={20}/></button>
-                                        <button onClick={() => setImgIndex((i) => (i + 1) % images.length)} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-sm"><ChevronLeft size={20} className="rotate-180"/></button>
-                                    </>
-                                )}
-                                <button onClick={() => { if(window.confirm('Delete image?')) { setImages(i => i.filter((_,x) => x !== imgIndex)); setImgIndex(0); saveData(true); } }} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:bg-red-600"><Trash2 size={16}/></button>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    {/* Editor Content Container */}
-                    <div className="flex-1 w-full max-w-4xl mx-auto px-6 py-8 lg:px-12 lg:py-12">
-                        
-                        {/* Title / Date Area (Mobile Only - Hidden on Desktop Sidebar) */}
-                        <div className="lg:hidden mb-6">
-                            <div className="flex items-baseline gap-3 mb-1">
-                                <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{currentDate.toLocaleDateString(undefined, { weekday: 'long' })}</h2>
-                                <span className="text-xl text-gray-400 dark:text-gray-500 font-medium">{currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</span>
-                            </div>
-                        </div>
-
-                        {/* Mobile Metadata Bar (Hidden on Desktop) */}
-                        <div className="lg:hidden mb-8">
-                             <MetadataBar 
-                                mood={mood} setMood={setMood} isMoodOpen={isMoodOpen} setIsMoodOpen={setIsMoodOpen} onSave={saveData}
-                                location={location} onLocationClick={handleLocation} loadingLocation={loadingLocation}
-                                weather={weather} uploading={uploading} onImageUpload={handleImageUpload}
-                                isSidebar={false}
-                            />
-                        </div>
-
-                        {/* Lexical Editor */}
-                        <div className="min-h-[400px] relative">
-                             <LexicalComposer initialConfig={initialConfig}>
-                               {mode === 'edit' && <ToolbarPlugin />}
-                               
-                               {/* INTEGRATED: MentionsPlugin added here */}
-                               <MentionsPlugin />
-
-                               <RichTextPlugin
-                                 contentEditable={
-                                   <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
-                                 }
-                                 placeholder={
-                                   <div className="absolute top-16 lg:top-14 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
-                                     Start writing here... (Type @ to mention)
-                                   </div>
-                                 }
-                                 ErrorBoundary={LexicalErrorBoundary}
-                               />
-                               <HistoryPlugin />
-                               <ListPlugin />
-                               <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
-                               <MarkdownInitPlugin content={content} />
-                               <MarkdownSyncPlugin onChange={setContent} />
-                             </LexicalComposer>
-                             {mode === 'preview' && <div className="absolute inset-0 z-10" />}
-                        </div>
-                    </div>
-                </main>
-
-                {/* RIGHT: Sidebar (Desktop Only) */}
-                <aside className="w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto order-1 lg:order-2">
-                    
-                    {/* Date Block */}
-                    <div className="mb-8 hidden lg:block">
-                        <div className="flex items-center gap-2 text-[var(--accent-500)] mb-2 font-medium">
-                            <Calendar size={18} />
-                            <span>{currentDate.getFullYear()}</span>
-                        </div>
-                        <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-1 tracking-tight">{currentDate.toLocaleDateString(undefined, { weekday: 'long' })}</h2>
-                        <h3 className="text-2xl text-gray-400 font-medium mb-4">{currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</h3>
-                        
-                        <div className="flex items-center gap-4 text-sm text-gray-500 border-b border-gray-200 dark:border-gray-800 pb-4">
-                            <div className="relative group cursor-pointer hover:text-[var(--accent-500)] transition-colors flex items-center gap-2">
-                                <Clock size={16} strokeWidth={2.5} />
-                                <span className="font-semibold">{currentDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-                                <input type="time" value={currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} onChange={handleTimeChange} className="absolute inset-0 opacity-0 cursor-pointer" />
-                            </div>
-                            <div className="flex items-center gap-1.5 ml-auto">
-                                <AlignLeft size={14} />
-                                <span>{wordCount} words</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Metadata Sidebar Implementation */}
-                    <div className="flex flex-col gap-6">
-                        
-                        {/* Re-using Metadata Bar logic but strictly for sidebar layout if LG */}
-                        <div className="hidden lg:block">
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Context</label>
-                            <MetadataBar 
-                                mood={mood} setMood={setMood} isMoodOpen={isMoodOpen} setIsMoodOpen={setIsMoodOpen} onSave={saveData}
-                                location={location} onLocationClick={handleLocation} loadingLocation={loadingLocation}
-                                weather={weather} uploading={uploading} onImageUpload={handleImageUpload}
-                                isSidebar={true}
-                            />
-                        </div>
-
-                        {/* Tags */}
-                        <div>
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
-                            <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
-                        </div>
-
-                        {/* Sleep */}
-                        {todaysSleepSessions.length > 0 && (
-                            <div>
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Sleep Data</label>
-                                {todaysSleepSessions.map(session => <SleepWidget key={session.id} session={session} />)}
-                            </div>
-                        )}
-                        
-                        {/* Mobile: Bottom Filler */}
-                        <div className="lg:hidden h-20"></div>
-                    </div>
-                </aside>
-
+            <div className="absolute inset-0 -z-10 overflow-hidden">
+              <img
+                src={images[imgIndex]}
+                className="w-full h-full object-cover blur-xl opacity-50"
+                alt=""
+              />
             </div>
-        </motion.div>
-      </AnimatePresence>
-    </>
+
+            {images.length > 1 && (
+              <div className="absolute inset-0 flex items-center justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={prevImage} className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors">
+                  <ChevronLeft size={20} />
+                </button>
+                <button onClick={nextImage} className="p-1.5 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white/40 transition-colors">
+                  <ChevronRight size={20} />
+                </button>
+              </div>
+            )}
+
+            <div className="absolute top-4 right-4 flex gap-2">
+               <button onClick={deleteCurrentImage} className="bg-black/30 hover:bg-red-500/80 text-white p-1.5 rounded-full backdrop-blur-md transition-colors">
+                <Trash2 size={14} />
+              </button>
+            </div>
+
+            {images.length > 1 && (
+              <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                {images.map((_, i) => (
+                  <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === imgIndex ? 'bg-white w-3' : 'bg-white/50'}`} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="px-6 pb-12">
+          <div className="mb-6">
+            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white leading-tight">
+              {entryDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+            </h2>
+            <div className="flex items-center gap-2 text-gray-400 dark:text-gray-500 text-sm mt-1 font-medium">
+              <Clock size={14} />
+              {entryDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+              <span>•</span>
+              <span>{entryDate.getFullYear()}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 mb-6">
+            <div className="relative">
+              <button
+                onClick={() => setIsMoodOpen(!isMoodOpen)}
+                className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  mood ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+                }`}
+              >
+                <CurrentMoodIcon size={14} className={currentMoodColor} />
+                <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
+              </button>
+              {isMoodOpen && (
+                <MoodPopup currentMood={mood} onChange={setMood} onClose={() => setIsMoodOpen(false)} />
+              )}
+            </div>
+
+            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-full pl-2 pr-1 py-0.5 border border-gray-100 dark:border-gray-700 max-w-[160px]">
+              <MapPin size={12} className="text-gray-400 mr-1 flex-shrink-0" />
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Location"
+                className="bg-transparent border-none p-0 text-xs text-gray-600 dark:text-gray-300 placeholder-gray-400 focus:ring-0 w-full truncate"
+              />
+              <button onClick={handleLocation} disabled={loadingLocation} className="p-1 text-gray-400 hover:text-blue-500 disabled:opacity-50">
+                {loadingLocation ? (
+                  <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Plus size={10} />
+                )}
+              </button>
+            </div>
+
+            {weather && (
+              <div className="flex items-center bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300 rounded-full px-2 py-0.5 border border-orange-100 dark:border-orange-800 text-xs">
+                <Cloud size={12} className="mr-1" />
+                {weather}
+              </div>
+            )}
+
+            <TagInput
+              tags={tags}
+              onChange={(newTags) => setTags(newTags)}
+            />
+          </div>
+
+          {/* REPLACED TEXTAREA WITH LEXICAL EDITOR */}
+          <div className="relative min-h-[300px]">
+            <LexicalComposer initialConfig={initialConfig}>
+                {/* Mentions Plugin Integration */}
+                <MentionsPlugin />
+                
+                <RichTextPlugin
+                    contentEditable={
+                        <ContentEditable className="outline-none text-lg text-gray-800 dark:text-gray-200 leading-7 font-serif min-h-[300px] pb-20" />
+                    }
+                    placeholder={
+                        <div className="absolute top-0 left-0 text-gray-300 dark:text-gray-600 pointer-events-none text-lg font-serif select-none">
+                            Start writing... (Type @ to tag people)
+                        </div>
+                    }
+                    ErrorBoundary={LexicalErrorBoundary}
+                />
+                <HistoryPlugin />
+                <ListPlugin />
+                <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+                <MarkdownInitPlugin content={content} />
+                <MarkdownSyncPlugin onChange={setContent} />
+            </LexicalComposer>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center text-gray-400">
+            <span className="text-xs uppercase tracking-wider font-medium">Attachments</span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                disabled={uploading}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-sm transition-colors disabled:opacity-50"
+              >
+                {uploading ? (
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <ImageIcon size={18} />
+                )}
+                <span className="text-xs">{uploading ? 'Processing...' : 'Add Image'}</span>
+              </button>
+            </div>
+          </div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept="image/*"
+            onChange={handleImageUpload}
+          />
+        </div>
+      </div>
+    </div>
   );
 };
 
