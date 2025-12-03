@@ -15,7 +15,7 @@ import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { TRANSFORMERS, $convertFromMarkdownString, $convertToMarkdownString } from '@lexical/markdown';
+import { TRANSFORMERS, $convertFromMarkdownString } from '@lexical/markdown'; // Only need convertFrom for backward compatibility
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
@@ -23,8 +23,8 @@ import { CodeNode } from '@lexical/code';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
 // --- MENTIONS IMPORTS ---
-import { $nodesOfType } from 'lexical';
-import { MentionNode, $createMentionNode, $isMentionNode } from './nodes/MentionNode'; // Ensure exports exist in MentionNode file
+import { $nodesOfType, $getRoot } from 'lexical';
+import { MentionNode } from './nodes/MentionNode'; 
 import MentionsPlugin from './MentionsPlugin';
 
 import { pdf } from '@react-pdf/renderer';
@@ -44,55 +44,58 @@ const BlobImage = ({ src, ...props }) => {
 
 const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
 
-// --- 1. CUSTOM MARKDOWN TRANSFORMER ---
-// This tells Lexical how to save/load mentions as "[Name](mention://id)"
-const MENTION_TRANSFORMER = {
-  dependencies: [MentionNode],
-  export: (node) => {
-    if (!$isMentionNode(node)) return null;
-    return `[${node.__mention}](mention://${node.__id})`;
-  },
-  importRegExp: /\[([^[]+)\]\(mention:\/\/([^()]+)\)/,
-  regExp: /\[([^[]+)\]\(mention:\/\/([^()]+)\)/,
-  replace: (textNode, match) => {
-    const [, name, id] = match;
-    const mentionNode = $createMentionNode(name, id, null);
-    textNode.replace(mentionNode);
-  },
-  trigger: ')',
-  type: 'text-match',
-};
+// --- CUSTOM PLUGINS ---
 
-// Combine default transformers with our custom one
-const EDITOR_TRANSFORMERS = [MENTION_TRANSFORMER, ...TRANSFORMERS];
-
-// --- 2. PLUGINS ---
-
-const MarkdownInitPlugin = ({ content }) => {
+// 1. STATE SYNC PLUGIN (Replaces MarkdownSync)
+// Handles loading initial content (JSON or Markdown fallback) and keeps local state updated
+const EditorStatePlugin = ({ content, onChange, onTextChange }) => {
   const [editor] = useLexicalComposerContext();
-  useEffect(() => {
-    editor.update(() => {
-      // Use custom transformers to load mentions correctly
-      $convertFromMarkdownString(content || '', EDITOR_TRANSFORMERS);
-    });
-  }, []); 
-  return null;
-};
+  const isFirstRender = useRef(true);
 
-const MarkdownSyncPlugin = ({ onChange }) => {
+  // Initialize State
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      if (content) {
+        try {
+          // Attempt to parse as JSON (New Format)
+          const jsonState = JSON.parse(content);
+          if (jsonState.root) {
+             const editorState = editor.parseEditorState(jsonState);
+             editor.setEditorState(editorState);
+          } else {
+             // If JSON but not lexical state, treat as text
+             throw new Error("Not lexical state");
+          }
+        } catch (e) {
+          // Fallback: Treat as Markdown/Plain Text (Old Format)
+          editor.update(() => {
+             $convertFromMarkdownString(content, TRANSFORMERS);
+          });
+        }
+      }
+    }
+  }, [content, editor]);
+
+  // Sync Changes
   return (
     <OnChangePlugin
       onChange={(editorState) => {
+        // 1. Save Full JSON State
+        const jsonString = JSON.stringify(editorState.toJSON());
+        onChange(jsonString);
+
+        // 2. Extract Plain Text for Previews/Search
         editorState.read(() => {
-          // Use custom transformers to save mentions correctly
-          const markdown = $convertToMarkdownString(EDITOR_TRANSFORMERS);
-          onChange(markdown);
+            const textContent = $getRoot().getTextContent();
+            onTextChange(textContent);
         });
       }}
     />
   );
 };
 
+// 2. MENTIONS TRACKER (Extracts IDs)
 const MentionsTracker = ({ onChange }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -107,7 +110,7 @@ const MentionsTracker = ({ onChange }) => {
   return null;
 };
 
-// FIX: Plugin to dynamically toggle Read-Only mode
+// 3. MODE PLUGIN (Read/Edit toggle)
 const EditorModePlugin = ({ mode }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -127,11 +130,14 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [entryId] = useState(entry?.id || Date.now().toString());
   const [currentDate, setCurrentDate] = useState(entry?.date ? new Date(entry.date) : new Date());
   
-  // Decide initial mode
   const isToday = currentDate.toDateString() === new Date().toDateString();
   const [mode, setMode] = useState(isToday ? 'edit' : 'preview');
 
+  // content now stores JSON string (or markdown for legacy)
   const [content, setContent] = useState(entry?.content || '');
+  // previewText stores just the plain text for list views
+  const [previewText, setPreviewText] = useState(entry?.preview || ''); 
+  
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
   const [locationLat, setLocationLat] = useState(entry?.locationLat || null);
@@ -143,6 +149,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   
   const contentRef = useRef(content);
   contentRef.current = content;
+  
+  const previewRef = useRef(previewText);
+  previewRef.current = previewText;
 
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
@@ -162,7 +171,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     new Date(session.startTime).toDateString() === currentDate.toDateString()
   );
 
-  const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
+  const wordCount = previewText.trim().split(/\s+/).filter(Boolean).length;
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -177,14 +186,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   }, [saveStatus, content, entry]);
 
   const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
-    if (isAutoSave && !contentRef.current?.trim() && images.length === 0) return;
+    if (isAutoSave && !contentRef.current && images.length === 0) return;
     
     setSaveStatus('saving');
     const dateToSave = overrideDate || currentDate;
     
     onSave({ 
       id: entryId, 
-      content: contentRef.current, 
+      content: contentRef.current, // Saves JSON string
+      preview: previewRef.current, // Saves Plain Text (for Lists)
       mood, 
       location, 
       locationLat, 
@@ -209,6 +219,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   // Handlers
   const handleZenBack = (finalContent) => {
+    // Note: ZenOverlay might need updates to handle JSON, 
+    // but assuming it passes back text/markdown, the hybrid loader handles it.
     if (typeof finalContent === 'string') {
         contentRef.current = finalContent; 
         setContent(finalContent); 
@@ -271,13 +283,14 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     setIsExporting(true);
     try {
       const pdfImages = await Promise.all(images.map(img => blobToJpeg(img)));
-      const doc = <EntryPdfDocument entry={{ id: entryId, content, mood, location, weather, tags, images: pdfImages.filter(Boolean), date: currentDate.toISOString() }} moodLabel={MOODS_LABELS[mood]} sleepSessions={todaysSleepSessions} />;
+      // Note: Passing raw JSON content to PDF might show JSON string. 
+      // Ideally pass 'previewText' or convert JSON to text for the PDF.
+      const doc = <EntryPdfDocument entry={{ id: entryId, content: previewText || content, mood, location, weather, tags, images: pdfImages.filter(Boolean), date: currentDate.toISOString() }} moodLabel={MOODS_LABELS[mood]} sleepSessions={todaysSleepSessions} />;
       const blob = await pdf(doc).toBlob();
       saveAs(blob, `Journal_${currentDate.toISOString().split('T')[0]}.pdf`);
     } catch (err) { alert("PDF Failed"); } finally { setIsExporting(false); }
   };
 
-  // 3. INITIAL CONFIG
   const initialConfig = useMemo(() => ({
     namespace: 'MainEditor',
     theme: {
@@ -287,7 +300,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       quote: 'border-l-4 border-gray-300 pl-4 italic my-4 text-gray-500',
       text: { bold: 'font-bold', italic: 'italic', underline: 'underline', code: 'bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 font-mono text-sm text-pink-500' }
     },
-    // Register the Node here
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
@@ -375,9 +387,18 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                />
                                <HistoryPlugin />
                                <ListPlugin />
-                               <MarkdownShortcutPlugin transformers={EDITOR_TRANSFORMERS} /> {/* <-- Updated */}
-                               <MarkdownInitPlugin content={content} />
-                               <MarkdownSyncPlugin onChange={setContent} />
+                               {/* Keep Markdown Shortcut for typing experience (e.g. # Header), but NOT for syncing */}
+                               <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
+                               
+                               {/* New Plugin to Handle JSON Saving/Loading */}
+                               <EditorStatePlugin 
+                                 content={content} 
+                                 onChange={setContent} 
+                                 onTextChange={(text) => {
+                                    setPreviewText(text);
+                                    previewRef.current = text;
+                                 }} 
+                               />
                              </LexicalComposer>
                              {mode === 'preview' && <div className="absolute inset-0 z-10" />}
                         </div>
