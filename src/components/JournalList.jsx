@@ -23,6 +23,20 @@ const MOODS = [
   { value: 10, icon: Heart, color: 'text-red-500', label: 'Amazing' },
 ];
 
+// --- HELPER: TEXT PREVIEW ---
+const getEntryPreview = (entry) => {
+  // 1. Use the pre-calculated preview if available (New Editor)
+  if (entry.preview) return entry.preview;
+
+  // 2. Check if content is raw JSON (Lexical State)
+  if (typeof entry.content === 'string' && entry.content.trim().startsWith('{')) {
+    return "View entry to read content..."; // Fallback for JSON entries missing preview
+  }
+
+  // 3. Fallback for Legacy Entries (Markdown/HTML) - Strip tags
+  return entry.content ? entry.content.replace(/<[^>]*>?/gm, ' ') : '';
+};
+
 // --- OPTIMIZED SUB-COMPONENTS ---
 
 const JournalEntryImage = React.memo(({ src, className = "w-full h-full object-cover" }) => {
@@ -44,7 +58,8 @@ const ListCard = React.memo(({ entry, onClick, variants }) => {
   const dateObj = new Date(entry.date);
   const mainDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   const yearTime = dateObj.toLocaleDateString(undefined, { year: 'numeric' }) + ' • ' + dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  
+  const previewText = getEntryPreview(entry);
+
   return (
     <motion.div
       variants={variants}
@@ -69,8 +84,9 @@ const ListCard = React.memo(({ entry, onClick, variants }) => {
         })()}
       </div>
       
-      <div className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 leading-relaxed mt-2 font-normal" 
-           dangerouslySetInnerHTML={{ __html: entry.content.replace(/<[^>]*>?/gm, ' ') }} />
+      <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 leading-relaxed mt-2 font-normal">
+        {previewText}
+      </p>
 
       {(entry.tags?.length > 0 || entry.location) && (
         <div className="mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar text-gray-400 dark:text-gray-500">
@@ -107,6 +123,7 @@ const GridCard = React.memo(({ entry, onClick, variants }) => {
   const dateObj = new Date(entry.date);
   const day = dateObj.getDate();
   const month = dateObj.toLocaleDateString(undefined, { month: 'short' });
+  const previewText = getEntryPreview(entry);
 
   return (
     <motion.div
@@ -138,7 +155,7 @@ const GridCard = React.memo(({ entry, onClick, variants }) => {
             })()}
           </div>
           <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-3 leading-tight group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors">
-            {entry.content.replace(/<[^>]*>?/gm, ' ')}
+            {previewText}
           </p>
         </div>
       )}
@@ -187,15 +204,18 @@ const JournalList = ({
     }
 
     return entries.filter(entry => {
+      // Basic Text Search (Check both preview and legacy content)
+      const lowerSearch = searchTerm.toLowerCase();
+      const contentToSearch = (entry.preview || entry.content || '').toLowerCase();
+      
       if (viewMode === 'calendar') {
         const entryDate = new Date(entry.date).toDateString();
         const selDate = selectedDate.toDateString();
         return entryDate === selDate;
       }
       
-      const lowerSearch = searchTerm.toLowerCase();
       const matchesSearch = searchTerm === '' || 
-        entry.content.toLowerCase().includes(lowerSearch) ||
+        contentToSearch.includes(lowerSearch) ||
         entry.tags?.some(tag => tag.toLowerCase().includes(lowerSearch)) ||
         (entry.location && entry.location.toLowerCase().includes(lowerSearch));
 
@@ -254,7 +274,7 @@ const JournalList = ({
           {/* DESKTOP ACTIONS CONTAINER */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 flex-shrink-0 self-end md:self-auto">
             
-            {/* SEARCH TOGGLE (Visible always on desktop if preferred, but scalable here) */}
+            {/* SEARCH TOGGLE */}
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsSearchOpen(!isSearchOpen)}
@@ -273,7 +293,7 @@ const JournalList = ({
               <span className="hidden md:inline text-sm font-bold">New Entry</span>
             </motion.button>
 
-            {/* VIEW TOGGLES (Moved from Modal to Header on Desktop) */}
+            {/* VIEW TOGGLES */}
             <div className="hidden md:flex bg-white dark:bg-gray-900 p-1 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
                {['list', 'grid', 'calendar'].map(mode => (
                   <button
@@ -345,7 +365,7 @@ const JournalList = ({
         
         <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
 
-        {/* EXPANDABLE SEARCH (Enhanced width for Desktop) */}
+        {/* EXPANDABLE SEARCH */}
         <AnimatePresence>
           {(isSearchOpen || searchTerm || activeFilters.mood || activeFilters.tag || activeFilters.location) && (
             <motion.div 
@@ -382,7 +402,6 @@ const JournalList = ({
                       <X size={12} /> Clear
                     </motion.button>
                   )}
-                  {/* ... Filter buttons remain same ... */}
                   {MOODS.map(m => {
                      const Icon = m.icon;
                      const isActive = activeFilters.mood === m.value;
