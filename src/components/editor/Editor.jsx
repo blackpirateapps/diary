@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, AlignLeft, ChevronLeft, Trash2 } from 'lucide-react';
+import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { db, useBlobUrl } from '../../db'; 
@@ -40,14 +40,11 @@ const BlobImage = ({ src, ...props }) => {
 const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
 
 // --- PLUGINS ---
-
-// Main Editor Init: Updates when content changes externally (e.g. via Zen Mode)
 const MarkdownInitPlugin = ({ content }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
     editor.update(() => {
       const current = $convertToMarkdownString(TRANSFORMERS);
-      // Only update if significantly different to avoid cursor jumps
       if (current !== content) {
          $convertFromMarkdownString(content || '', TRANSFORMERS);
       }
@@ -70,18 +67,11 @@ const MarkdownSyncPlugin = ({ onChange }) => {
 };
 
 // --- ANIMATION VARIANTS ---
+// Updated for a subtle modal pop-up effect on desktop
 const containerVariants = {
-  hidden: { opacity: 0, scale: 0.98 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } },
-  exit: { opacity: 0, scale: 0.98, transition: { duration: 0.2, ease: "easeIn" } }
-};
-const contentStagger = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.4, delayChildren: 0.1, staggerChildren: 0.05 } }
-};
-const itemVariants = {
-  hidden: { opacity: 0, y: 10 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } }
+  hidden: { opacity: 0, scale: 0.95, y: 20 },
+  visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
+  exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } }
 };
 
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
@@ -122,7 +112,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
 
-  // --- AUTO SAVE & UNSAVED CHANGES WARNING ---
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       const isDirty = content !== (entry?.content || '');
@@ -235,7 +224,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     } catch (err) { alert("PDF Failed"); } finally { setIsExporting(false); }
   };
 
-  // --- LEXICAL CONFIG ---
   const initialConfig = useMemo(() => ({
     namespace: 'MainEditor',
     theme: {
@@ -274,8 +262,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       />
 
       <AnimatePresence>
+        {/* Backdrop for Desktop */}
         <motion.div 
-            className="fixed inset-0 bg-white dark:bg-gray-950 z-50 flex flex-col overflow-hidden font-sans transition-colors" 
+            className="fixed inset-0 bg-black/5 dark:bg-black/50 backdrop-blur-sm z-40 hidden lg:block"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => { saveData(false); onClose(); }}
+        />
+
+        <motion.div 
+            className="fixed inset-0 lg:inset-8 lg:max-w-7xl lg:mx-auto bg-white dark:bg-gray-950 lg:rounded-2xl lg:shadow-2xl z-50 flex flex-col overflow-hidden font-sans transition-colors border border-gray-100 dark:border-gray-800" 
             variants={containerVariants} initial="hidden" animate="visible" exit="exit"
         >
             <EditorHeader 
@@ -285,94 +280,142 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               onDone={() => { saveData(false); onClose(); }} entryId={entry?.id}
             />
 
-            <motion.div className="flex-1 overflow-y-auto no-scrollbar flex flex-col bg-white dark:bg-gray-950 relative transition-colors" variants={contentStagger}>
+            {/* Split Layout for Desktop */}
+            <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
                 
-                <AnimatePresence>
-                    {images.length > 0 && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "18rem" }} exit={{ opacity: 0, height: 0 }} className="w-full relative group bg-gray-50 dark:bg-gray-900 flex-shrink-0">
-                            <BlobImage key={imgIndex} src={images[imgIndex]} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
-                            {images.length > 1 && (
-                                <>
-                                    <button onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-all"><ChevronLeft size={20}/></button>
-                                    <button onClick={() => setImgIndex((i) => (i + 1) % images.length)} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-all"><ChevronLeft size={20} className="rotate-180"/></button>
-                                </>
-                            )}
-                            <button onClick={() => { if(window.confirm('Delete image?')) { setImages(i => i.filter((_,x) => x !== imgIndex)); setImgIndex(0); saveData(true); } }} className="absolute top-4 right-4 p-2 bg-white/80 dark:bg-black/50 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                {/* LEFT: Main Editor Area */}
+                <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col order-2 lg:order-1">
+                    
+                    {/* Cover Image Style */}
+                    <AnimatePresence>
+                        {images.length > 0 && (
+                            <motion.div 
+                                initial={{ opacity: 0, height: 0 }} 
+                                animate={{ opacity: 1, height: "16rem" }} 
+                                exit={{ opacity: 0, height: 0 }} 
+                                className="w-full relative group bg-gray-50 dark:bg-gray-900 flex-shrink-0"
+                            >
+                                <BlobImage key={imgIndex} src={images[imgIndex]} className="w-full h-full object-cover opacity-90 transition-opacity hover:opacity-100" />
+                                
+                                <div className="absolute inset-0 bg-gradient-to-t from-white/80 dark:from-gray-950/80 to-transparent pointer-events-none" />
 
-                <div className="px-8 pb-32 max-w-3xl mx-auto w-full flex flex-col">
-                    <motion.div variants={itemVariants} className="pt-10 pb-6">
-                        <div className="flex items-baseline gap-3 mb-1">
-                            <h2 className="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">{currentDate.toLocaleDateString(undefined, { weekday: 'long' })}</h2>
-                            <span className="text-2xl text-gray-400 dark:text-gray-500 font-medium">{currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</span>
-                        </div>
-                        <div className="flex items-center gap-4 text-gray-400 dark:text-gray-500 text-sm font-medium">
-                            <div className="relative group cursor-pointer hover:text-[var(--accent-500)] transition-colors flex items-center gap-2">
-                                <Clock size={16} strokeWidth={2.5} className="group-hover:text-[var(--accent-500)] transition-colors" />
-                                <span className="font-semibold">{currentDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-                                <input type="time" value={currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} onChange={handleTimeChange} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+                                {images.length > 1 && (
+                                    <>
+                                        <button onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-sm"><ChevronLeft size={20}/></button>
+                                        <button onClick={() => setImgIndex((i) => (i + 1) % images.length)} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-sm"><ChevronLeft size={20} className="rotate-180"/></button>
+                                    </>
+                                )}
+                                <button onClick={() => { if(window.confirm('Delete image?')) { setImages(i => i.filter((_,x) => x !== imgIndex)); setImgIndex(0); saveData(true); } }} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:bg-red-600"><Trash2 size={16}/></button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Editor Content Container */}
+                    <div className="flex-1 w-full max-w-4xl mx-auto px-6 py-8 lg:px-12 lg:py-12">
+                        
+                        {/* Title / Date Area (Mobile Only - Hidden on Desktop Sidebar) */}
+                        <div className="lg:hidden mb-6">
+                            <div className="flex items-baseline gap-3 mb-1">
+                                <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{currentDate.toLocaleDateString(undefined, { weekday: 'long' })}</h2>
+                                <span className="text-xl text-gray-400 dark:text-gray-500 font-medium">{currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</span>
                             </div>
-                            {!isToday && <span className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-bold">Past Entry</span>}
-                            <div className="flex items-center gap-1.5 ml-auto text-gray-300 dark:text-gray-600"><AlignLeft size={14} strokeWidth={2.5} /><span className="text-xs font-semibold tracking-wide">{wordCount} words</span></div>
                         </div>
-                    </motion.div>
 
-                    <MetadataBar 
-                        mood={mood} setMood={setMood} isMoodOpen={isMoodOpen} setIsMoodOpen={setIsMoodOpen} onSave={saveData}
-                        location={location} onLocationClick={handleLocation} loadingLocation={loadingLocation}
-                        weather={weather} uploading={uploading} onImageUpload={handleImageUpload}
-                    />
+                        {/* Mobile Metadata Bar (Hidden on Desktop) */}
+                        <div className="lg:hidden mb-8">
+                             <MetadataBar 
+                                mood={mood} setMood={setMood} isMoodOpen={isMoodOpen} setIsMoodOpen={setIsMoodOpen} onSave={saveData}
+                                location={location} onLocationClick={handleLocation} loadingLocation={loadingLocation}
+                                weather={weather} uploading={uploading} onImageUpload={handleImageUpload}
+                                isSidebar={false}
+                            />
+                        </div>
 
-                    <motion.div variants={itemVariants} className="min-h-[300px] relative">
-                         <LexicalComposer initialConfig={initialConfig}>
-                           {/* Toolbar only in edit mode */}
-                           {mode === 'edit' && <ToolbarPlugin />}
-
-                           <RichTextPlugin
-                             contentEditable={
-                               <ContentEditable 
-                                 className="outline-none text-lg text-gray-800 dark:text-gray-200 leading-relaxed min-h-[300px]" 
+                        {/* Lexical Editor */}
+                        <div className="min-h-[400px] relative">
+                             <LexicalComposer initialConfig={initialConfig}>
+                               {mode === 'edit' && <ToolbarPlugin />}
+                               <RichTextPlugin
+                                 contentEditable={
+                                   <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
+                                 }
+                                 placeholder={
+                                   <div className="absolute top-16 lg:top-14 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
+                                     Start writing here...
+                                   </div>
+                                 }
+                                 ErrorBoundary={LexicalErrorBoundary}
                                />
-                             }
-                             placeholder={
-                               <div className="absolute top-0 left-0 text-gray-300 dark:text-gray-600 pointer-events-none text-lg select-none">
-                                 Write about your day...
-                               </div>
-                             }
-                             ErrorBoundary={LexicalErrorBoundary}
-                           />
-                           
-                           <HistoryPlugin />
-                           <ListPlugin />
-                           <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
-                           
-                           {/* Updated Sync Plugins */}
-                           <MarkdownInitPlugin content={content} />
-                           <MarkdownSyncPlugin onChange={setContent} />
-                         </LexicalComposer>
+                               <HistoryPlugin />
+                               <ListPlugin />
+                               <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+                               <MarkdownInitPlugin content={content} />
+                               <MarkdownSyncPlugin onChange={setContent} />
+                             </LexicalComposer>
+                             {mode === 'preview' && <div className="absolute inset-0 z-10" />}
+                        </div>
+                    </div>
+                </main>
 
-                         {/* Overlay for Preview Mode */}
-                         {mode === 'preview' && <div className="absolute inset-0 z-10" />}
-                    </motion.div>
+                {/* RIGHT: Sidebar (Desktop Only) */}
+                <aside className="w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto order-1 lg:order-2">
+                    
+                    {/* Date Block */}
+                    <div className="mb-8 hidden lg:block">
+                        <div className="flex items-center gap-2 text-[var(--accent-500)] mb-2 font-medium">
+                            <Calendar size={18} />
+                            <span>{currentDate.getFullYear()}</span>
+                        </div>
+                        <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-1 tracking-tight">{currentDate.toLocaleDateString(undefined, { weekday: 'long' })}</h2>
+                        <h3 className="text-2xl text-gray-400 font-medium mb-4">{currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</h3>
+                        
+                        <div className="flex items-center gap-4 text-sm text-gray-500 border-b border-gray-200 dark:border-gray-800 pb-4">
+                            <div className="relative group cursor-pointer hover:text-[var(--accent-500)] transition-colors flex items-center gap-2">
+                                <Clock size={16} strokeWidth={2.5} />
+                                <span className="font-semibold">{currentDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                                <input type="time" value={currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} onChange={handleTimeChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                            </div>
+                            <div className="flex items-center gap-1.5 ml-auto">
+                                <AlignLeft size={14} />
+                                <span>{wordCount} words</span>
+                            </div>
+                        </div>
+                    </div>
 
-                    <div className="h-px bg-gray-100 dark:bg-gray-800 my-8" />
+                    {/* Metadata Sidebar Implementation */}
+                    <div className="flex flex-col gap-6">
+                        
+                        {/* Re-using Metadata Bar logic but strictly for sidebar layout if LG */}
+                        <div className="hidden lg:block">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Context</label>
+                            <MetadataBar 
+                                mood={mood} setMood={setMood} isMoodOpen={isMoodOpen} setIsMoodOpen={setIsMoodOpen} onSave={saveData}
+                                location={location} onLocationClick={handleLocation} loadingLocation={loadingLocation}
+                                weather={weather} uploading={uploading} onImageUpload={handleImageUpload}
+                                isSidebar={true}
+                            />
+                        </div>
 
-                    <motion.div variants={itemVariants} className="flex flex-col gap-6">
-                        <div className="flex flex-col gap-2">
-                            <label className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-1">Tags</label>
+                        {/* Tags */}
+                        <div>
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
                             <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
                         </div>
+
+                        {/* Sleep */}
                         {todaysSleepSessions.length > 0 && (
-                            <div className="flex flex-col gap-2">
-                                <label className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-1">Sleep Data</label>
+                            <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Sleep Data</label>
                                 {todaysSleepSessions.map(session => <SleepWidget key={session.id} session={session} />)}
                             </div>
                         )}
-                    </motion.div>
-                </div>
-            </motion.div>
+                        
+                        {/* Mobile: Bottom Filler */}
+                        <div className="lg:hidden h-20"></div>
+                    </div>
+                </aside>
+
+            </div>
         </motion.div>
       </AnimatePresence>
     </>

@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Sun, Image as ImageIcon, CloudRain, Frown, Meh, Smile, Heart } from 'lucide-react';
+import { MapPin, Sun, Image as ImageIcon, CloudRain, Frown, Meh, Smile, Heart, ChevronDown } from 'lucide-react';
 import MoodPopup from '../MoodPopup';
 
 // Keep icons consistent
@@ -20,85 +20,90 @@ const MOODS = [
 const MetadataBar = ({ 
   mood, setMood, isMoodOpen, setIsMoodOpen, onSave,
   location, onLocationClick, loadingLocation,
-  weather, uploading, onImageUpload 
+  weather, uploading, onImageUpload, isSidebar = false
 }) => {
   const fileInputRef = useRef(null);
   const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Meh;
   const currentMoodColor = MOODS.find(m => m.value === mood)?.color || 'text-gray-500';
 
+  // Common button styles
+  const baseBtnClass = "flex items-center gap-2 rounded-lg text-sm font-medium transition-all group";
+  const mobileClass = "pl-3 pr-4 py-1.5 rounded-full border shadow-sm";
+  const sidebarClass = "w-full p-2 hover:bg-white dark:hover:bg-gray-800 border border-transparent hover:border-gray-200 dark:hover:border-gray-700";
+
   return (
-    <div className="flex flex-wrap gap-3 mb-8">
-      {/* Mood Pill */}
+    <div className={isSidebar ? "flex flex-col gap-1" : "flex flex-wrap gap-3 mb-8"}>
+      
+      {/* Mood */}
       <div className="relative">
         <motion.button 
-          whileTap={{ scale: 0.95 }}
+          whileTap={{ scale: 0.98 }}
           onClick={() => setIsMoodOpen(!isMoodOpen)} 
-          className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent ${mood ? 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-200 hover:border-[var(--accent-200)] dark:hover:border-[var(--accent-800)]' : 'bg-gray-50 dark:bg-gray-800 text-gray-400'}`}
+          className={`${baseBtnClass} ${isSidebar ? sidebarClass : mobileClass} ${mood && !isSidebar ? 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800' : 'bg-transparent text-gray-500 dark:text-gray-400 border-transparent'}`}
         >
-          <CurrentMoodIcon size={16} className={currentMoodColor} strokeWidth={2.5} />
-          <span>{MOODS.find(m => m.value === mood)?.label || 'Mood'}</span>
+          <div className={`flex items-center justify-center ${isSidebar ? 'w-8 h-8 rounded-md bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700' : ''}`}>
+             <CurrentMoodIcon size={18} className={currentMoodColor} strokeWidth={2.5} />
+          </div>
+          <span className="flex-1 text-left text-gray-700 dark:text-gray-300">
+             {MOODS.find(m => m.value === mood)?.label || 'Set Mood'}
+          </span>
+          {isSidebar && <ChevronDown size={14} className="text-gray-400"/>}
         </motion.button>
         <AnimatePresence>
           {isMoodOpen && (
             <MoodPopup 
               currentMood={mood} 
-              onChange={(val) => { 
-                setMood(val); 
-                setIsMoodOpen(false); 
-                onSave(true); 
-              }} 
+              onChange={(val) => { setMood(val); setIsMoodOpen(false); onSave(true); }} 
               onClose={() => setIsMoodOpen(false)} 
             />
           )}
         </AnimatePresence>
       </div>
 
-      {/* Location Pill */}
+      {/* Location */}
       <motion.button 
-        whileTap={{ scale: 0.95 }}
+        whileTap={{ scale: 0.98 }}
         onClick={onLocationClick}
         disabled={loadingLocation}
-        className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent ${location ? 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] hover:border-[var(--accent-200)]' : 'bg-white dark:bg-gray-900 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 hover:border-[var(--accent-300)] hover:text-[var(--accent-500)]'}`}
+        className={`${baseBtnClass} ${isSidebar ? sidebarClass : mobileClass} ${location && !isSidebar ? 'bg-white border-gray-100 text-[var(--accent-600)]' : 'text-gray-500 hover:text-[var(--accent-500)]'}`}
       >
-        {loadingLocation ? (
-          <div className="w-4 h-4 border-2 border-[var(--accent-500)] border-t-transparent rounded-full animate-spin" />
-        ) : (
-          <MapPin size={16} strokeWidth={2.5} />
-        )}
-        <span className="truncate max-w-[200px]">{location || 'Add Location'}</span>
+        <div className={`flex items-center justify-center ${isSidebar ? 'w-8 h-8 rounded-md bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 text-gray-400' : ''}`}>
+           {loadingLocation ? (
+             <div className="w-4 h-4 border-2 border-[var(--accent-500)] border-t-transparent rounded-full animate-spin" />
+           ) : (
+             <MapPin size={18} strokeWidth={2} />
+           )}
+        </div>
+        <span className="truncate flex-1 text-left text-gray-700 dark:text-gray-300">{location || 'Add Location'}</span>
       </motion.button>
 
-      {/* Weather Pill */}
-      {weather && (
-        <motion.div 
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-600 dark:text-gray-300 shadow-sm"
-        >
-          <Sun size={16} className="text-orange-400" strokeWidth={2.5} />
-          <span>{weather}</span>
-        </motion.div>
+      {/* Weather */}
+      {(weather || isSidebar) && (
+        <div className={`${baseBtnClass} ${isSidebar ? sidebarClass : mobileClass} ${!isSidebar ? 'bg-white border-gray-100' : ''}`}>
+           <div className={`flex items-center justify-center ${isSidebar ? 'w-8 h-8 rounded-md bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 text-orange-400' : 'text-orange-400'}`}>
+              <Sun size={18} strokeWidth={2} />
+           </div>
+           <span className="text-gray-700 dark:text-gray-300">{weather || 'Weather unavailable'}</span>
+        </div>
       )}
 
-      {/* Add Image Pill */}
+      {/* Add Image */}
       <motion.label 
-        whileTap={{ scale: 0.95 }}
-        className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm border border-transparent cursor-pointer ${uploading ? 'bg-gray-100 dark:bg-gray-800' : 'bg-white dark:bg-gray-900 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 hover:border-[var(--accent-300)] hover:text-[var(--accent-500)]'}`}
+        whileTap={{ scale: 0.98 }}
+        className={`${baseBtnClass} ${isSidebar ? sidebarClass : mobileClass} cursor-pointer hover:text-[var(--accent-500)]`}
       >
         <input 
-          type="file" 
-          accept="image/*" 
-          className="hidden" 
-          onChange={onImageUpload} 
-          disabled={uploading}
-          ref={fileInputRef}
+          type="file" accept="image/*" className="hidden" 
+          onChange={onImageUpload} disabled={uploading} ref={fileInputRef}
         />
-        {uploading ? (
-          <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-        ) : (
-          <ImageIcon size={16} strokeWidth={2.5} />
-        )}
-        <span>{uploading ? 'Compressing...' : 'Add Photo'}</span>
+        <div className={`flex items-center justify-center ${isSidebar ? 'w-8 h-8 rounded-md bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 text-gray-400' : ''}`}>
+             {uploading ? (
+               <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+             ) : (
+               <ImageIcon size={18} strokeWidth={2} />
+             )}
+        </div>
+        <span className="text-gray-700 dark:text-gray-300">{uploading ? 'Compressing...' : 'Add Photo'}</span>
       </motion.label>
     </div>
   );
