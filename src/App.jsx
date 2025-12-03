@@ -5,7 +5,7 @@ import { SleepPage } from './components/SleepPage';
 import { WhatsAppPage } from './components/WhatsAppPage';
 import MeditationPage from './components/MeditationPage'; 
 import YearInReviewPage from './components/YearInReviewPage'; 
-
+import PrivacyPolicy from './components/PrivacyPolicy';
 // --- UPDATED IMPORT PATH ---
 import Editor from './components/editor/Editor'; 
 
@@ -295,6 +295,7 @@ const App = () => {
             {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
             {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />}
             {currentRoute === 'year-review' && <YearInReviewPage navigate={navigate} />}
+            {currentRoute === 'privacy' && <PrivacyPolicy navigate={navigate} />} {/* <--- ADD THIS */}
             
             {/* THEMES PAGE */}
             {currentRoute === 'themes' && (

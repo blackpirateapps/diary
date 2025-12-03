@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   ChevronLeft, Settings, Info, Download, Upload, 
   ChevronRight, Github, Mail, Moon, MessageCircle, Flower2, 
-  BookOpen, Palette, Check, Type, Sliders, Monitor
+  BookOpen, Palette, Check, Type, Sliders, Monitor, Shield
 } from 'lucide-react';
 import CloudBackup from './CloudBackup';
-import GoogleBackup from './GoogleBackup'; // <--- Import here
-import PrivacyPolicy from './PrivacyPolicy';
+import GoogleBackup from './GoogleBackup';
+// Note: PrivacyPolicy component is typically rendered by App.jsx based on route, 
+// so we don't import it here directly to avoid circular dependency, 
+// but we link to it via navigate('privacy').
 
 // --- SHARED HEADER COMPONENT ---
 const PageHeader = ({ title, onBack }) => (
@@ -278,13 +280,13 @@ export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport
         </div>
 
         {/* CLOUD SYNC SECTION */}
-<div>
-  <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Cloud Sync</h3>
-  <div className="space-y-4">
-    <GoogleBackup />
-    <CloudBackup />
-  </div>
-</div>
+        <div>
+          <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Cloud Sync</h3>
+          <div className="space-y-4">
+            <GoogleBackup />
+            <CloudBackup />
+          </div>
+        </div>
 
         {/* DATA */}
         <div>
@@ -322,10 +324,20 @@ export const AboutPage = ({ navigate }) => {
             <Github size={20} className="text-gray-700 dark:text-gray-200" />
             <span className="text-gray-700 dark:text-gray-200 font-medium">Source Code</span>
           </a>
-          <a href="#" className="bg-white dark:bg-gray-900 p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+          <a href="#" className="bg-white dark:bg-gray-900 p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
             <Mail size={20} className="text-gray-700 dark:text-gray-200" />
             <span className="text-gray-700 dark:text-gray-200 font-medium">Contact Support</span>
           </a>
+          {/* NEW PRIVACY LINK */}
+          <button 
+            onClick={() => navigate('privacy')}
+            className="w-full bg-white dark:bg-gray-900 p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+          >
+            <div className="p-1 bg-green-50 text-green-600 rounded">
+                <Shield size={18} />
+            </div>
+            <span className="text-gray-700 dark:text-gray-200 font-medium">Privacy Policy</span>
+          </button>
         </div>
       </div>
     </div>
