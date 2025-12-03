@@ -27,7 +27,10 @@ import {
   Moon,
   MessageCircle,
   Coffee,
-  Calendar
+  Calendar,
+  History,
+  Tag,
+  CalendarDays
 } from 'lucide-react';
 
 // --- THEME ENGINE CONSTANTS ---
@@ -225,9 +228,15 @@ const App = () => {
   const isMoreRoute = ['more', 'settings', 'about', 'themes'].includes(currentRoute);
 
   // --- SIDEBAR NAV COMPONENT (DESKTOP) ---
-  const SidebarItem = ({ route, icon: Icon, label, activeCheck }) => (
+  const SidebarItem = ({ route, icon: Icon, label, activeCheck, onClick }) => (
     <button
-      onClick={() => { navigate(route); setShowFlashback(false); }}
+      onClick={() => { 
+        if(onClick) onClick();
+        else {
+          navigate(route); 
+          setShowFlashback(false); 
+        }
+      }}
       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
         activeCheck 
           ? 'bg-[var(--accent-100)] text-[var(--accent-700)] dark:bg-[var(--accent-900)] dark:text-[var(--accent-300)]' 
@@ -244,19 +253,28 @@ const App = () => {
       
       {/* --- DESKTOP SIDEBAR --- */}
       <aside className="hidden md:flex flex-col w-64 fixed h-full bg-[#f8f9fa] dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 p-4 z-50">
-        <div className="mb-8 px-2">
+        <div className="mb-6 px-2">
            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
               <Book className="text-[var(--accent-500)]" size={24} />
               {appName}
            </h1>
         </div>
         
-        <nav className="space-y-1 flex-1">
-          <SidebarItem route="journal" icon={Home} label="Journal" activeCheck={currentRoute === 'journal'} />
+        <nav className="space-y-1 flex-1 overflow-y-auto no-scrollbar">
+          
+          <div className="pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Journal</div>
+          <SidebarItem route="journal" icon={Home} label="Entries" activeCheck={currentRoute === 'journal'} />
+          <SidebarItem route="calendar" icon={CalendarDays} label="Calendar" activeCheck={currentRoute === 'calendar'} />
           <SidebarItem route="map" icon={MapIcon} label="Atlas" activeCheck={currentRoute === 'map'} />
-          <SidebarItem route="stats" icon={BarChart2} label="Insights" activeCheck={currentRoute === 'stats'} />
+          
+          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Memories</div>
+          <SidebarItem route="flashback" icon={History} label="On This Day" activeCheck={currentRoute === 'flashback'} />
           <SidebarItem route="media" icon={Grid} label="Media Gallery" activeCheck={currentRoute === 'media'} />
           
+          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Insights</div>
+          <SidebarItem route="stats" icon={BarChart2} label="Analytics" activeCheck={currentRoute === 'stats'} />
+          <SidebarItem route="tags" icon={Tag} label="Tags" activeCheck={currentRoute === 'tags'} />
+
           <div className="pt-4 pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Wellbeing</div>
           <SidebarItem route="sleep" icon={Moon} label="Sleep Tracker" activeCheck={currentRoute === 'sleep'} />
           <SidebarItem route="meditation" icon={Coffee} label="Meditation" activeCheck={currentRoute === 'meditation'} />
@@ -297,15 +315,18 @@ const App = () => {
           )}
 
           {/* PAGE ROUTING */}
-          {showFlashback ? (
+          {showFlashback || currentRoute === 'flashback' ? (
             <FlashbackPage 
               entries={entries} 
-              onBack={() => setShowFlashback(false)} 
+              onBack={() => { 
+                setShowFlashback(false);
+                if(currentRoute === 'flashback') navigate('journal');
+              }} 
               onEdit={(entry) => { setShowFlashback(false); openEditEditor(entry); }}
             />
           ) : (
             <>
-              {currentRoute === 'journal' && (
+              {(currentRoute === 'journal' || currentRoute === 'calendar' || currentRoute === 'tags') && (
                 <JournalList
                   entries={entries}
                   appName={appName}
@@ -316,7 +337,9 @@ const App = () => {
                   onExport={handleExport}
                   isOffline={isOffline}
                   isImporting={isImporting}
-                  onOpenFlashback={() => setShowFlashback(true)} 
+                  onOpenFlashback={() => setShowFlashback(true)}
+                  // Pass route so JournalList can conditionally default to calendar/tags (requires JournalList update to support these props fully, but routing works)
+                  initialView={currentRoute === 'calendar' ? 'calendar' : 'list'}
                 />
               )}
               {currentRoute === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}

@@ -68,17 +68,11 @@ const StatsPage = ({ entries, isDarkMode }) => {
   // --- THEME STYLES ---
   const themeStyles = useMemo(() => {
     return {
-      // Grid lines: Subtle gray in both modes
       grid: isDarkMode ? '#374151' : '#E5E7EB', 
-      // Axis Text: Muted text
       text: isDarkMode ? '#9CA3AF' : '#6B7280', 
-      // Card Background: Matches the Tailwind bg-white/dark:bg-gray-900 classes
       cardBg: isDarkMode ? '#111827' : '#FFFFFF',
-      // Tooltip Background
       tooltipBg: isDarkMode ? '#1F2937' : '#FFFFFF', 
-      // Tooltip Text
       tooltipColor: isDarkMode ? '#F3F4F6' : '#111827',
-      // Tooltip Border
       tooltipBorder: isDarkMode ? '#374151' : '#E5E7EB'
     };
   }, [isDarkMode]);
@@ -180,30 +174,32 @@ const StatsPage = ({ entries, isDarkMode }) => {
   }, [entries]);
 
   return (
-    <div className="pb-24 animate-slideUp text-gray-900 dark:text-gray-100 transition-colors">
-      <header className="px-6 pt-6 pb-2 sticky top-0 bg-[#F3F4F6]/95 dark:bg-gray-950/95 backdrop-blur-md z-20 border-b border-gray-200/50 dark:border-gray-800/50 transition-colors">
-        <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Insights</h1>
-        <div className="flex p-1 bg-gray-200/50 dark:bg-gray-800 rounded-xl mt-4 mb-2">
-          {['all', 'year', 'month'].map((p) => (
-            <button
-              key={p}
-              onClick={() => setSelectedPeriod(p)}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg capitalize transition-all ${
-                selectedPeriod === p 
-                  ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' 
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
-              }`}
-            >
-              {p === 'all' ? 'All Time' : p === 'year' ? 'This Year' : 'This Month'}
-            </button>
-          ))}
+    <div className="pb-24 animate-slideUp text-gray-900 dark:text-gray-100 transition-colors max-w-5xl mx-auto">
+      <header className="px-6 pt-6 pb-2 sticky top-0 md:relative bg-[#F3F4F6]/95 dark:bg-gray-950/95 md:bg-transparent backdrop-blur-md z-20 md:z-0 border-b md:border-b-0 border-gray-200/50 dark:border-gray-800/50 transition-colors">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Insights</h1>
+          <div className="flex p-1 bg-gray-200/50 dark:bg-gray-800 rounded-xl w-full md:w-auto">
+            {['all', 'year', 'month'].map((p) => (
+              <button
+                key={p}
+                onClick={() => setSelectedPeriod(p)}
+                className={`flex-1 md:flex-none md:px-6 py-1.5 text-xs font-bold rounded-lg capitalize transition-all ${
+                  selectedPeriod === p 
+                    ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' 
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
+                }`}
+              >
+                {p === 'all' ? 'All Time' : p === 'year' ? 'This Year' : 'This Month'}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
       <div className="px-4 space-y-6 mt-6">
         
         {/* METRICS */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center">
             <div className="p-2 bg-orange-50 dark:bg-orange-900/30 text-orange-500 rounded-full mb-2">
               <Trophy size={20} />
@@ -217,6 +213,22 @@ const StatsPage = ({ entries, isDarkMode }) => {
             </div>
             <span className="text-2xl font-bold text-gray-900 dark:text-white">{filteredEntries.length}</span>
             <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Entries</span>
+          </div>
+           <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center">
+            <div className="p-2 bg-purple-50 dark:bg-purple-900/30 text-purple-500 rounded-full mb-2">
+              <AlignLeft size={20} />
+            </div>
+            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              {filteredEntries.reduce((acc, curr) => acc + curr.content.split(' ').length, 0).toLocaleString()}
+            </span>
+            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Total Words</span>
+          </div>
+           <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center">
+            <div className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-500 rounded-full mb-2">
+              <CalendarIcon size={20} />
+            </div>
+            <span className="text-2xl font-bold text-gray-900 dark:text-white">{availableYears.length}</span>
+            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Years Active</span>
           </div>
         </div>
 
@@ -287,7 +299,6 @@ const StatsPage = ({ entries, isDarkMode }) => {
                     itemStyle={{ color: themeStyles.tooltipColor }}
                     formatter={(val, name, props) => [val, `Mood: ${props.payload.mood}`]}
                   />
-                  {/* UPDATED: Uses --accent-500 now, which is defined in App.jsx */}
                   <Bar dataKey="words" fill="var(--accent-500)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -311,7 +322,6 @@ const StatsPage = ({ entries, isDarkMode }) => {
                      outerRadius={70}
                      paddingAngle={5}
                      dataKey="value"
-                     // UPDATED: Stroke now matches cardBg (dark gray in dark mode) to look transparent
                      stroke={themeStyles.cardBg} 
                    >
                      {timeOfDayData.map((entry, index) => (
@@ -330,18 +340,18 @@ const StatsPage = ({ entries, isDarkMode }) => {
 
         {/* SLEEP ANALYTICS */}
         {sleepStats ? (
-          <div className="space-y-4">
-            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 col-span-full">
               <div className="flex items-center gap-2 mb-4">
                 <Moon size={18} className="text-indigo-500" />
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Sleep Duration</h2>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Sleep Trends</h2>
               </div>
-              <div className="flex justify-between text-center mb-6 bg-gray-50 dark:bg-gray-800 p-3 rounded-xl">
+              <div className="grid grid-cols-3 text-center mb-6 bg-gray-50 dark:bg-gray-800 p-3 rounded-xl gap-4">
                 <div>
                   <span className="block text-xs text-gray-400 font-bold uppercase">Avg / Day</span>
                   <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{formatDecimalHour(sleepStats.avg)}</span>
                 </div>
-                <div className="px-4 border-l border-r border-gray-200 dark:border-gray-700">
+                <div className="border-l border-r border-gray-200 dark:border-gray-700 px-2">
                   <span className="block text-xs text-gray-400 font-bold uppercase">Shortest</span>
                   <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{formatDecimalHour(sleepStats.min.totalDuration)}</span>
                 </div>
@@ -355,7 +365,6 @@ const StatsPage = ({ entries, isDarkMode }) => {
                   <AreaChart data={sleepStats.chartData}>
                     <defs>
                       <linearGradient id="colorSleep" x1="0" y1="0" x2="0" y2="1">
-                        {/* UPDATED: Gradient now uses accent color variable */}
                         <stop offset="5%" stopColor="var(--accent-500)" stopOpacity={0.3}/>
                         <stop offset="95%" stopColor="var(--accent-500)" stopOpacity={0}/>
                       </linearGradient>
@@ -369,7 +378,6 @@ const StatsPage = ({ entries, isDarkMode }) => {
                       itemStyle={{ color: themeStyles.tooltipColor }}
                       formatter={(val) => [formatDecimalHour(val), 'Total Duration']}
                     />
-                    {/* UPDATED: Area now uses accent color variable */}
                     <Area type="monotone" dataKey="totalDuration" stroke="var(--accent-500)" fillOpacity={1} fill="url(#colorSleep)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -377,7 +385,7 @@ const StatsPage = ({ entries, isDarkMode }) => {
             </div>
 
             {/* Sleep Schedule */}
-            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 col-span-full">
               <div className="flex items-center gap-2 mb-4">
                 <Clock size={18} className="text-purple-500" />
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">Sleep Schedule</h2>
@@ -426,7 +434,6 @@ const StatsPage = ({ entries, isDarkMode }) => {
                         <Bar 
                             key={i}
                             dataKey={`range${i}`} 
-                            // UPDATED: Bar now uses accent color variable
                             fill="var(--accent-500)" 
                             radius={[4, 4, 4, 4]} 
                             barSize={12} 
@@ -437,9 +444,7 @@ const StatsPage = ({ entries, isDarkMode }) => {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <p className="text-center text-[10px] text-gray-400 mt-2">Bars represent time from Bedtime to Wake up</p>
             </div>
-
           </div>
         ) : (
           <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 text-center">
