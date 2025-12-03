@@ -6,7 +6,7 @@ import {
 import { exportToZip, importFromZip } from '../db';
 
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-const CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com'; // <--- KEEP YOUR ID HERE
+const CLIENT_ID = '640977666110-4lvm2gj9otb78k0a2ju0eere49lfhe98.apps.googleusercontent.com'; // <--- KEEP YOUR ID HERE
 const FOLDER_NAME = 'Diary by Blackpiratex';
 
 const GoogleBackup = () => {
