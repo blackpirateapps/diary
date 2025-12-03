@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import CloudBackup from './CloudBackup';
 import GoogleBackup from './GoogleBackup'; // <--- Import here
+import PrivacyPolicy from './PrivacyPolicy';
 
 // --- SHARED HEADER COMPONENT ---
 const PageHeader = ({ title, onBack }) => (
