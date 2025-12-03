@@ -458,8 +458,9 @@ export const PeoplePage = ({ navigate, onEdit }) => {
 
   const handleSave = async (data) => {
     if (!data.name.trim()) return alert("Name is required");
-    // Ensure deep clone/clean object to avoid state mutation issues if Dexie objects are frozen
-    const personData = JSON.parse(JSON.stringify(data));
+    
+    // FIX: DIRECTLY USE DATA TO PRESERVE BLOBS
+    const personData = { ...data };
     
     if (personData.id) {
         await db.people.put(personData);
