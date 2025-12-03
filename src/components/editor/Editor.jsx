@@ -23,6 +23,7 @@ import { CodeNode } from '@lexical/code';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
 // --- NEW IMPORTS FOR MENTIONS ---
+import { $nodesOfType } from 'lexical';
 import { MentionNode } from './nodes/MentionNode';
 import MentionsPlugin from './MentionsPlugin';
 
@@ -70,8 +71,23 @@ const MarkdownSyncPlugin = ({ onChange }) => {
   );
 };
 
+// --- MENTIONS TRACKER PLUGIN ---
+// This extracts the IDs from MentionNodes whenever the editor updates
+const MentionsTracker = ({ onChange }) => {
+  const [editor] = useLexicalComposerContext();
+  useEffect(() => {
+    return editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        const mentionNodes = $nodesOfType(MentionNode);
+        const uniqueIds = [...new Set(mentionNodes.map((node) => node.__id))];
+        onChange(uniqueIds);
+      });
+    });
+  }, [editor, onChange]);
+  return null;
+};
+
 // --- ANIMATION VARIANTS ---
-// Updated for a subtle modal pop-up effect on desktop
 const containerVariants = {
   hidden: { opacity: 0, scale: 0.95, y: 20 },
   visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
@@ -91,6 +107,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [weather, setWeather] = useState(entry?.weather || '');
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
+  
+  // NEW: State to track people IDs tagged in the editor
+  const [taggedPeople, setTaggedPeople] = useState(entry?.people || []);
   
   const contentRef = useRef(content);
   contentRef.current = content;
@@ -144,12 +163,13 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       weather, 
       tags, 
       images, 
+      people: taggedPeople, // <--- Saving the extracted IDs
       date: dateToSave.toISOString() 
     });
 
     setTimeout(() => setSaveStatus('saved'), 500);
     setTimeout(() => setSaveStatus('idle'), 2500);
-  }, [entryId, currentDate, mood, location, locationLat, locationLng, weather, tags, images, onSave]);
+  }, [entryId, currentDate, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, onSave]);
 
   useEffect(() => {
     if (content !== (entry?.content || '')) {
@@ -341,9 +361,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                              <LexicalComposer initialConfig={initialConfig}>
                                {mode === 'edit' && <ToolbarPlugin />}
                                
-                               {/* --- ADDED MENTIONS PLUGIN --- */}
                                <MentionsPlugin />
-                               
+                               {/* Tracks changes to mention pills and updates local state */}
+                               <MentionsTracker onChange={setTaggedPeople} />
+
                                <RichTextPlugin
                                  contentEditable={
                                    <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
