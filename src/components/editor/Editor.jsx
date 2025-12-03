@@ -3,12 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlignLeft, ChevronLeft, Trash2 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-// --- FIXED IMPORT PATHS ---
 import { db, useBlobUrl } from '../../db'; 
 import EntryPdfDocument from './EntryPdfDocument'; 
 import TagInput from './TagInput'; 
 
-// --- LEXICAL IMPORTS ---
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
@@ -24,11 +22,9 @@ import { LinkNode } from '@lexical/link';
 import { CodeNode } from '@lexical/code';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
-// --- PDF IMPORTS ---
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
-// --- SUB COMPONENTS ---
 import EditorHeader from './EditorHeader';
 import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
@@ -36,7 +32,6 @@ import SleepWidget from './SleepWidget';
 import ToolbarPlugin from './ToolbarPlugin';
 import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtils';
 
-// --- HELPERS FOR LOCAL IMAGE RENDERING ---
 const BlobImage = ({ src, ...props }) => {
   const url = useBlobUrl(src);
   return <motion.img src={url} {...props} />;
@@ -44,29 +39,19 @@ const BlobImage = ({ src, ...props }) => {
 
 const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
 
-// --- ANIMATION VARIANTS ---
-const containerVariants = {
-  hidden: { opacity: 0, scale: 0.98 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } },
-  exit: { opacity: 0, scale: 0.98, transition: { duration: 0.2, ease: "easeIn" } }
-};
-const contentStagger = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.4, delayChildren: 0.1, staggerChildren: 0.05 } }
-};
-const itemVariants = {
-  hidden: { opacity: 0, y: 10 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } }
-};
+// --- PLUGINS ---
 
-// --- LEXICAL SYNC PLUGINS ---
+// UPDATED: Watches 'content' prop and updates editor if it changes externally (e.g. from Zen Mode)
 const MarkdownInitPlugin = ({ content }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
     editor.update(() => {
-      $convertFromMarkdownString(content, TRANSFORMERS);
+      const current = $convertToMarkdownString(TRANSFORMERS);
+      if (current !== content) {
+         $convertFromMarkdownString(content || '', TRANSFORMERS);
+      }
     });
-  }, []); 
+  }, [content, editor]); 
   return null;
 };
 
@@ -83,7 +68,21 @@ const MarkdownSyncPlugin = ({ onChange }) => {
   );
 };
 
-// --- MAIN COMPONENT ---
+// --- ANIMATION VARIANTS ---
+const containerVariants = {
+  hidden: { opacity: 0, scale: 0.98 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } },
+  exit: { opacity: 0, scale: 0.98, transition: { duration: 0.2, ease: "easeIn" } }
+};
+const contentStagger = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.4, delayChildren: 0.1, staggerChildren: 0.05 } }
+};
+const itemVariants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } }
+};
+
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [entryId] = useState(entry?.id || Date.now().toString());
   const [currentDate, setCurrentDate] = useState(entry?.date ? new Date(entry.date) : new Date());
@@ -98,7 +97,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
   
-  // Use a Ref to track content synchronously to solve the "Back button" state staleness
+  // Ref tracks content for synchronous access
   const contentRef = useRef(content);
   contentRef.current = content;
 
@@ -123,15 +122,28 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
 
+  // --- AUTO SAVE & UNSAVED CHANGES WARNING ---
+
+  // 1. Warn user if they try to refresh/close while saving
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      // Check if status is saving OR if content is different from original entry
+      const isDirty = content !== (entry?.content || '');
+      if (saveStatus === 'saving' || (isDirty && saveStatus !== 'saved')) {
+        e.preventDefault();
+        e.returnValue = ''; // Standard browser trigger for "Leave site?" dialog
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [saveStatus, content, entry]);
+
   const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
-    // If auto-saving and empty, ignore
     if (isAutoSave && !contentRef.current?.trim() && images.length === 0) return;
     
     setSaveStatus('saving');
     const dateToSave = overrideDate || currentDate;
     
-    // Use contentRef.current to ensure we always have the latest keystrokes 
-    // even if the closure is slightly stale during rapid "Back" clicks
     onSave({ 
       id: entryId, 
       content: contentRef.current, 
@@ -149,15 +161,25 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     setTimeout(() => setSaveStatus('idle'), 2500);
   }, [entryId, currentDate, mood, location, locationLat, locationLng, weather, tags, images, onSave]);
 
+  // 2. Auto-save trigger with reduced 500ms delay
   useEffect(() => {
     if (content !== (entry?.content || '')) {
-      // Reduced delay to 500ms for a more "instant" feel
       const timer = setTimeout(() => saveData(true), 500);
       return () => clearTimeout(timer);
     }
   }, [content, saveData, entry?.content]);
 
   // --- HANDLERS ---
+  
+  const handleZenBack = (finalContent) => {
+    if (typeof finalContent === 'string') {
+        contentRef.current = finalContent; 
+        setContent(finalContent); 
+    }
+    saveData(true);
+    setIsZenMode(false);
+  };
+
   const handleTimeChange = (e) => {
     if (!e.target.value) return;
     const [hours, minutes] = e.target.value.split(':').map(Number);
@@ -175,10 +197,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       try {
         const compressedBlob = await compressImage(file);
         setImages(prev => [...prev, compressedBlob]);
-        setImgIndex(images.length);
-        // Note: images state update is async, so we might want to save in a useEffect or ensure sync
-        // But for file uploads, the slight delay in re-render to trigger save is usually fine.
-        setTimeout(() => saveData(true), 100); 
+        setImgIndex(images.length); 
+        setTimeout(() => saveData(true), 100);
       } catch (err) { alert(err.message); } 
       finally { setUploading(false); e.target.value = ''; }
     }
@@ -205,8 +225,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             const parts = [d.address.road || d.address.building, d.address.city || d.address.town || d.address.suburb].filter(Boolean);
             setLocation(parts.length ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
         }
-        // Save immediately after location found
-        setTimeout(() => saveData(true), 100);
+        setTimeout(() => saveData(true), 200);
       } catch (e) { console.error(e); } finally { setLoadingLocation(false); }
     }, (e) => { console.error(e); alert("Location error"); setLoadingLocation(false); });
   };
@@ -219,11 +238,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       const blob = await pdf(doc).toBlob();
       saveAs(blob, `Journal_${currentDate.toISOString().split('T')[0]}.pdf`);
     } catch (err) { alert("PDF Failed"); } finally { setIsExporting(false); }
-  };
-
-  const handleZenBack = () => {
-    saveData(true); 
-    setIsZenMode(false);
   };
 
   // --- LEXICAL CONFIG ---
@@ -253,7 +267,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     editable: mode === 'edit'
   };
 
-  // --- RENDER ---
   return (
     <>
       <Styles />
@@ -319,7 +332,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
                     <motion.div variants={itemVariants} className="min-h-[300px] relative">
                          <LexicalComposer initialConfig={initialConfig}>
-                           {/* Render Toolbar only if in Edit Mode */}
+                           {/* Toolbar only in edit mode */}
                            {mode === 'edit' && <ToolbarPlugin />}
 
                            <RichTextPlugin
@@ -340,7 +353,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                            <ListPlugin />
                            <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
                            
-                           {/* Sync Logic */}
+                           {/* Updated Sync Plugins */}
                            <MarkdownInitPlugin content={content} />
                            <MarkdownSyncPlugin onChange={setContent} />
                          </LexicalComposer>
@@ -354,7 +367,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     <motion.div variants={itemVariants} className="flex flex-col gap-6">
                         <div className="flex flex-col gap-2">
                             <label className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-1">Tags</label>
-                            {/* Corrected TagInput usage matching the rewritten component */}
                             <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
                         </div>
                         {todaysSleepSessions.length > 0 && (
