@@ -28,9 +28,7 @@ import {
   MessageCircle,
   Coffee,
   Calendar,
-  History,
-  Tag,
-  CalendarDays
+  History
 } from 'lucide-react';
 
 // --- THEME ENGINE CONSTANTS ---
@@ -264,7 +262,6 @@ const App = () => {
           
           <div className="pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Journal</div>
           <SidebarItem route="journal" icon={Home} label="Entries" activeCheck={currentRoute === 'journal'} />
-          <SidebarItem route="calendar" icon={CalendarDays} label="Calendar" activeCheck={currentRoute === 'calendar'} />
           <SidebarItem route="map" icon={MapIcon} label="Atlas" activeCheck={currentRoute === 'map'} />
           
           <div className="pt-4 pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Memories</div>
@@ -273,10 +270,10 @@ const App = () => {
           
           <div className="pt-4 pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Insights</div>
           <SidebarItem route="stats" icon={BarChart2} label="Analytics" activeCheck={currentRoute === 'stats'} />
-          <SidebarItem route="tags" icon={Tag} label="Tags" activeCheck={currentRoute === 'tags'} />
+          <SidebarItem route="whatsapp" icon={MessageCircle} label="Chat Analytics" activeCheck={currentRoute === 'whatsapp'} />
 
           <div className="pt-4 pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Wellbeing</div>
-          <SidebarItem route="sleep" icon={Moon} label="Sleep Tracker" activeCheck={currentRoute === 'sleep'} />
+          <SidebarItem route="sleep" icon={Moon} label="Sleep Insights" activeCheck={currentRoute === 'sleep'} />
           <SidebarItem route="meditation" icon={Coffee} label="Meditation" activeCheck={currentRoute === 'meditation'} />
           <SidebarItem route="year-review" icon={Calendar} label="Year in Review" activeCheck={currentRoute === 'year-review'} />
         </nav>
