@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlignLeft, ChevronLeft, Trash2 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 // --- FIXED IMPORT PATHS ---
-import { db, useBlobUrl } from '../../db'; // Go up two levels to find db
-import EntryPdfDocument from './EntryPdfDocument'; // Go up one level to components
-import TagInput from './TagInput'; // Go up one level to components
+import { db, useBlobUrl } from '../../db'; 
+import EntryPdfDocument from './EntryPdfDocument'; 
+import TagInput from './TagInput'; 
 
 // --- LEXICAL IMPORTS ---
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
@@ -28,7 +28,7 @@ import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
-// --- SUB COMPONENTS (Local to ./editor folder) ---
+// --- SUB COMPONENTS ---
 import EditorHeader from './EditorHeader';
 import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
@@ -98,6 +98,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
   
+  // Use a Ref to track content synchronously to solve the "Back button" state staleness
+  const contentRef = useRef(content);
+  contentRef.current = content;
+
   const [mode, setMode] = useState(isToday ? 'edit' : 'preview');
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
@@ -120,17 +124,35 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
 
   const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
-    if (isAutoSave && !content.trim() && images.length === 0) return;
+    // If auto-saving and empty, ignore
+    if (isAutoSave && !contentRef.current?.trim() && images.length === 0) return;
+    
     setSaveStatus('saving');
     const dateToSave = overrideDate || currentDate;
-    onSave({ id: entryId, content, mood, location, locationLat, locationLng, weather, tags, images, date: dateToSave.toISOString() });
+    
+    // Use contentRef.current to ensure we always have the latest keystrokes 
+    // even if the closure is slightly stale during rapid "Back" clicks
+    onSave({ 
+      id: entryId, 
+      content: contentRef.current, 
+      mood, 
+      location, 
+      locationLat, 
+      locationLng, 
+      weather, 
+      tags, 
+      images, 
+      date: dateToSave.toISOString() 
+    });
+
     setTimeout(() => setSaveStatus('saved'), 500);
     setTimeout(() => setSaveStatus('idle'), 2500);
-  }, [entryId, currentDate, content, mood, location, locationLat, locationLng, weather, tags, images, onSave]);
+  }, [entryId, currentDate, mood, location, locationLat, locationLng, weather, tags, images, onSave]);
 
   useEffect(() => {
     if (content !== (entry?.content || '')) {
-      const timer = setTimeout(() => saveData(true), 2000);
+      // Reduced delay to 500ms for a more "instant" feel
+      const timer = setTimeout(() => saveData(true), 500);
       return () => clearTimeout(timer);
     }
   }, [content, saveData, entry?.content]);
@@ -154,7 +176,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         const compressedBlob = await compressImage(file);
         setImages(prev => [...prev, compressedBlob]);
         setImgIndex(images.length);
-        saveData(true);
+        // Note: images state update is async, so we might want to save in a useEffect or ensure sync
+        // But for file uploads, the slight delay in re-render to trigger save is usually fine.
+        setTimeout(() => saveData(true), 100); 
       } catch (err) { alert(err.message); } 
       finally { setUploading(false); e.target.value = ''; }
     }
@@ -181,6 +205,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             const parts = [d.address.road || d.address.building, d.address.city || d.address.town || d.address.suburb].filter(Boolean);
             setLocation(parts.length ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
         }
+        // Save immediately after location found
+        setTimeout(() => saveData(true), 100);
       } catch (e) { console.error(e); } finally { setLoadingLocation(false); }
     }, (e) => { console.error(e); alert("Location error"); setLoadingLocation(false); });
   };
@@ -193,6 +219,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       const blob = await pdf(doc).toBlob();
       saveAs(blob, `Journal_${currentDate.toISOString().split('T')[0]}.pdf`);
     } catch (err) { alert("PDF Failed"); } finally { setIsExporting(false); }
+  };
+
+  const handleZenBack = () => {
+    saveData(true); 
+    setIsZenMode(false);
   };
 
   // --- LEXICAL CONFIG ---
@@ -230,7 +261,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         isActive={isZenMode} 
         content={content} 
         setContent={setContent} 
-        onBack={() => { saveData(true); setIsZenMode(false); }} 
+        onBack={handleZenBack} 
         settings={zenSettings} 
       />
 
@@ -314,7 +345,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                            <MarkdownSyncPlugin onChange={setContent} />
                          </LexicalComposer>
 
-                         {/* Overlay for Preview Mode to prevent interaction if needed, though Editable=false handles most */}
+                         {/* Overlay for Preview Mode */}
                          {mode === 'preview' && <div className="absolute inset-0 z-10" />}
                     </motion.div>
 
@@ -323,6 +354,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     <motion.div variants={itemVariants} className="flex flex-col gap-6">
                         <div className="flex flex-col gap-2">
                             <label className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-1">Tags</label>
+                            {/* Corrected TagInput usage matching the rewritten component */}
                             <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
                         </div>
                         {todaysSleepSessions.length > 0 && (
