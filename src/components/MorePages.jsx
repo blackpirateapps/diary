@@ -5,6 +5,7 @@ import {
   BookOpen, Palette, Check, Type, Sliders, Monitor
 } from 'lucide-react';
 import CloudBackup from './CloudBackup';
+import GoogleBackup from './GoogleBackup'; // <--- Import here
 
 // --- SHARED HEADER COMPONENT ---
 const PageHeader = ({ title, onBack }) => (
@@ -275,11 +276,14 @@ export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport
           </div>
         </div>
 
-        {/* CLOUD BACKUP SECTION */}
-        <div>
-          <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Cloud Sync</h3>
-          <CloudBackup />
-        </div>
+        {/* CLOUD SYNC SECTION */}
+<div>
+  <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Cloud Sync</h3>
+  <div className="space-y-4">
+    <GoogleBackup />
+    <CloudBackup />
+  </div>
+</div>
 
         {/* DATA */}
         <div>
