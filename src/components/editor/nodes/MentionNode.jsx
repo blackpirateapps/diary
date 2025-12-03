@@ -44,66 +44,39 @@ export class MentionNode extends TextNode {
   createDOM(config) {
     const dom = super.createDOM(config);
     
-    // --- STYLING ---
-    // Base Pill Style
-    dom.style.backgroundColor = 'var(--accent-100)'; 
-    dom.style.color = 'var(--accent-700)';
-    dom.style.padding = '1px 8px 1px 2px'; // Right padding for balance
-    dom.style.borderRadius = '12px'; // Pill shape
-    dom.style.display = 'inline-flex';
-    dom.style.alignItems = 'center';
+    // --- STYLING: MINIMAL TEXT ONLY ---
+    dom.style.backgroundColor = 'transparent';
+    dom.style.border = 'none';
+    dom.style.borderRadius = '0';
+    dom.style.padding = '0';
+    
+    // Text Appearance
+    dom.style.color = 'var(--accent-600)'; // Just the accent color
     dom.style.fontWeight = '600';
-    dom.style.fontSize = '0.9em';
-    dom.style.lineHeight = '1.4';
-    dom.style.border = '1px solid var(--accent-200)';
-    dom.style.verticalAlign = 'baseline';
-    dom.style.margin = '0 2px';
-    dom.style.cursor = 'pointer'; // Clickable cursor
-    dom.style.transition = 'all 0.15s ease';
-    dom.style.userSelect = 'none'; // Prevent text selection inside chip
-    dom.style.whiteSpace = 'nowrap';
+    dom.style.display = 'inline-block'; // Keeps it atomic
+    dom.style.cursor = 'pointer';
+    dom.style.textDecoration = 'none';
 
-    // Interactive Hover Effects (via JS since we are inline)
+    // Hover Effect
     dom.onmouseenter = () => {
-      dom.style.backgroundColor = 'var(--accent-200)';
-      dom.style.borderColor = 'var(--accent-300)';
-      dom.style.transform = 'translateY(-1px)';
+      dom.style.textDecoration = 'underline';
     };
     dom.onmouseleave = () => {
-      dom.style.backgroundColor = 'var(--accent-100)';
-      dom.style.borderColor = 'var(--accent-200)';
-      dom.style.transform = 'none';
+      dom.style.textDecoration = 'none';
     };
-
-    // --- IMAGE HANDLING ---
-    if (this.__src && typeof this.__src === 'string') {
-        // Use padding + background image to simulate an avatar inside the text node
-        dom.style.paddingLeft = '22px'; // Space for image
-        dom.style.backgroundImage = `url(${this.__src})`;
-        dom.style.backgroundSize = '18px 18px'; // Size of avatar
-        dom.style.backgroundRepeat = 'no-repeat';
-        dom.style.backgroundPosition = '2px center'; // Positioned left
-        // Circular mask for the background image isn't perfect in CSS without a real element, 
-        // but typically square avatars are uploaded. If we need circles:
-        // We can't easily border-radius ONLY the background image in one div. 
-        // However, standard avatars usually look fine small.
-    } else {
-        // Fallback icon style (optional, simple dot)
-        dom.style.paddingLeft = '8px';
-    }
     
     dom.className = 'mention-node'; 
 
-    // --- CLICK NAVIGATION ---
+    // --- NAVIGATION CLICK HANDLER ---
     dom.onclick = (e) => {
-        // Prevent editor from stealing focus immediately or other weird behaviors
-        e.preventDefault();
+        // Prevent editor cursor shifts or focus stealing if needed
+        e.preventDefault(); 
         e.stopPropagation();
         
-        // 1. Save the target person ID to local storage so PeoplePage knows who to open
+        // 1. Save target ID for PeoplePage to read
         localStorage.setItem('open_person_id', this.__id);
         
-        // 2. Navigate to the People Page
+        // 2. Trigger Navigation via Hash
         window.location.hash = 'people';
     };
 

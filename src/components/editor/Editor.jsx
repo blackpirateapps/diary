@@ -15,7 +15,7 @@ import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { TRANSFORMERS, $convertFromMarkdownString } from '@lexical/markdown'; // Only need convertFrom for backward compatibility
+import { TRANSFORMERS, $convertFromMarkdownString } from '@lexical/markdown';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
@@ -46,8 +46,7 @@ const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: '
 
 // --- CUSTOM PLUGINS ---
 
-// 1. STATE SYNC PLUGIN (Replaces MarkdownSync)
-// Handles loading initial content (JSON or Markdown fallback) and keeps local state updated
+// 1. STATE SYNC PLUGIN
 const EditorStatePlugin = ({ content, onChange, onTextChange }) => {
   const [editor] = useLexicalComposerContext();
   const isFirstRender = useRef(true);
@@ -58,17 +57,14 @@ const EditorStatePlugin = ({ content, onChange, onTextChange }) => {
       isFirstRender.current = false;
       if (content) {
         try {
-          // Attempt to parse as JSON (New Format)
           const jsonState = JSON.parse(content);
           if (jsonState.root) {
              const editorState = editor.parseEditorState(jsonState);
              editor.setEditorState(editorState);
           } else {
-             // If JSON but not lexical state, treat as text
              throw new Error("Not lexical state");
           }
         } catch (e) {
-          // Fallback: Treat as Markdown/Plain Text (Old Format)
           editor.update(() => {
              $convertFromMarkdownString(content, TRANSFORMERS);
           });
@@ -81,11 +77,8 @@ const EditorStatePlugin = ({ content, onChange, onTextChange }) => {
   return (
     <OnChangePlugin
       onChange={(editorState) => {
-        // 1. Save Full JSON State
         const jsonString = JSON.stringify(editorState.toJSON());
         onChange(jsonString);
-
-        // 2. Extract Plain Text for Previews/Search
         editorState.read(() => {
             const textContent = $getRoot().getTextContent();
             onTextChange(textContent);
@@ -95,7 +88,7 @@ const EditorStatePlugin = ({ content, onChange, onTextChange }) => {
   );
 };
 
-// 2. MENTIONS TRACKER (Extracts IDs)
+// 2. MENTIONS TRACKER
 const MentionsTracker = ({ onChange }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -110,7 +103,7 @@ const MentionsTracker = ({ onChange }) => {
   return null;
 };
 
-// 3. MODE PLUGIN (Read/Edit toggle)
+// 3. MODE PLUGIN
 const EditorModePlugin = ({ mode }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -133,9 +126,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const isToday = currentDate.toDateString() === new Date().toDateString();
   const [mode, setMode] = useState(isToday ? 'edit' : 'preview');
 
-  // content now stores JSON string (or markdown for legacy)
   const [content, setContent] = useState(entry?.content || '');
-  // previewText stores just the plain text for list views
   const [previewText, setPreviewText] = useState(entry?.preview || ''); 
   
   const [mood, setMood] = useState(entry?.mood || 5);
@@ -193,8 +184,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     
     onSave({ 
       id: entryId, 
-      content: contentRef.current, // Saves JSON string
-      preview: previewRef.current, // Saves Plain Text (for Lists)
+      content: contentRef.current, 
+      preview: previewRef.current, 
       mood, 
       location, 
       locationLat, 
@@ -219,8 +210,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   // Handlers
   const handleZenBack = (finalContent) => {
-    // Note: ZenOverlay might need updates to handle JSON, 
-    // but assuming it passes back text/markdown, the hybrid loader handles it.
     if (typeof finalContent === 'string') {
         contentRef.current = finalContent; 
         setContent(finalContent); 
@@ -283,8 +272,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     setIsExporting(true);
     try {
       const pdfImages = await Promise.all(images.map(img => blobToJpeg(img)));
-      // Note: Passing raw JSON content to PDF might show JSON string. 
-      // Ideally pass 'previewText' or convert JSON to text for the PDF.
       const doc = <EntryPdfDocument entry={{ id: entryId, content: previewText || content, mood, location, weather, tags, images: pdfImages.filter(Boolean), date: currentDate.toISOString() }} moodLabel={MOODS_LABELS[mood]} sleepSessions={todaysSleepSessions} />;
       const blob = await pdf(doc).toBlob();
       saveAs(blob, `Journal_${currentDate.toISOString().split('T')[0]}.pdf`);
@@ -321,7 +308,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         />
 
         <motion.div 
-            className="fixed inset-0 lg:inset-8 lg:max-w-7xl lg:mx-auto bg-white dark:bg-gray-950 lg:rounded-2xl lg:shadow-2xl z-50 flex flex-col overflow-hidden font-sans transition-colors border border-gray-100 dark:border-gray-800" 
+            // FIXED: h-[100dvh] ensures it fits mobile viewports perfectly (including safe areas)
+            className="fixed inset-0 lg:inset-8 lg:max-w-7xl lg:mx-auto bg-white dark:bg-gray-950 lg:rounded-2xl lg:shadow-2xl z-50 flex flex-col overflow-hidden font-sans transition-colors border border-gray-100 dark:border-gray-800 h-[100dvh] lg:h-auto" 
             variants={containerVariants} initial="hidden" animate="visible" exit="exit"
         >
             <EditorHeader 
@@ -332,7 +320,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             />
 
             <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
-                <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col order-2 lg:order-1">
+                <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col order-2 lg:order-1 max-w-full overflow-x-hidden">
                     <AnimatePresence>
                         {images.length > 0 && (
                             <motion.div 
@@ -348,7 +336,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         )}
                     </AnimatePresence>
 
-                    <div className="flex-1 w-full max-w-4xl mx-auto px-6 py-8 lg:px-12 lg:py-12">
+                    {/* FIXED: Reduced padding on mobile (px-4) vs desktop (px-12) */}
+                    <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 lg:px-12 lg:py-12">
                         <div className="lg:hidden mb-6">
                             <div className="flex items-baseline gap-3 mb-1">
                                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{currentDate.toLocaleDateString(undefined, { weekday: 'long' })}</h2>
@@ -406,6 +395,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 </main>
 
                 <aside className="w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto order-1 lg:order-2">
+                    {/* ... Desktop Sidebar Content (Unchanged) ... */}
                     <div className="mb-8 hidden lg:block">
                         <div className="flex items-center gap-2 text-[var(--accent-500)] mb-2 font-medium">
                             <Calendar size={18} />
