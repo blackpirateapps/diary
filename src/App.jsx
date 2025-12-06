@@ -1,39 +1,36 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db'; 
-import { SleepPage } from './components/SleepPage';
-import { WhatsAppPage } from './components/WhatsAppPage';
-import MeditationPage from './components/MeditationPage'; 
-import YearInReviewPage from './components/YearInReviewPage'; 
-import PrivacyPolicy from './components/PrivacyPolicy';
-import Editor from './components/editor/Editor'; 
-
-// --- NEW IMPORTS ---
-import { PeoplePage } from './components/PeoplePage';
-
-import JournalList from './components/JournalList';
-import StatsPage from './components/StatsPage';
-import MediaGallery from './components/MediaGallery';
-import FlashbackPage from './components/FlashbackPage';
-import MapPage from './components/MapPage';
-import { MoreMenu, SettingsPage, AboutPage, ThemesPage } from './components/MorePages';
-
 import {
-  BarChart2,
-  Grid,
-  Home,
-  Map as MapIcon, 
-  Trash2,
-  Menu,
-  Settings,
-  Book,
-  Moon,
-  MessageCircle,
-  Coffee,
-  Calendar,
-  History,
-  Users // New Icon
+  BarChart2, Grid, Home, Map as MapIcon, Trash2, Menu,
+  Settings, Book, Moon, MessageCircle, Coffee, Calendar,
+  History, Users, Loader2 // Added Loader2 for loading state
 } from 'lucide-react';
+
+// --- LAZY LOAD IMPORTS (CODE SPLITTING) ---
+
+// 1. Default Exports (Simple lazy load)
+const MeditationPage = lazy(() => import('./components/MeditationPage'));
+const YearInReviewPage = lazy(() => import('./components/YearInReviewPage'));
+const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
+const Editor = lazy(() => import('./components/editor/Editor'));
+const JournalList = lazy(() => import('./components/JournalList'));
+const StatsPage = lazy(() => import('./components/StatsPage'));
+const MediaGallery = lazy(() => import('./components/MediaGallery'));
+const FlashbackPage = lazy(() => import('./components/FlashbackPage'));
+const MapPage = lazy(() => import('./components/MapPage'));
+
+// 2. Named Exports (Helper pattern to extracting specific components)
+const SleepPage = lazy(() => import('./components/SleepPage').then(module => ({ default: module.SleepPage })));
+const WhatsAppPage = lazy(() => import('./components/WhatsAppPage').then(module => ({ default: module.WhatsAppPage })));
+const PeoplePage = lazy(() => import('./components/PeoplePage').then(module => ({ default: module.PeoplePage })));
+
+// 3. Grouped Named Exports (From MorePages.jsx)
+const MoreMenu = lazy(() => import('./components/MorePages').then(module => ({ default: module.MoreMenu })));
+const SettingsPage = lazy(() => import('./components/MorePages').then(module => ({ default: module.SettingsPage })));
+const AboutPage = lazy(() => import('./components/MorePages').then(module => ({ default: module.AboutPage })));
+const ThemesPage = lazy(() => import('./components/MorePages').then(module => ({ default: module.ThemesPage })));
+
 
 // --- THEME ENGINE CONSTANTS ---
 const ACCENT_COLORS = {
@@ -43,6 +40,14 @@ const ACCENT_COLORS = {
   amber:  { 50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 500: '#f59e0b', 600: '#d97706' },
   rose:   { 50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 500: '#f43f5e', 600: '#e11d48' },
 };
+
+// --- LOADING COMPONENT ---
+const PageLoader = () => (
+  <div className="flex flex-col items-center justify-center h-[50vh] text-gray-400">
+    <Loader2 size={32} className="animate-spin mb-2 text-[var(--accent-500)]" />
+    <p className="text-sm font-medium">Loading component...</p>
+  </div>
+);
 
 const App = () => {
   // --- APP PREFERENCES STATE ---
@@ -316,81 +321,86 @@ const App = () => {
             </div>
           )}
 
-          {/* PAGE ROUTING */}
-          {showFlashback || currentRoute === 'flashback' ? (
-            <FlashbackPage 
-              entries={entries} 
-              onBack={() => { 
-                setShowFlashback(false);
-                if(currentRoute === 'flashback') navigate('journal');
-              }} 
-              onEdit={(entry) => { setShowFlashback(false); openEditEditor(entry); }}
-            />
-          ) : (
-            <>
-              {(currentRoute === 'journal' || currentRoute === 'calendar' || currentRoute === 'tags') && (
-                <JournalList
-                  entries={entries}
-                  appName={appName}
-                  onEdit={openEditEditor}
-                  onCreate={() => openNewEditor()}
-                  onAddOld={() => dateInputRef.current?.showPicker()}
-                  onImport={handleImport}
-                  onExport={handleExport}
-                  isOffline={isOffline}
-                  isImporting={isImporting}
-                  onOpenFlashback={() => setShowFlashback(true)}
-                  initialView={currentRoute === 'calendar' ? 'calendar' : 'list'}
-                />
-              )}
-              {currentRoute === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
-              {currentRoute === 'stats' && <StatsPage entries={entries} isDarkMode={isDarkMode} />}
-              {currentRoute === 'media' && <MediaGallery entries={entries} onEdit={openEditEditor} />}
-              
-              {/* Additional Pages */}
-              {currentRoute === 'more' && <MoreMenu navigate={navigate} />}
-              {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
-              {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
-              {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />}
-              {currentRoute === 'people' && <PeoplePage navigate={navigate} />}
-              {currentRoute === 'year-review' && <YearInReviewPage navigate={navigate} />}
-              {currentRoute === 'privacy' && <PrivacyPolicy navigate={navigate} />}
-              
-              {currentRoute === 'themes' && (
-                <ThemesPage 
-                  navigate={navigate}
-                  isDarkMode={isDarkMode}
-                  setIsDarkMode={setIsDarkMode}
-                  accentColor={accentColor}
-                  setAccentColor={setAccentColor}
-                />
-              )}
-              
-              {currentRoute === 'settings' && (
-                <SettingsPage 
-                  navigate={navigate} 
-                  appName={appName} 
-                  setAppName={setAppName} 
-                  onExport={handleExport} 
-                  onImport={() => fileInputRef.current?.click()}
-                  importInputRef={fileInputRef} 
-                />
-              )}
-              {currentRoute === 'about' && <AboutPage navigate={navigate} />}
-            </>
-          )}
+          {/* PAGE ROUTING (Wrapped in Suspense) */}
+          <Suspense fallback={<PageLoader />}>
+            {showFlashback || currentRoute === 'flashback' ? (
+              <FlashbackPage 
+                entries={entries} 
+                onBack={() => { 
+                  setShowFlashback(false);
+                  if(currentRoute === 'flashback') navigate('journal');
+                }} 
+                onEdit={(entry) => { setShowFlashback(false); openEditEditor(entry); }}
+              />
+            ) : (
+              <>
+                {(currentRoute === 'journal' || currentRoute === 'calendar' || currentRoute === 'tags') && (
+                  <JournalList
+                    entries={entries}
+                    appName={appName}
+                    onEdit={openEditEditor}
+                    onCreate={() => openNewEditor()}
+                    onAddOld={() => dateInputRef.current?.showPicker()}
+                    onImport={handleImport}
+                    onExport={handleExport}
+                    isOffline={isOffline}
+                    isImporting={isImporting}
+                    onOpenFlashback={() => setShowFlashback(true)}
+                    initialView={currentRoute === 'calendar' ? 'calendar' : 'list'}
+                  />
+                )}
+                {currentRoute === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
+                {currentRoute === 'stats' && <StatsPage entries={entries} isDarkMode={isDarkMode} />}
+                {currentRoute === 'media' && <MediaGallery entries={entries} onEdit={openEditEditor} />}
+                
+                {/* Additional Pages */}
+                {currentRoute === 'more' && <MoreMenu navigate={navigate} />}
+                {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
+                {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
+                {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />}
+                {currentRoute === 'people' && <PeoplePage navigate={navigate} />}
+                {currentRoute === 'year-review' && <YearInReviewPage navigate={navigate} />}
+                {currentRoute === 'privacy' && <PrivacyPolicy navigate={navigate} />}
+                
+                {currentRoute === 'themes' && (
+                  <ThemesPage 
+                    navigate={navigate}
+                    isDarkMode={isDarkMode}
+                    setIsDarkMode={setIsDarkMode}
+                    accentColor={accentColor}
+                    setAccentColor={setAccentColor}
+                  />
+                )}
+                
+                {currentRoute === 'settings' && (
+                  <SettingsPage 
+                    navigate={navigate} 
+                    appName={appName} 
+                    setAppName={setAppName} 
+                    onExport={handleExport} 
+                    onImport={() => fileInputRef.current?.click()}
+                    importInputRef={fileInputRef} 
+                  />
+                )}
+                {currentRoute === 'about' && <AboutPage navigate={navigate} />}
+              </>
+            )}
+          </Suspense>
 
           {/* Hidden Inputs */}
           <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
           <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".zip,.json" />
           
+          {/* Editor (Also lazy loaded via Suspense if needed, though usually overlaid) */}
           {isEditorOpen && (
-            <Editor
-              entry={editingEntry}
-              onClose={() => { setIsEditorOpen(false); setEditingEntry(null); }}
-              onSave={handleSaveEntry}
-              onDelete={handleDeleteEntry}
-            />
+             <Suspense fallback={<div className="fixed inset-0 z-50 bg-white/50 backdrop-blur-sm flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
+                <Editor
+                  entry={editingEntry}
+                  onClose={() => { setIsEditorOpen(false); setEditingEntry(null); }}
+                  onSave={handleSaveEntry}
+                  onDelete={handleDeleteEntry}
+                />
+             </Suspense>
           )}
         </div>
       </div>
