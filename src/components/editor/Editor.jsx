@@ -83,7 +83,8 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate })
         editorState.read(() => {
             const textContent = $getRoot().getTextContent();
             onTextChange(textContent);
-            onSessionUpdate(textContent); // Notify parent to check session logic
+            // Pass BOTH plain text (for logic) and JSON (for restoration)
+            onSessionUpdate(textContent, jsonString); 
         });
       }}
     />
@@ -105,12 +106,47 @@ const MentionsTracker = ({ onChange }) => {
   return null;
 };
 
-// 3. MODE PLUGIN - Controls Read-Only vs Edit
+// 3. MODE PLUGIN
 const EditorModePlugin = ({ mode }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
     editor.setEditable(mode === 'edit');
   }, [editor, mode]);
+  return null;
+};
+
+// 4. TIME TRAVEL PLUGIN (NEW)
+// This listens to the selected session index and updates the editor content accordingly
+const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
+  const [editor] = useLexicalComposerContext();
+  
+  useEffect(() => {
+    if (!isPreviewMode || !sessions || sessions.length === 0) return;
+    
+    // Safety check for index
+    const index = Math.min(Math.max(0, activeIndex), sessions.length - 1);
+    const session = sessions[index];
+    const content = session?.contentSnapshot;
+
+    if (!content) return;
+
+    editor.update(() => {
+        try {
+            // Try to parse as JSON (Rich Text Snapshot)
+            const jsonState = JSON.parse(content);
+            if (jsonState.root) {
+                const editorState = editor.parseEditorState(jsonState);
+                editor.setEditorState(editorState);
+                return;
+            }
+        } catch (e) {
+            // Fallback: It's plain text/markdown (Legacy Snapshot)
+            // We treat it as Markdown to preserve basic lists/headers if possible
+            $convertFromMarkdownString(String(content), TRANSFORMERS);
+        }
+    });
+  }, [editor, sessions, activeIndex, isPreviewMode]);
+
   return null;
 };
 
@@ -138,11 +174,21 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       return [{
         startTime: entry.date || new Date().toISOString(),
         endTime: entry.date || new Date().toISOString(),
-        contentSnapshot: entry.preview || entry.content 
+        contentSnapshot: entry.content // Legacy: Start with existing content
       }];
     }
     return [];
   });
+
+  // State for the Visualizer Slider
+  const [previewSessionIndex, setPreviewSessionIndex] = useState(sessions.length - 1);
+
+  // Sync preview index when sessions update (auto-follow latest)
+  useEffect(() => {
+      if (mode === 'edit') {
+          setPreviewSessionIndex(sessions.length - 1);
+      }
+  }, [sessions.length, mode]);
   
   const lastTypeTimeRef = useRef(null);
   if (lastTypeTimeRef.current === null) {
@@ -194,10 +240,13 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const wordCount = previewText.trim().split(/\s+/).filter(Boolean).length;
 
   // --- SESSION LOGIC ---
-  const handleSessionUpdate = useCallback((currentText) => {
+  const handleSessionUpdate = useCallback((currentText, currentJSON) => {
     const now = Date.now();
     const timeSinceLastType = now - lastTypeTimeRef.current;
     const SESSION_TIMEOUT = 5 * 60 * 1000; 
+
+    // We save the JSON if available to preserve formatting, otherwise text
+    const snapshotToSave = currentJSON || currentText;
 
     setSessions(prevSessions => {
       let newSessions = [...prevSessions];
@@ -206,14 +255,14 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         newSessions.push({
           startTime: new Date().toISOString(),
           endTime: new Date().toISOString(),
-          contentSnapshot: currentText
+          contentSnapshot: snapshotToSave
         });
       } 
       else if (timeSinceLastType > SESSION_TIMEOUT) {
         newSessions.push({
           startTime: new Date().toISOString(),
           endTime: new Date().toISOString(),
-          contentSnapshot: currentText
+          contentSnapshot: snapshotToSave
         });
       } 
       else {
@@ -221,7 +270,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         newSessions[lastIndex] = {
           ...newSessions[lastIndex],
           endTime: new Date().toISOString(),
-          contentSnapshot: currentText
+          contentSnapshot: snapshotToSave
         };
       }
       return newSessions;
@@ -420,31 +469,39 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         </div>
 
                         <div className="min-h-[400px] relative">
-                             
-                             {/* MODIFIED: Always render LexicalComposer. Use EditorModePlugin to toggle editable state. */}
-                             <div className="block">
-                               <LexicalComposer initialConfig={initialConfig}>
-                                 {/* Only show toolbar in edit mode */}
-                                 {mode === 'edit' && <ToolbarPlugin />}
-                                 <EditorModePlugin mode={mode} />
-                                 <MentionsPlugin />
-                                 <MentionsTracker onChange={setTaggedPeople} />
+                             {/* ALWAYS Render Editor, just toggle editable/readonly mode */}
+                             <LexicalComposer initialConfig={initialConfig}>
+                               {/* Only show toolbar in Edit Mode */}
+                               {mode === 'edit' && <ToolbarPlugin />}
+                               
+                               <EditorModePlugin mode={mode} />
+                               <MentionsPlugin />
+                               <MentionsTracker onChange={setTaggedPeople} />
+                               
+                               {/* Time Travel Plugin: Updates the editor content based on the selected session in preview mode */}
+                               <TimeTravelPlugin 
+                                  sessions={sessions} 
+                                  activeIndex={previewSessionIndex} 
+                                  isPreviewMode={mode === 'preview'} 
+                               />
 
-                                 <RichTextPlugin
-                                   contentEditable={
-                                     <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
-                                   }
-                                   placeholder={
-                                     <div className="absolute top-16 lg:top-14 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
-                                       Start writing here...
-                                     </div>
-                                   }
-                                   ErrorBoundary={LexicalErrorBoundary}
-                                 />
-                                 <HistoryPlugin />
-                                 <ListPlugin />
-                                 <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
-                                 
+                               <RichTextPlugin
+                                 contentEditable={
+                                   <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
+                                 }
+                                 placeholder={
+                                   <div className="absolute top-16 lg:top-14 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
+                                     Start writing here...
+                                   </div>
+                                 }
+                                 ErrorBoundary={LexicalErrorBoundary}
+                               />
+                               <HistoryPlugin />
+                               <ListPlugin />
+                               <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
+                               
+                               {/* Editor State Sync: Only active if NOT in preview mode (to prevent session slider from overwriting actual state) */}
+                               {mode === 'edit' && (
                                  <EditorStatePlugin 
                                    content={content} 
                                    onChange={setContent} 
@@ -454,12 +511,41 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                    }}
                                    onSessionUpdate={handleSessionUpdate}
                                  />
-                               </LexicalComposer>
-                             </div>
+                               )}
+                             </LexicalComposer>
 
-                             {/* TIME TRAVELLER UI (Visible in Preview Mode) */}
+                             {/* TIME TRAVEL SLIDER (Visible only in Preview Mode) */}
                              {mode === 'preview' && (
-                                <SessionVisualizer sessions={sessions} />
+                                <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-6">
+                                   <div className="flex items-center gap-2 mb-4">
+                                      <Clock size={18} className="text-[var(--accent-500)]" />
+                                      <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Time Travel</h3>
+                                   </div>
+                                   
+                                   {/* Reusing SessionVisualizer UI but stripping its internal text rendering */}
+                                   <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
+                                      <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
+                                         <span>Start</span>
+                                         <span>
+                                            Session {previewSessionIndex + 1} / {sessions.length}
+                                         </span>
+                                         <span>Now</span>
+                                      </div>
+                                      <input 
+                                        type="range" 
+                                        min={0} 
+                                        max={sessions.length - 1} 
+                                        value={previewSessionIndex}
+                                        onChange={(e) => setPreviewSessionIndex(Number(e.target.value))}
+                                        className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
+                                      />
+                                      <div className="text-center mt-2 text-xs text-gray-400">
+                                         {sessions[previewSessionIndex]?.endTime 
+                                            ? new Date(sessions[previewSessionIndex].endTime).toLocaleTimeString() 
+                                            : 'Unknown Time'}
+                                      </div>
+                                   </div>
+                                </div>
                              )}
                         </div>
 
