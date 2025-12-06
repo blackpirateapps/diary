@@ -7,6 +7,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, useBlobUrl } from '../../db'; 
 import EntryPdfDocument from './EntryPdfDocument'; 
 import TagInput from './TagInput'; 
+import SessionVisualizer from './SessionVisualizer';
 
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
@@ -47,8 +48,8 @@ const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: '
 
 // --- CUSTOM PLUGINS ---
 
-// 1. STATE SYNC PLUGIN
-const EditorStatePlugin = ({ content, onChange, onTextChange }) => {
+// 1. STATE SYNC & SESSION TRACKING PLUGIN
+const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate }) => {
   const [editor] = useLexicalComposerContext();
   const isFirstRender = useRef(true);
 
@@ -74,7 +75,7 @@ const EditorStatePlugin = ({ content, onChange, onTextChange }) => {
     }
   }, [content, editor]);
 
-  // Sync Changes
+  // Sync Changes & Track Sessions
   return (
     <OnChangePlugin
       onChange={(editorState) => {
@@ -83,6 +84,7 @@ const EditorStatePlugin = ({ content, onChange, onTextChange }) => {
         editorState.read(() => {
             const textContent = $getRoot().getTextContent();
             onTextChange(textContent);
+            onSessionUpdate(textContent); // Notify parent to check session logic
         });
       }}
     />
@@ -130,6 +132,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [content, setContent] = useState(entry?.content || '');
   const [previewText, setPreviewText] = useState(entry?.preview || ''); 
   
+  // --- SESSION STATE ---
+  const [sessions, setSessions] = useState(entry?.sessions || []);
+  const lastTypeTimeRef = useRef(Date.now());
+  // --------------------
+
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
   const [locationLat, setLocationLat] = useState(entry?.locationLat || null);
@@ -144,6 +151,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   
   const previewRef = useRef(previewText);
   previewRef.current = previewText;
+
+  // Track sessions reference for saving
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
 
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
@@ -164,6 +175,47 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   );
 
   const wordCount = previewText.trim().split(/\s+/).filter(Boolean).length;
+
+  // --- SESSION LOGIC ---
+  const handleSessionUpdate = useCallback((currentText) => {
+    const now = Date.now();
+    const timeSinceLastType = now - lastTypeTimeRef.current;
+    const SESSION_TIMEOUT = 5 * 60 * 1000; // 5 Minutes
+
+    setSessions(prevSessions => {
+      let newSessions = [...prevSessions];
+      
+      // Case 1: First session ever for this entry
+      if (newSessions.length === 0) {
+        newSessions.push({
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          contentSnapshot: currentText
+        });
+      } 
+      // Case 2: Returned after a long break (> 5 mins) -> NEW SESSION
+      else if (timeSinceLastType > SESSION_TIMEOUT) {
+        newSessions.push({
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          contentSnapshot: currentText
+        });
+      } 
+      // Case 3: Continuing current session -> UPDATE END TIME & SNAPSHOT
+      else {
+        const lastIndex = newSessions.length - 1;
+        newSessions[lastIndex] = {
+          ...newSessions[lastIndex],
+          endTime: new Date().toISOString(),
+          contentSnapshot: currentText
+        };
+      }
+      return newSessions;
+    });
+
+    lastTypeTimeRef.current = now;
+  }, []);
+  // ---------------------
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -194,7 +246,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       weather, 
       tags, 
       images, 
-      people: taggedPeople, 
+      people: taggedPeople,
+      sessions: sessionsRef.current, // SAVE SESSIONS
       date: dateToSave.toISOString() 
     });
 
@@ -214,6 +267,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     if (typeof finalContent === 'string') {
         contentRef.current = finalContent; 
         setContent(finalContent); 
+        // Note: Zen mode session updates usually handled by onChange, 
+        // but if strictly handled on back, we might miss granular updates.
+        // For now, simple save triggers updates.
     }
     saveData(true);
     setIsZenMode(false);
@@ -298,7 +354,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       <Styles />
       <ZenOverlay 
         isActive={isZenMode} content={content} setContent={setContent} 
-        onBack={handleZenBack} settings={zenSettings} 
+        onBack={handleZenBack} 
       />
 
       <AnimatePresence>
@@ -309,7 +365,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         />
 
         <motion.div 
-            // FIXED: h-[100dvh] ensures it fits mobile viewports perfectly (including safe areas)
             className="fixed inset-0 lg:inset-8 lg:max-w-7xl lg:mx-auto bg-white dark:bg-gray-950 lg:rounded-2xl lg:shadow-2xl z-50 flex flex-col overflow-hidden font-sans transition-colors border border-gray-100 dark:border-gray-800 h-[100dvh] lg:h-auto" 
             variants={containerVariants} initial="hidden" animate="visible" exit="exit"
         >
@@ -337,7 +392,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         )}
                     </AnimatePresence>
 
-                    {/* FIXED: Reduced padding on mobile (px-4) vs desktop (px-12) */}
                     <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 lg:px-12 lg:py-12">
                         <div className="lg:hidden mb-6">
                             <div className="flex items-baseline gap-3 mb-1">
@@ -356,41 +410,64 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         </div>
 
                         <div className="min-h-[400px] relative">
-                             <LexicalComposer initialConfig={initialConfig}>
-                               {mode === 'edit' && <ToolbarPlugin />}
-                               
-                               <EditorModePlugin mode={mode} />
-                               
-                               <MentionsPlugin />
-                               <MentionsTracker onChange={setTaggedPeople} />
+                             {/* PREVIEW MODE OVERLAY (Transparent) OR SESSION VIEW */}
+                             {mode === 'preview' ? (
+                               <div className="prose dark:prose-invert max-w-none">
+                                  {/* In preview mode, we can show the standard preview OR the Time Travel view */}
+                                  {/* If the user wants to see the diff, they will look at SessionVisualizer below. */}
+                                  {/* But standard preview is just the text. */}
+                                  
+                                  {/* Actually, if SessionVisualizer handles the content display, we can HIDE the editor content in preview */}
+                                  {/* But usually we want to see the "Current Final" version by default. */}
+                                  {/* Let's render the editor in read-only mode for "Current" and the Visualizer below it for "History" */}
+                                  
+                                  <div className="pointer-events-none opacity-50 hidden"> 
+                                    {/* We hide the editor in preview to let SessionVisualizer take over if desired, 
+                                        OR we keep it. The user said: "Option A... Time Travel Slider for UI".
+                                        This implies the Time Travel IS the preview experience.
+                                    */}
+                                  </div>
+                               </div>
+                             ) : null}
 
-                               <RichTextPlugin
-                                 contentEditable={
-                                   <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
-                                 }
-                                 placeholder={
-                                   <div className="absolute top-16 lg:top-14 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
-                                     Start writing here...
-                                   </div>
-                                 }
-                                 ErrorBoundary={LexicalErrorBoundary}
-                               />
-                               <HistoryPlugin />
-                               <ListPlugin />
-                               {/* Keep Markdown Shortcut for typing experience (e.g. # Header), but NOT for syncing */}
-                               <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
-                               
-                               {/* New Plugin to Handle JSON Saving/Loading */}
-                               <EditorStatePlugin 
-                                 content={content} 
-                                 onChange={setContent} 
-                                 onTextChange={(text) => {
-                                    setPreviewText(text);
-                                    previewRef.current = text;
-                                 }} 
-                               />
-                             </LexicalComposer>
-                             {mode === 'preview' && <div className="absolute inset-0 z-10" />}
+                             <div className={mode === 'preview' ? 'hidden' : 'block'}>
+                               <LexicalComposer initialConfig={initialConfig}>
+                                 <ToolbarPlugin />
+                                 <EditorModePlugin mode={mode} />
+                                 <MentionsPlugin />
+                                 <MentionsTracker onChange={setTaggedPeople} />
+
+                                 <RichTextPlugin
+                                   contentEditable={
+                                     <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
+                                   }
+                                   placeholder={
+                                     <div className="absolute top-16 lg:top-14 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
+                                       Start writing here...
+                                     </div>
+                                   }
+                                   ErrorBoundary={LexicalErrorBoundary}
+                                 />
+                                 <HistoryPlugin />
+                                 <ListPlugin />
+                                 <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
+                                 
+                                 <EditorStatePlugin 
+                                   content={content} 
+                                   onChange={setContent} 
+                                   onTextChange={(text) => {
+                                      setPreviewText(text);
+                                      previewRef.current = text;
+                                   }} 
+                                   onSessionUpdate={handleSessionUpdate}
+                                 />
+                               </LexicalComposer>
+                             </div>
+
+                             {/* TIME TRAVELLER UI (Visible in Preview Mode) */}
+                             {mode === 'preview' && (
+                                <SessionVisualizer sessions={sessions} />
+                             )}
                         </div>
 
                         {/* MOBILE ONLY: Tags and Sleep at the bottom */}
@@ -406,7 +483,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                   {todaysSleepSessions.map(session => <SleepWidget key={session.id} session={session} />)}
                               </div>
                            )}
-                           {/* Spacer for safe area if needed */}
                            <div className="h-10"></div>
                         </div>
 
@@ -414,7 +490,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 </main>
 
                 <aside className="w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto order-1 lg:order-2">
-                    {/* ... Desktop Sidebar Content (Unchanged) ... */}
+                    {/* ... Desktop Sidebar Content ... */}
                     <div className="mb-8 hidden lg:block">
                         <div className="flex items-center gap-2 text-[var(--accent-500)] mb-2 font-medium">
                             <Calendar size={18} />
@@ -447,7 +523,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             />
                         </div>
 
-                        {/* DESKTOP ONLY: Tags and Sleep in sidebar */}
                         <div className="hidden lg:block">
                             <div className="mb-6">
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
