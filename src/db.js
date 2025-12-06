@@ -1,7 +1,4 @@
-{
-type: uploaded file
-fileName: blackpirateapps/diary/diary-7509bb24ed4c92699e90e838f8f60f70b47131e9/src/db.js
-fullContent:
+
 import Dexie from 'dexie';
 import { useLiveQuery } from 'dexie-react-hooks';
 import JSZip from 'jszip';
@@ -323,4 +320,3 @@ export const importFromZip = async (file) => {
 
   return importCount;
 };
-}
