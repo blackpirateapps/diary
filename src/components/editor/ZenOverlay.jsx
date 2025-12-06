@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, SlidersHorizontal, X, Type, AlignJustify } from 'lucide-react';
 
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
@@ -17,52 +18,159 @@ import { LinkNode } from '@lexical/link';
 import { CodeNode } from '@lexical/code';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
-// --- HELPER: INITIALIZE EDITOR WITH MARKDOWN ---
-// FIXED: This now runs ONLY ONCE when Zen Mode mounts.
-// It ignores subsequent prop changes to prevent cursor loss while typing.
-const MarkdownInitPlugin = ({ content }) => {
+// --- HELPER: INITIALIZE EDITOR SMARTLY (JSON OR MARKDOWN) ---
+const ContentInitPlugin = ({ content }) => {
   const [editor] = useLexicalComposerContext();
+  const isFirstRender = useRef(true);
 
   useEffect(() => {
-    editor.update(() => {
-      // Initialize content only once
-      $convertFromMarkdownString(content || '', TRANSFORMERS);
-    });
-  }, []); // <--- Empty dependency array ensures this runs only on mount
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      editor.update(() => {
+        if (!content) return;
+        
+        try {
+          // 1. Try to parse as JSON State first
+          const jsonState = JSON.parse(content);
+          if (jsonState.root) {
+             const editorState = editor.parseEditorState(jsonState);
+             editor.setEditorState(editorState);
+             return;
+          }
+        } catch (e) {
+          // Ignore error, it wasn't JSON
+        }
+
+        // 2. Fallback to Markdown
+        $convertFromMarkdownString(content, TRANSFORMERS);
+      });
+    }
+  }, [content, editor]);
 
   return null;
 };
 
-// --- HELPER: SYNC CHANGES BACK TO MARKDOWN ---
-const MarkdownSyncPlugin = ({ onChange, contentRef }) => {
+// --- HELPER: SYNC CHANGES BACK TO MARKDOWN/JSON ---
+// Note: We sync back as Markdown for compatibility, or you can switch to JSON if preferred.
+// For Zen mode, keeping it simple with Markdown text update usually works best for the "Back" button preview.
+const StateSyncPlugin = ({ onChange, contentRef }) => {
   return (
     <OnChangePlugin
       onChange={(editorState) => {
-        editorState.read(() => {
-          const markdown = $convertToMarkdownString(TRANSFORMERS);
-          // Sync ref for immediate "Back" button access
-          if (contentRef) contentRef.current = markdown;
-          // Sync state for auto-save
-          onChange(markdown);
-        });
+        // We save the full JSON state so the main editor doesn't lose formatting
+        const jsonString = JSON.stringify(editorState.toJSON());
+        
+        if (contentRef) contentRef.current = jsonString;
+        onChange(jsonString);
       }}
     />
   );
 };
 
-// --- MAIN COMPONENT ---
-const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
-  if (!isActive) return null;
+// --- SETTINGS POPUP COMPONENT ---
+const ZenSettingsPopup = ({ settings, setSettings, onClose }) => {
+  const handleChange = (key, value) => {
+    const newSettings = { ...settings, [key]: value };
+    setSettings(newSettings);
+    localStorage.setItem('zen_settings', JSON.stringify(newSettings));
+  };
 
-  // Track latest content locally to bypass React state delay on exit
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95, y: 10 }}
+      className="absolute top-16 right-6 w-72 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800 p-5 z-50"
+    >
+      <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-800 pb-3">
+        <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Reading Settings</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+          <X size={16} />
+        </button>
+      </div>
+
+      <div className="space-y-5">
+        {/* Font Family */}
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Typeface</label>
+          <input 
+            type="text" 
+            value={settings.fontFamily}
+            onChange={(e) => handleChange('fontFamily', e.target.value)}
+            placeholder="Inter, Serif..."
+            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--accent-500)] dark:text-white"
+          />
+        </div>
+
+        {/* Font Size */}
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Size</label>
+            <span className="text-xs text-gray-500">{settings.fontSize}px</span>
+          </div>
+          <input 
+            type="range" min="14" max="32" step="1"
+            value={settings.fontSize}
+            onChange={(e) => handleChange('fontSize', Number(e.target.value))}
+            className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
+          />
+        </div>
+
+        {/* Weight */}
+        <div className="space-y-2">
+           <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Weight</label>
+           <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+             {['300', '400', '600'].map(w => (
+               <button
+                 key={w}
+                 onClick={() => handleChange('fontWeight', w)}
+                 className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${settings.fontWeight === w ? 'bg-white dark:bg-gray-700 text-black dark:text-white shadow-sm' : 'text-gray-400'}`}
+               >
+                 {w === '300' ? 'Thin' : w === '400' ? 'Reg' : 'Bold'}
+               </button>
+             ))}
+           </div>
+        </div>
+
+        {/* Line Height */}
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Spacing</label>
+            <span className="text-xs text-gray-500">{settings.lineHeight}x</span>
+          </div>
+          <input 
+            type="range" min="1.2" max="2.4" step="0.1"
+            value={settings.lineHeight}
+            onChange={(e) => handleChange('lineHeight', Number(e.target.value))}
+            className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
+          />
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// --- MAIN COMPONENT ---
+const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
+  // Local Settings State
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem('zen_settings');
+    return saved ? JSON.parse(saved) : {
+      fontFamily: 'Inter',
+      fontSize: 18,
+      fontWeight: '400',
+      lineHeight: 1.6
+    };
+  });
+
+  const [showSettings, setShowSettings] = useState(false);
   const contentRef = useRef(content);
-  
-  // Ensure ref is synced when component mounts
+
+  // Sync ref on mount
   useEffect(() => {
       contentRef.current = content;
-  }, []);
+  }, [content]);
 
-  // FIXED: Memoize config to prevent re-initialization on re-renders
   const initialConfig = useMemo(() => ({
     namespace: 'ZenEditor',
     theme: {
@@ -81,18 +189,14 @@ const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
         bold: 'font-bold',
         italic: 'italic',
         underline: 'underline',
+        code: 'bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 font-mono text-sm text-pink-500' 
       }
     },
-    nodes: [
-      HeadingNode, 
-      QuoteNode, 
-      ListNode, 
-      ListItemNode, 
-      LinkNode, 
-      CodeNode
-    ],
+    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode],
     onError: (error) => console.error(error),
-  }), []); // Empty deps, created once per mount
+  }), []); 
+
+  if (!isActive) return null;
 
   return (
     <AnimatePresence>
@@ -102,7 +206,7 @@ const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       >
-        {/* Inject User Preferences via CSS Variables */}
+        {/* Inject Styles Dynamically */}
         <style>{`
           .zen-editor-content {
             font-family: ${settings.fontFamily}, sans-serif;
@@ -112,12 +216,11 @@ const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
             outline: none;
             min-height: 80vh;
           }
-          /* Override placeholder color for dark mode */
           .dark .zen-placeholder { color: #4b5563; }
         `}</style>
 
         {/* TOP BAR */}
-        <div className="w-full max-w-2xl px-6 pt-6 pb-2 flex-shrink-0">
+        <div className="w-full max-w-3xl px-6 pt-6 pb-2 flex-shrink-0 flex justify-between items-center relative">
           <button 
             onClick={() => onBack(contentRef.current)}
             className="flex items-center gap-2 text-gray-400 hover:text-[var(--accent-500)] transition-colors"
@@ -125,14 +228,31 @@ const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
             <ChevronLeft size={24} />
             <span className="text-sm font-medium">Back</span>
           </button>
+
+          <button 
+            onClick={() => setShowSettings(!showSettings)}
+            className={`p-2 rounded-lg transition-colors ${showSettings ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-500)]' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900'}`}
+          >
+            <SlidersHorizontal size={20} strokeWidth={2} />
+          </button>
+
+          {/* Settings Popup */}
+          <AnimatePresence>
+            {showSettings && (
+              <ZenSettingsPopup 
+                settings={settings} 
+                setSettings={setSettings} 
+                onClose={() => setShowSettings(false)} 
+              />
+            )}
+          </AnimatePresence>
         </div>
         
         {/* EDITOR AREA */}
-        <div className="flex-1 w-full max-w-2xl px-6 overflow-y-auto no-scrollbar">
+        <div className="flex-1 w-full max-w-3xl px-6 overflow-y-auto no-scrollbar" onClick={() => setShowSettings(false)}>
           <div className="py-8 relative">
-            
             <LexicalComposer initialConfig={initialConfig}>
-              {/* The Editable Area */}
+              
               <RichTextPlugin
                 contentEditable={
                   <ContentEditable className="zen-editor-content text-gray-800 dark:text-gray-200" />
@@ -148,17 +268,16 @@ const ZenOverlay = ({ isActive, content, setContent, onBack, settings }) => {
                 ErrorBoundary={LexicalErrorBoundary}
               />
               
-              {/* Plugins */}
               <HistoryPlugin />
               <ListPlugin />
               <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
               
-              {/* Custom Sync Plugins */}
-              <MarkdownInitPlugin content={content} />
-              <MarkdownSyncPlugin onChange={setContent} contentRef={contentRef} />
+              {/* Correctly Load JSON or Markdown */}
+              <ContentInitPlugin content={content} />
+              {/* Sync changes back to parent */}
+              <StateSyncPlugin onChange={setContent} contentRef={contentRef} />
               
             </LexicalComposer>
-
           </div>
         </div>
       </motion.div>
