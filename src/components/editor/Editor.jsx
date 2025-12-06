@@ -134,7 +134,20 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   
   // --- SESSION STATE ---
   const [sessions, setSessions] = useState(entry?.sessions || []);
-  const lastTypeTimeRef = useRef(Date.now());
+  
+  // FIXED: Initialize ref based on the LAST SAVED session.
+  // We added a fallback: if endTime is missing/invalid, default to 0.
+  // This ensures 'now - 0' is a large number, triggering a NEW session correctly.
+  const lastTypeTimeRef = useRef(null);
+  if (lastTypeTimeRef.current === null) {
+      if (entry?.sessions && entry.sessions.length > 0) {
+        const last = entry.sessions[entry.sessions.length - 1];
+        const lastEnd = last.endTime ? new Date(last.endTime).getTime() : 0;
+        lastTypeTimeRef.current = isNaN(lastEnd) ? 0 : lastEnd;
+      } else {
+        lastTypeTimeRef.current = 0; // Force new session if no history
+      }
+  }
   // --------------------
 
   const [mood, setMood] = useState(entry?.mood || 5);
@@ -267,9 +280,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     if (typeof finalContent === 'string') {
         contentRef.current = finalContent; 
         setContent(finalContent); 
-        // Note: Zen mode session updates usually handled by onChange, 
-        // but if strictly handled on back, we might miss granular updates.
-        // For now, simple save triggers updates.
     }
     saveData(true);
     setIsZenMode(false);
@@ -410,23 +420,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         </div>
 
                         <div className="min-h-[400px] relative">
-                             {/* PREVIEW MODE OVERLAY (Transparent) OR SESSION VIEW */}
                              {mode === 'preview' ? (
                                <div className="prose dark:prose-invert max-w-none">
-                                  {/* In preview mode, we can show the standard preview OR the Time Travel view */}
-                                  {/* If the user wants to see the diff, they will look at SessionVisualizer below. */}
-                                  {/* But standard preview is just the text. */}
-                                  
-                                  {/* Actually, if SessionVisualizer handles the content display, we can HIDE the editor content in preview */}
-                                  {/* But usually we want to see the "Current Final" version by default. */}
-                                  {/* Let's render the editor in read-only mode for "Current" and the Visualizer below it for "History" */}
-                                  
-                                  <div className="pointer-events-none opacity-50 hidden"> 
-                                    {/* We hide the editor in preview to let SessionVisualizer take over if desired, 
-                                        OR we keep it. The user said: "Option A... Time Travel Slider for UI".
-                                        This implies the Time Travel IS the preview experience.
-                                    */}
-                                  </div>
+                                  {/* Preview mode shows Time Travel UI below, editor hidden */}
                                </div>
                              ) : null}
 
