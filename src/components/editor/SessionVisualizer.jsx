@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { diffWords } from 'diff';
 import { Clock, Play, SkipBack, SkipForward } from 'lucide-react';
@@ -7,11 +6,22 @@ const SessionVisualizer = ({ sessions = [] }) => {
   // Default to showing the latest version
   const [activeIndex, setActiveIndex] = useState(sessions.length - 1);
 
+  // Sync activeIndex when sessions update (Fix for crash when loading sessions)
+  useEffect(() => {
+    setActiveIndex(sessions.length - 1);
+  }, [sessions.length]);
+
   // Handle case with no sessions (legacy entries)
   if (!sessions || sessions.length === 0) return null;
 
-  const activeSession = sessions[activeIndex];
-  const previousSession = sessions[activeIndex - 1];
+  // SAFE GUARD: Ensure index is within bounds (Fix for crash when activeIndex is -1)
+  const safeIndex = Math.min(Math.max(0, activeIndex), sessions.length - 1);
+  
+  const activeSession = sessions[safeIndex];
+  const previousSession = sessions[safeIndex - 1];
+  
+  // Guard against undefined session (double safety)
+  if (!activeSession) return null;
 
   // Calculate Diff: Compare Current Session vs Previous Session
   const diffData = useMemo(() => {
@@ -50,7 +60,7 @@ const SessionVisualizer = ({ sessions = [] }) => {
       <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-4 mb-6 select-none">
         <div className="flex justify-between items-end mb-4">
             <div>
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Session {activeIndex + 1} of {sessions.length}</span>
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Session {safeIndex + 1} of {sessions.length}</span>
                 <div className="text-xl font-bold text-gray-900 dark:text-white mt-1">
                     {formatTime(activeSession.startTime)}
                     <span className="text-gray-400 font-normal mx-2">-</span> 
@@ -61,14 +71,14 @@ const SessionVisualizer = ({ sessions = [] }) => {
             {/* Quick Navigation Buttons */}
             <div className="flex gap-2">
                 <button 
-                   disabled={activeIndex === 0}
+                   disabled={safeIndex === 0}
                    onClick={() => setActiveIndex(i => Math.max(0, i - 1))}
                    className="p-2 rounded-full bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 disabled:opacity-30 active:scale-95 transition-all"
                 >
                     <SkipBack size={18} />
                 </button>
                 <button 
-                   disabled={activeIndex === sessions.length - 1}
+                   disabled={safeIndex === sessions.length - 1}
                    onClick={() => setActiveIndex(i => Math.min(sessions.length - 1, i + 1))}
                    className="p-2 rounded-full bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 disabled:opacity-30 active:scale-95 transition-all"
                 >
@@ -87,7 +97,7 @@ const SessionVisualizer = ({ sessions = [] }) => {
                 {sessions.map((_, idx) => (
                     <div 
                         key={idx} 
-                        className={`w-2 h-2 rounded-full transition-colors ${idx <= activeIndex ? 'bg-[var(--accent-500)]' : 'bg-gray-300 dark:bg-gray-600'}`} 
+                        className={`w-2 h-2 rounded-full transition-colors ${idx <= safeIndex ? 'bg-[var(--accent-500)]' : 'bg-gray-300 dark:bg-gray-600'}`} 
                     />
                 ))}
             </div>
@@ -98,7 +108,7 @@ const SessionVisualizer = ({ sessions = [] }) => {
                 min={0}
                 max={sessions.length - 1}
                 step={1}
-                value={activeIndex}
+                value={safeIndex}
                 onChange={(e) => setActiveIndex(Number(e.target.value))}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             />
@@ -107,7 +117,7 @@ const SessionVisualizer = ({ sessions = [] }) => {
             <div 
                 className="absolute h-5 w-5 bg-white border-2 border-[var(--accent-500)] rounded-full shadow-md pointer-events-none transition-all"
                 style={{ 
-                    left: `calc(${(activeIndex / (sessions.length - 1 || 1)) * 100}% - 10px)` 
+                    left: `calc(${(safeIndex / (sessions.length - 1 || 1)) * 100}% - 10px)` 
                 }}
             />
         </div>
