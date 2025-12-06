@@ -2,20 +2,23 @@ import React, { useState, useMemo } from 'react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, 
-  BarChart, Bar, ReferenceLine 
+  BarChart, Bar, ReferenceLine, 
+  ComposedChart, Line, // <--- NEW IMPORTS
+  Legend // <--- NEW IMPORT
 } from 'recharts';
 import CalendarHeatmap from 'react-calendar-heatmap';
 import 'react-calendar-heatmap/dist/styles.css';
 import { 
   Trophy, TrendingUp, Calendar as CalendarIcon, 
-  Clock, Activity, Moon, ChevronDown, Leaf, AlignLeft
+  Clock, Activity, Moon, ChevronDown, Leaf, AlignLeft,
+  Smile, PlusCircle // <--- NEW ICONS
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 
 const COLORS = ['#60A5FA', '#34D399', '#F87171', '#FBBF24', '#A78BFA'];
 
-// --- HELPER FUNCTIONS ---
+// ... (Keep existing helper functions: calculateStreak, formatDecimalHour, normalizeTime, formatAxisTime) ...
 const calculateStreak = (entries) => {
   if (!entries.length) return 0;
   const sortedDates = [...new Set(entries.map(e => new Date(e.date).toDateString()))]
@@ -58,7 +61,7 @@ const formatAxisTime = (val) => {
   return `${Math.floor(displayHour)} ${suffix}`;
 };
 
-const StatsPage = ({ entries, isDarkMode }) => {
+const StatsPage = ({ entries, isDarkMode, navigate }) => { // <--- Added navigate prop if available for empty states
   const [selectedPeriod, setSelectedPeriod] = useState('month'); 
   const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear());
 
@@ -102,12 +105,21 @@ const StatsPage = ({ entries, isDarkMode }) => {
   }, [meditationSessions, dateRange]);
 
   // --- DATA PROCESSING ---
+  
+  // 1. IMPROVED: Mood + Word Count Combined
   const moodVolumeData = useMemo(() => {
     return filteredEntries.map(e => ({
       date: new Date(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
       mood: e.mood,
       words: e.content.trim().split(/\s+/).length
     }));
+  }, [filteredEntries]);
+
+  // 2. NEW: Average Mood Calculation
+  const averageMood = useMemo(() => {
+    if (filteredEntries.length === 0) return 0;
+    const sum = filteredEntries.reduce((acc, curr) => acc + (curr.mood || 0), 0);
+    return (sum / filteredEntries.length).toFixed(1);
   }, [filteredEntries]);
 
   const timeOfDayData = useMemo(() => {
@@ -122,6 +134,7 @@ const StatsPage = ({ entries, isDarkMode }) => {
     return Object.keys(counts).map(key => ({ name: key, value: counts[key] })).filter(d => d.value > 0);
   }, [filteredEntries]);
 
+  // ... (Keep existing sleepStats and meditationStats logic) ...
   const sleepStats = useMemo(() => {
     if (filteredSleep.length === 0) return null;
     const dailyGroups = {};
@@ -198,15 +211,16 @@ const StatsPage = ({ entries, isDarkMode }) => {
 
       <div className="px-4 space-y-6 mt-6">
         
-        {/* METRICS */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* METRICS - Added Average Mood */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center">
             <div className="p-2 bg-orange-50 dark:bg-orange-900/30 text-orange-500 rounded-full mb-2">
               <Trophy size={20} />
             </div>
             <span className="text-2xl font-bold text-gray-900 dark:text-white">{calculateStreak(entries)}</span>
-            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Day Streak</span>
+            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Streak</span>
           </div>
+          
           <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center">
             <div className="p-2 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-500)] rounded-full mb-2">
               <TrendingUp size={20} />
@@ -214,6 +228,16 @@ const StatsPage = ({ entries, isDarkMode }) => {
             <span className="text-2xl font-bold text-gray-900 dark:text-white">{filteredEntries.length}</span>
             <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Entries</span>
           </div>
+
+          {/* NEW: Average Mood Card */}
+          <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center">
+            <div className="p-2 bg-pink-50 dark:bg-pink-900/30 text-pink-500 rounded-full mb-2">
+              <Smile size={20} />
+            </div>
+            <span className="text-2xl font-bold text-gray-900 dark:text-white">{averageMood}</span>
+            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Avg Mood</span>
+          </div>
+
            <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center">
             <div className="p-2 bg-purple-50 dark:bg-purple-900/30 text-purple-500 rounded-full mb-2">
               <AlignLeft size={20} />
@@ -221,18 +245,18 @@ const StatsPage = ({ entries, isDarkMode }) => {
             <span className="text-2xl font-bold text-gray-900 dark:text-white">
               {filteredEntries.reduce((acc, curr) => acc + curr.content.split(' ').length, 0).toLocaleString()}
             </span>
-            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Total Words</span>
+            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Words</span>
           </div>
-           <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center">
+           <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center text-center col-span-2 md:col-span-1">
             <div className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-500 rounded-full mb-2">
               <CalendarIcon size={20} />
             </div>
             <span className="text-2xl font-bold text-gray-900 dark:text-white">{availableYears.length}</span>
-            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Years Active</span>
+            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Years</span>
           </div>
         </div>
 
-        {/* HEATMAP */}
+        {/* HEATMAP - Keep existing code */}
         <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -277,30 +301,38 @@ const StatsPage = ({ entries, isDarkMode }) => {
           `}</style>
         </div>
 
-        {/* WORD COUNT & MOOD ANALYTICS */}
+        {/* 3. IMPROVED: WORD COUNT & MOOD ANALYTICS (ComposedChart) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
-          {/* Word Count */}
+          {/* Word Count vs Mood */}
           <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-2 mb-4">
               <AlignLeft size={18} className="text-[var(--accent-500)]" />
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Word Volume</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Volume & Mood</h2>
             </div>
             <div className="h-48 w-full -ml-2">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={moodVolumeData}>
+                <ComposedChart data={moodVolumeData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={themeStyles.grid} />
                   <XAxis dataKey="date" tick={{fontSize: 10, fill: themeStyles.text}} tickLine={false} axisLine={false} />
-                  <YAxis hide />
+                  
+                  {/* Left Axis: Words */}
+                  <YAxis yAxisId="left" hide />
+                  
+                  {/* Right Axis: Mood (0-10) */}
+                  <YAxis yAxisId="right" orientation="right" domain={[0, 10]} hide />
+
                   <Tooltip 
                     cursor={{fill: isDarkMode ? '#374151' : '#f3f4f6'}}
                     contentStyle={{borderRadius: '12px', border: `1px solid ${themeStyles.tooltipBorder}`, boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: themeStyles.tooltipBg}}
                     labelStyle={{color: themeStyles.text, fontSize:'12px', marginBottom:'4px'}}
                     itemStyle={{ color: themeStyles.tooltipColor }}
-                    formatter={(val, name, props) => [val, `Mood: ${props.payload.mood}`]}
                   />
-                  <Bar dataKey="words" fill="var(--accent-500)" radius={[4, 4, 0, 0]} />
-                </BarChart>
+                  <Legend iconSize={8} wrapperStyle={{fontSize: '10px'}} />
+
+                  <Bar yAxisId="left" dataKey="words" name="Words" fill="var(--accent-500)" radius={[4, 4, 0, 0]} barSize={20} />
+                  <Line yAxisId="right" type="monotone" dataKey="mood" name="Mood" stroke="#F59E0B" strokeWidth={2} dot={false} />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
@@ -332,6 +364,7 @@ const StatsPage = ({ entries, isDarkMode }) => {
                      contentStyle={{borderRadius: '12px', border: `1px solid ${themeStyles.tooltipBorder}`, boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: themeStyles.tooltipBg}}
                      itemStyle={{color: themeStyles.tooltipColor, fontWeight: '600'}}
                    />
+                   <Legend iconSize={8} wrapperStyle={{fontSize: '10px'}} layout="vertical" verticalAlign="middle" align="right" />
                  </PieChart>
                </ResponsiveContainer>
             </div>
@@ -340,8 +373,10 @@ const StatsPage = ({ entries, isDarkMode }) => {
 
         {/* SLEEP ANALYTICS */}
         {sleepStats ? (
+          // ... (Keep existing sleep chart code) ...
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 col-span-full">
+              {/* ... (Existing Sleep Trends) ... */}
               <div className="flex items-center gap-2 mb-4">
                 <Moon size={18} className="text-indigo-500" />
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">Sleep Trends</h2>
@@ -384,13 +419,13 @@ const StatsPage = ({ entries, isDarkMode }) => {
               </div>
             </div>
 
-            {/* Sleep Schedule */}
+            {/* Sleep Schedule (Keep existing) */}
             <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 col-span-full">
-              <div className="flex items-center gap-2 mb-4">
+               {/* ... Same Sleep Schedule Bar Chart code ... */}
+               <div className="flex items-center gap-2 mb-4">
                 <Clock size={18} className="text-purple-500" />
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">Sleep Schedule</h2>
               </div>
-              
               <div className="h-56 w-full -ml-2">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={sleepStats.chartData}>
@@ -447,14 +482,27 @@ const StatsPage = ({ entries, isDarkMode }) => {
             </div>
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 text-center">
-            <Moon size={24} className="mx-auto text-gray-300 dark:text-gray-600 mb-2" />
-            <p className="text-sm text-gray-400 dark:text-gray-500">No sleep data found</p>
+          // 4. ACTIONABLE EMPTY STATE
+          <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 text-center flex flex-col items-center">
+            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-full mb-3 text-indigo-500">
+               <Moon size={24} />
+            </div>
+            <h3 className="font-bold text-gray-900 dark:text-white mb-1">No sleep data yet</h3>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mb-4 max-w-xs">Connect sleep tracking to analyze your rest patterns.</p>
+            {navigate && (
+              <button 
+                onClick={() => navigate('sleep')}
+                className="flex items-center gap-2 px-4 py-2 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] rounded-lg text-sm font-bold hover:brightness-95 transition-all"
+              >
+                <PlusCircle size={16} /> Import Sleep Data
+              </button>
+            )}
           </div>
         )}
         
         {/* MEDITATION ANALYTICS */}
         {meditationStats ? (
+          // ... (Keep existing meditation chart) ...
           <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-2 mb-4">
               <Leaf size={18} className="text-teal-500" />
@@ -479,7 +527,7 @@ const StatsPage = ({ entries, isDarkMode }) => {
                     <XAxis dataKey="date" tick={{fontSize: 10, fill: themeStyles.text}} tickLine={false} axisLine={false} />
                     <YAxis hide />
                     <Tooltip 
-                      cursor={{fill: isDarkMode ? '#115e59' : '#f0fdfa'}} // Dark mode teal shade
+                      cursor={{fill: isDarkMode ? '#115e59' : '#f0fdfa'}} 
                       contentStyle={{borderRadius: '12px', border: `1px solid ${themeStyles.tooltipBorder}`, boxShadow:'0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: themeStyles.tooltipBg}}
                       labelStyle={{color: themeStyles.text, fontSize:'12px', marginBottom:'4px'}}
                       itemStyle={{ color: themeStyles.tooltipColor }}
@@ -491,9 +539,21 @@ const StatsPage = ({ entries, isDarkMode }) => {
             </div>
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 text-center">
-            <Leaf size={24} className="mx-auto text-gray-300 dark:text-gray-600 mb-2" />
-            <p className="text-sm text-gray-400 dark:text-gray-500">No meditation data found</p>
+          // 4. ACTIONABLE EMPTY STATE (Meditation)
+          <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 text-center flex flex-col items-center">
+            <div className="p-3 bg-teal-50 dark:bg-teal-900/30 rounded-full mb-3 text-teal-500">
+               <Leaf size={24} />
+            </div>
+            <h3 className="font-bold text-gray-900 dark:text-white mb-1">Start Meditating</h3>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mb-4 max-w-xs">Take a moment to breathe and track your mindfulness journey.</p>
+            {navigate && (
+              <button 
+                onClick={() => navigate('meditation')}
+                className="flex items-center gap-2 px-4 py-2 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] rounded-lg text-sm font-bold hover:brightness-95 transition-all"
+              >
+                <PlusCircle size={16} /> Start Session
+              </button>
+            )}
           </div>
         )}
 
