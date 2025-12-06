@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { marked } from 'marked'; //
-import DOMPurify from 'dompurify'; //
 
 import { db, useBlobUrl } from '../../db'; 
 import EntryPdfDocument from './EntryPdfDocument'; 
@@ -18,7 +16,7 @@ import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { TRANSFORMERS, $convertFromMarkdownString, $convertToMarkdownString } from '@lexical/markdown'; // Added converter
+import { TRANSFORMERS, $convertFromMarkdownString } from '@lexical/markdown';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
@@ -49,8 +47,8 @@ const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: '
 
 // --- CUSTOM PLUGINS ---
 
-// 1. STATE SYNC & SESSION TRACKING PLUGIN (Updated for Markdown)
-const EditorStatePlugin = ({ content, onChange, onTextChange, onMarkdownChange, onSessionUpdate }) => {
+// 1. STATE SYNC & SESSION TRACKING PLUGIN
+const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate }) => {
   const [editor] = useLexicalComposerContext();
   const isFirstRender = useRef(true);
 
@@ -84,11 +82,8 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onMarkdownChange, 
         onChange(jsonString);
         editorState.read(() => {
             const textContent = $getRoot().getTextContent();
-            const markdownContent = $convertToMarkdownString(TRANSFORMERS);
-            
-            onTextChange(textContent); // For List Preview (Plain text)
-            onMarkdownChange(markdownContent); // For Editor Preview Tab (Markdown)
-            onSessionUpdate(textContent); 
+            onTextChange(textContent);
+            onSessionUpdate(textContent); // Notify parent to check session logic
         });
       }}
     />
@@ -110,7 +105,7 @@ const MentionsTracker = ({ onChange }) => {
   return null;
 };
 
-// 3. MODE PLUGIN
+// 3. MODE PLUGIN - Controls Read-Only vs Edit
 const EditorModePlugin = ({ mode }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -135,8 +130,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const [content, setContent] = useState(entry?.content || '');
   const [previewText, setPreviewText] = useState(entry?.preview || ''); 
-  // Track Markdown specifically for the "Preview Mode" tab
-  const [markdownPreview, setMarkdownPreview] = useState(''); 
   
   // --- SESSION STATE ---
   const [sessions, setSessions] = useState(() => {
@@ -427,16 +420,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         </div>
 
                         <div className="min-h-[400px] relative">
-                             {mode === 'preview' ? (
-                               <div 
-                                 className="prose dark:prose-invert max-w-none mb-10"
-                                 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(markdownPreview || previewText)) }}
-                               />
-                             ) : null}
-
-                             <div className={mode === 'preview' ? 'hidden' : 'block'}>
+                             
+                             {/* MODIFIED: Always render LexicalComposer. Use EditorModePlugin to toggle editable state. */}
+                             <div className="block">
                                <LexicalComposer initialConfig={initialConfig}>
-                                 <ToolbarPlugin />
+                                 {/* Only show toolbar in edit mode */}
+                                 {mode === 'edit' && <ToolbarPlugin />}
                                  <EditorModePlugin mode={mode} />
                                  <MentionsPlugin />
                                  <MentionsTracker onChange={setTaggedPeople} />
@@ -463,7 +452,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                       setPreviewText(text);
                                       previewRef.current = text;
                                    }}
-                                   onMarkdownChange={setMarkdownPreview} 
                                    onSessionUpdate={handleSessionUpdate}
                                  />
                                </LexicalComposer>
