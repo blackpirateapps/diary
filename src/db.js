@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: blackpirateapps/diary/diary-7509bb24ed4c92699e90e838f8f60f70b47131e9/src/db.js
+fullContent:
 import Dexie from 'dexie';
 import { useLiveQuery } from 'dexie-react-hooks';
 import JSZip from 'jszip';
@@ -40,6 +44,32 @@ db.version(5).stores({
   chat_analytics: 'id, name',
   meditation_sessions: '++id, startTime, duration',
   people: '++id, name, relationship'
+});
+
+// --- POPULATE DEFAULT DATA ---
+db.on('populate', () => {
+  // 1. Add Default Person
+  db.people.add({
+    id: '1',
+    name: 'Future Self',
+    relationship: 'Me',
+    description: 'The person I am becoming.',
+    dates: [{ label: 'Started Journaling', icon: 'Star', date: new Date().toISOString().split('T')[0], hasYear: true }],
+    giftIdeas: ['Peace of mind', 'New experiences']
+  });
+
+  // 2. Add Welcome Entry
+  db.entries.add({
+    date: new Date().toISOString(),
+    mood: 8,
+    tags: ['welcome', 'guide'],
+    location: 'My Mind Palace',
+    weather: 'Clear',
+    // Using simple Markdown for the default entry content
+    content: "# Welcome to your new Journal! 📔\n\nThis is a safe, offline-first space for your thoughts. Here are a few things you can do:\n\n* **Rich Text:** Use bold, italics, lists, and more.\n* **Mentions:** Go to the People page to add contacts, then type '@' in the editor to link them.\n* **Privacy:** Your data stays on your device.\n\nTry exploring the menu to see stats, maps, and more. Happy journaling!",
+    preview: "Welcome to your new Journal! 📔 This is a safe, offline-first space for your thoughts...",
+    people: ['1']
+  });
 });
 
 // --- HELPER: IMAGE URL HOOK ---
@@ -96,37 +126,20 @@ export const exportToZip = async (triggerDownload = false) => {
   const sleepSessions = await db.sleep_sessions.toArray();
   const chats = await db.chat_analytics.toArray();
   const meditations = await db.meditation_sessions.toArray();
-  const people = await db.people.toArray(); // Export People too
+  const people = await db.people.toArray();
   
-  // 2. Process Journal Images (Convert to Blobs or Filenames)
+  // 2. Process Journal Images
   const cleanEntries = entries.map(entry => {
     const doc = { ...entry, images: [] };
 
     if (entry.images && Array.isArray(entry.images)) {
       entry.images.forEach((img, index) => {
-        // Handle Base64 strings
-        if (typeof img === 'string' && img.startsWith('data:')) {
-           const arr = img.split(',');
-           const mime = arr[0].match(/:(.*?);/)[1];
-           const bstr = atob(arr[1]);
-           let n = bstr.length;
-           const u8arr = new Uint8Array(n);
-           while(n--) u8arr[n] = bstr.charCodeAt(n);
-           const blob = new Blob([u8arr], {type:mime});
-           
-           const fileName = `${entry.id}_${index}.jpg`; 
-           imgFolder.file(fileName, blob);
-           doc.images.push(fileName);
-        } 
-        // Handle Blobs (The new standard)
-        else if (img instanceof Blob) {
-           // Try to detect extension, default to webp or jpg
+        if (img instanceof Blob) {
            const ext = img.type.split('/')[1] || 'webp';
            const fileName = `${entry.id}_${index}.${ext}`;
            imgFolder.file(fileName, img);
            doc.images.push(fileName);
         }
-        // Handle Legacy URLs
         else if (typeof img === 'string') {
           doc.images.push(img);
         }
@@ -135,33 +148,44 @@ export const exportToZip = async (triggerDownload = false) => {
     return doc;
   });
 
-  // 3. Add Files to Zip
+  // 3. Process People Images (Profile & Gallery)
+  if (people.length > 0) {
+    const cleanPeople = people.map(p => {
+      const doc = { ...p };
+      
+      // A. Profile Picture
+      if (doc.image instanceof Blob) {
+         const ext = doc.image.type.split('/')[1] || 'webp';
+         const fileName = `person_${doc.id}_avatar.${ext}`;
+         imgFolder.file(fileName, doc.image);
+         doc.image = fileName; 
+      }
+
+      // B. Gallery Images
+      if (doc.gallery && Array.isArray(doc.gallery)) {
+         doc.gallery = doc.gallery.map((img, idx) => {
+             if (img instanceof Blob) {
+                 const ext = img.type.split('/')[1] || 'webp';
+                 const fileName = `person_${doc.id}_gallery_${idx}.${ext}`;
+                 imgFolder.file(fileName, img);
+                 return fileName;
+             }
+             return img;
+         });
+      }
+      return doc;
+    });
+    zip.file("people_data.json", JSON.stringify(cleanPeople, null, 2));
+  }
+
+  // 4. Add Files to Zip
   zip.file("journal.json", JSON.stringify(cleanEntries, null, 2));
   
-  if (sleepSessions.length > 0) {
-      zip.file("sleep_data.json", JSON.stringify(sleepSessions, null, 2));
-  }
+  if (sleepSessions.length > 0) zip.file("sleep_data.json", JSON.stringify(sleepSessions, null, 2));
+  if (chats.length > 0) zip.file("chat_data.json", JSON.stringify(chats, null, 2));
+  if (meditations.length > 0) zip.file("meditation_data.json", JSON.stringify(meditations, null, 2));
 
-  if (chats.length > 0) {
-      zip.file("chat_data.json", JSON.stringify(chats, null, 2));
-  }
-  
-  if (meditations.length > 0) {
-      zip.file("meditation_data.json", JSON.stringify(meditations, null, 2));
-  }
-
-  // Export People Data
-  if (people.length > 0) {
-    const peopleData = people.map(p => {
-       // We need to handle people images separately if they are blobs
-       // For simplicity in this version, we skip blob export for people or rely on base64
-       // Ideally you'd do the same image folder logic here.
-       return p; 
-    });
-    zip.file("people_data.json", JSON.stringify(peopleData, null, 2));
-  }
-
-  // 4. Generate Blob
+  // 5. Generate Blob
   const content = await zip.generateAsync({ type: "blob" });
   
   if (triggerDownload) {
@@ -174,6 +198,7 @@ export const exportToZip = async (triggerDownload = false) => {
 // --- ZIP IMPORT ---
 export const importFromZip = async (file) => {
   const zip = await JSZip.loadAsync(file);
+  const imgFolder = zip.folder("images");
   let importCount = 0;
   
   // 1. Parse Journal Entries
@@ -181,10 +206,8 @@ export const importFromZip = async (file) => {
   if (jsonFile) {
       const jsonStr = await jsonFile.async("string");
       const entries = JSON.parse(jsonStr);
-      const imgFolder = zip.folder("images");
 
       const processedEntries = [];
-
       for (const entry of entries) {
         const newImages = [];
         if (entry.images && Array.isArray(entry.images)) {
@@ -204,45 +227,60 @@ export const importFromZip = async (file) => {
       importCount += processedEntries.length;
   }
 
-  // 2. Parse Sleep Data
-  const sleepFile = zip.file("sleep_data.json");
-  if (sleepFile) {
-      const sleepStr = await sleepFile.async("string");
-      const sleepSessions = JSON.parse(sleepStr);
-      if (Array.isArray(sleepSessions) && sleepSessions.length > 0) {
-          await db.sleep_sessions.bulkPut(sleepSessions);
-      }
-  }
-
-  // 3. Parse Chat Analytics
-  const chatFile = zip.file("chat_data.json");
-  if (chatFile) {
-      const chatStr = await chatFile.async("string");
-      const chats = JSON.parse(chatStr);
-      if (Array.isArray(chats) && chats.length > 0) {
-          await db.chat_analytics.bulkPut(chats);
-      }
-  }
-  
-  // 4. Parse Meditation Data
-  const medFile = zip.file("meditation_data.json");
-  if (medFile) {
-      const medStr = await medFile.async("string");
-      const medData = JSON.parse(medStr);
-      if (Array.isArray(medData) && medData.length > 0) {
-          await db.meditation_sessions.bulkPut(medData);
-      }
-  }
-
-  // 5. Parse People Data
+  // 2. Parse People Data (With Images)
   const peopleFile = zip.file("people_data.json");
   if (peopleFile) {
       const pStr = await peopleFile.async("string");
       const pData = JSON.parse(pStr);
-      if (Array.isArray(pData) && pData.length > 0) {
-          await db.people.bulkPut(pData);
+      
+      const processedPeople = [];
+      for (const p of pData) {
+          const doc = { ...p };
+          
+          // A. Profile Picture
+          if (doc.image && typeof doc.image === 'string' && imgFolder && imgFolder.file(doc.image)) {
+             doc.image = await imgFolder.file(doc.image).async("blob");
+          }
+
+          // B. Gallery
+          if (doc.gallery && Array.isArray(doc.gallery)) {
+              const newGallery = [];
+              for (const imgRef of doc.gallery) {
+                  if (typeof imgRef === 'string' && imgFolder && imgFolder.file(imgRef)) {
+                      newGallery.push(await imgFolder.file(imgRef).async("blob"));
+                  } else {
+                      newGallery.push(imgRef);
+                  }
+              }
+              doc.gallery = newGallery;
+          }
+          processedPeople.push(doc);
       }
+
+      if (processedPeople.length > 0) {
+          await db.people.bulkPut(processedPeople);
+      }
+  }
+
+  // 3. Other Data Types
+  const sleepFile = zip.file("sleep_data.json");
+  if (sleepFile) {
+      const sleepSessions = JSON.parse(await sleepFile.async("string"));
+      if (Array.isArray(sleepSessions)) await db.sleep_sessions.bulkPut(sleepSessions);
+  }
+
+  const chatFile = zip.file("chat_data.json");
+  if (chatFile) {
+      const chats = JSON.parse(await chatFile.async("string"));
+      if (Array.isArray(chats)) await db.chat_analytics.bulkPut(chats);
+  }
+  
+  const medFile = zip.file("meditation_data.json");
+  if (medFile) {
+      const medData = JSON.parse(await medFile.async("string"));
+      if (Array.isArray(medData)) await db.meditation_sessions.bulkPut(medData);
   }
 
   return importCount;
 };
+}
