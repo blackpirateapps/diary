@@ -48,28 +48,68 @@ db.version(5).stores({
 
 // --- POPULATE DEFAULT DATA ---
 db.on('populate', () => {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+
   // 1. Add Default Person
   db.people.add({
     id: '1',
     name: 'Future Self',
     relationship: 'Me',
     description: 'The person I am becoming.',
-    dates: [{ label: 'Started Journaling', icon: 'Star', date: new Date().toISOString().split('T')[0], hasYear: true }],
-    giftIdeas: ['Peace of mind', 'New experiences']
+    dates: [{ label: 'Started Journaling', icon: 'Star', date: todayStr, hasYear: true }],
+    giftIdeas: ['Peace of mind', 'New experiences'],
+    image: null // Placeholder
   });
 
   // 2. Add Welcome Entry
   db.entries.add({
-    date: new Date().toISOString(),
+    date: now.toISOString(),
     mood: 8,
     tags: ['welcome', 'guide'],
     location: 'My Mind Palace',
     weather: 'Clear',
-    // Using simple Markdown for the default entry content
     content: "# Welcome to your new Journal! 📔\n\nThis is a safe, offline-first space for your thoughts. Here are a few things you can do:\n\n* **Rich Text:** Use bold, italics, lists, and more.\n* **Mentions:** Go to the People page to add contacts, then type '@' in the editor to link them.\n* **Privacy:** Your data stays on your device.\n\nTry exploring the menu to see stats, maps, and more. Happy journaling!",
     preview: "Welcome to your new Journal! 📔 This is a safe, offline-first space for your thoughts...",
     people: ['1']
   });
+
+  // 3. Add Default Sleep Data (Showcase Charts)
+  // We generate 3 simple sessions for the past 3 nights
+  const oneDay = 24 * 60 * 60 * 1000;
+  
+  const sleepSamples = [
+    {
+      id: (now.getTime() - oneDay * 1).toString(),
+      dateString: new Date(now.getTime() - oneDay * 1).toLocaleDateString(),
+      startTime: now.getTime() - oneDay * 1 - (8 * 60 * 60 * 1000), // Yesterday night
+      duration: 7.5,
+      rating: 4.2,
+      deepSleepPerc: 0.45,
+      snore: 0,
+      noiseLevel: 30,
+      metadata: {},
+      movementData: [], // Empty for lightweight default
+      sensorData: [],
+      hypnogram: [] // Empty means it will use basic calculation in UI
+    },
+    {
+      id: (now.getTime() - oneDay * 2).toString(),
+      dateString: new Date(now.getTime() - oneDay * 2).toLocaleDateString(),
+      startTime: now.getTime() - oneDay * 2 - (7 * 60 * 60 * 1000), // 2 days ago
+      duration: 6.8,
+      rating: 3.5,
+      deepSleepPerc: 0.30,
+      snore: 150,
+      noiseLevel: 45,
+      metadata: {},
+      movementData: [],
+      sensorData: [],
+      hypnogram: [] 
+    }
+  ];
+  
+  db.sleep_sessions.bulkAdd(sleepSamples);
 });
 
 // --- HELPER: IMAGE URL HOOK ---
