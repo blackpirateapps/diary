@@ -8,9 +8,9 @@ import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
-import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin'; // Ensure this handles the "style as you write" logic
+import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin'; 
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { TRANSFORMERS, $convertFromMarkdownString, $convertToMarkdownString } from '@lexical/markdown'; // Required for shortcuts
+import { TRANSFORMERS, $convertFromMarkdownString, $convertToMarkdownString } from '@lexical/markdown'; 
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
@@ -27,7 +27,6 @@ const ContentInitPlugin = ({ content }) => {
       isFirstRender.current = false;
       editor.update(() => {
         if (!content) return;
-        
         try {
           // 1. Try to parse as JSON State first
           const jsonState = JSON.parse(content);
@@ -39,7 +38,6 @@ const ContentInitPlugin = ({ content }) => {
         } catch (e) {
           // Ignore error, it wasn't JSON
         }
-
         // 2. Fallback to Markdown
         $convertFromMarkdownString(content, TRANSFORMERS);
       });
@@ -75,7 +73,7 @@ const ZenSettingsPopup = ({ settings, setSettings, onClose }) => {
       initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, y: 10 }}
-      className="absolute top-16 right-6 w-72 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800 p-5 z-50"
+      className="absolute top-16 right-0 md:right-6 w-72 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800 p-5 z-[70]"
     >
       <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-800 pb-3">
         <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Reading Settings</h3>
@@ -196,10 +194,13 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
   return (
     <AnimatePresence>
       <motion.div 
-        className="fixed inset-0 z-[60] bg-white dark:bg-gray-950 flex flex-col items-center animate-slideUp zen-container"
+        // MODIFIED: Added overflow-y-auto to root for native page scrolling feel
+        // REMOVED: animate-slideUp, flex-col items-center (moved inner)
+        className="fixed inset-0 z-[60] bg-white dark:bg-gray-950 overflow-y-auto"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
       >
         {/* Inject Styles Dynamically */}
         <style>{`
@@ -209,72 +210,75 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
             font-weight: ${settings.fontWeight};
             line-height: ${settings.lineHeight};
             outline: none;
-            min-height: 80vh;
+            min-height: 60vh;
           }
           .dark .zen-placeholder { color: #4b5563; }
         `}</style>
 
-        {/* TOP BAR */}
-        <div className="w-full max-w-3xl px-6 pt-6 pb-2 flex-shrink-0 flex justify-between items-center relative">
-          <button 
-            onClick={() => onBack(contentRef.current)}
-            className="flex items-center gap-2 text-gray-400 hover:text-[var(--accent-500)] transition-colors"
-          >
-            <ChevronLeft size={24} />
-            <span className="text-sm font-medium">Back</span>
-          </button>
+        {/* CONTAINER FOR PAGE LAYOUT (Min-Height ensures full page feel) */}
+        <div className="min-h-screen flex flex-col items-center">
+            
+            {/* TOP BAR */}
+            <div className="w-full max-w-3xl px-6 pt-6 pb-4 flex-shrink-0 flex justify-between items-center relative">
+              <button 
+                onClick={() => onBack(contentRef.current)}
+                className="flex items-center gap-2 text-gray-400 hover:text-[var(--accent-500)] transition-colors group"
+              >
+                <div className="p-1.5 rounded-full group-hover:bg-gray-100 dark:group-hover:bg-gray-800 transition-colors">
+                  <ChevronLeft size={22} />
+                </div>
+                <span className="text-sm font-medium">Back</span>
+              </button>
 
-          <button 
-            onClick={() => setShowSettings(!showSettings)}
-            className={`p-2 rounded-lg transition-colors ${showSettings ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-500)]' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900'}`}
-          >
-            <SlidersHorizontal size={20} strokeWidth={2} />
-          </button>
+              <button 
+                onClick={() => setShowSettings(!showSettings)}
+                className={`p-2 rounded-lg transition-colors ${showSettings ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-500)]' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900'}`}
+              >
+                <SlidersHorizontal size={20} strokeWidth={2} />
+              </button>
 
-          {/* Settings Popup */}
-          <AnimatePresence>
-            {showSettings && (
-              <ZenSettingsPopup 
-                settings={settings} 
-                setSettings={setSettings} 
-                onClose={() => setShowSettings(false)} 
-              />
-            )}
-          </AnimatePresence>
-        </div>
-        
-        {/* EDITOR AREA */}
-        <div className="flex-1 w-full max-w-3xl px-6 overflow-y-auto no-scrollbar" onClick={() => setShowSettings(false)}>
-          <div className="py-8 relative">
-            <LexicalComposer initialConfig={initialConfig}>
-              
-              <RichTextPlugin
-                contentEditable={
-                  <ContentEditable className="zen-editor-content text-gray-800 dark:text-gray-200" />
-                }
-                placeholder={
-                  <div className="absolute top-8 left-0 text-gray-300 pointer-events-none zen-placeholder" style={{
-                    fontFamily: settings.fontFamily,
-                    fontSize: `${settings.fontSize}px`,
-                  }}>
-                    Start writing...
-                  </div>
-                }
-                ErrorBoundary={LexicalErrorBoundary}
-              />
-              
-              <HistoryPlugin />
-              <ListPlugin />
-              {/* Ensure transformers are passed to enable auto-formatting */}
-              <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
-              
-              {/* Correctly Load JSON or Markdown */}
-              <ContentInitPlugin content={content} />
-              {/* Sync changes back to parent */}
-              <StateSyncPlugin onChange={setContent} contentRef={contentRef} />
-              
-            </LexicalComposer>
-          </div>
+              {/* Settings Popup */}
+              <AnimatePresence>
+                {showSettings && (
+                  <ZenSettingsPopup 
+                    settings={settings} 
+                    setSettings={setSettings} 
+                    onClose={() => setShowSettings(false)} 
+                  />
+                )}
+              </AnimatePresence>
+            </div>
+            
+            {/* EDITOR AREA - Grows to fill space, clicks outside close settings */}
+            <div className="flex-1 w-full max-w-3xl px-6 pb-32" onClick={() => setShowSettings(false)}>
+              <div className="py-8 relative">
+                <LexicalComposer initialConfig={initialConfig}>
+                  
+                  <RichTextPlugin
+                    contentEditable={
+                      <ContentEditable className="zen-editor-content text-gray-800 dark:text-gray-200" />
+                    }
+                    placeholder={
+                      <div className="absolute top-8 left-0 text-gray-300 pointer-events-none zen-placeholder" style={{
+                        fontFamily: settings.fontFamily,
+                        fontSize: `${settings.fontSize}px`,
+                      }}>
+                        Start writing...
+                      </div>
+                    }
+                    ErrorBoundary={LexicalErrorBoundary}
+                  />
+                  
+                  <HistoryPlugin />
+                  <ListPlugin />
+                  <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
+                  
+                  <ContentInitPlugin content={content} />
+                  <StateSyncPlugin onChange={setContent} contentRef={contentRef} />
+                  
+                </LexicalComposer>
+              </div>
+            </div>
         </div>
       </motion.div>
     </AnimatePresence>
