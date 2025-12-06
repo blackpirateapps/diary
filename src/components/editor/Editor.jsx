@@ -1,7 +1,4 @@
-{
-type: uploaded file
-fileName: Editor.jsx
-fullContent:
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun } from 'lucide-react';
@@ -475,4 +472,3 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 };
 
 export default Editor;
-}
