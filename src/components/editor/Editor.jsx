@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun } from 'lucide-react';
@@ -133,11 +132,27 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [previewText, setPreviewText] = useState(entry?.preview || ''); 
   
   // --- SESSION STATE ---
-  const [sessions, setSessions] = useState(entry?.sessions || []);
+  // MODIFIED: Automatically seed a "Baseline" session for legacy entries
+  const [sessions, setSessions] = useState(() => {
+    // 1. If sessions exist, use them
+    if (entry?.sessions && entry.sessions.length > 0) {
+      return entry.sessions;
+    }
+    // 2. If no sessions but content exists (Legacy), create a baseline
+    if (entry?.content) {
+      return [{
+        startTime: entry.date || new Date().toISOString(),
+        endTime: entry.date || new Date().toISOString(),
+        contentSnapshot: entry.preview || entry.content // Use raw text for snapshot
+      }];
+    }
+    // 3. New entry
+    return [];
+  });
   
-  // FIXED: Initialize ref based on the LAST SAVED session.
-  // We added a fallback: if endTime is missing/invalid, default to 0.
-  // This ensures 'now - 0' is a large number, triggering a NEW session correctly.
+  // Initialize ref based on the LAST SAVED session.
+  // If we seeded a session above, entry.sessions is still empty here, so it defaults to 0.
+  // This causes the next edit to be treated as a "New Session" (Case 2), which is exactly what we want.
   const lastTypeTimeRef = useRef(null);
   if (lastTypeTimeRef.current === null) {
       if (entry?.sessions && entry.sessions.length > 0) {
@@ -198,7 +213,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     setSessions(prevSessions => {
       let newSessions = [...prevSessions];
       
-      // Case 1: First session ever for this entry
+      // Case 1: First session ever for this entry (New Entry)
       if (newSessions.length === 0) {
         newSessions.push({
           startTime: new Date().toISOString(),
@@ -207,6 +222,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         });
       } 
       // Case 2: Returned after a long break (> 5 mins) -> NEW SESSION
+      // This also handles the "First Edit of Legacy Entry" case, because lastTypeTimeRef is 0
       else if (timeSinceLastType > SESSION_TIMEOUT) {
         newSessions.push({
           startTime: new Date().toISOString(),
