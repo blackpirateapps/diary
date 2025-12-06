@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, CheckCircle2 } from 'lucide-react';
+import { X, Play, CheckCircle2, Volume2, VolumeX } from 'lucide-react';
 import { db } from '../db';
 
 const MeditationPage = ({ navigate }) => {
@@ -7,11 +7,32 @@ const MeditationPage = ({ navigate }) => {
   const [targetDuration, setTargetDuration] = useState(0); // in seconds
   const [timeLeft, setTimeLeft] = useState(0);
   const [isActive, setIsActive] = useState(false);
+  const [isMuted, setIsMuted] = useState(false); // New state for sound preference
   
   // Ref to track actual start time for accurate logging
   const startTimeRef = useRef(null);
 
-  // Timer Logic
+  // --- SOUND SYSTEM ---
+  // You need to place three MP3 files in your public folder:
+  // /public/sounds/bell-start.mp3
+  // /public/sounds/bell-interval.mp3
+  // /public/sounds/bell-end.mp3
+  const playSound = (type) => {
+    if (isMuted) return;
+
+    // Map types to filenames
+    const sounds = {
+      start: '/sounds/bell-start.mp3',
+      interval: '/sounds/bell-interval.mp3',
+      end: '/sounds/bell-end.mp3'
+    };
+
+    const audio = new Audio(sounds[type]);
+    audio.volume = 0.5; // Keep it gentle (50% volume)
+    audio.play().catch(e => console.warn("Audio play failed (interaction required first):", e));
+  };
+
+  // --- TIMER LOGIC ---
   useEffect(() => {
     let interval = null;
     if (isActive && timeLeft > 0) {
@@ -25,6 +46,18 @@ const MeditationPage = ({ navigate }) => {
     return () => clearInterval(interval);
   }, [isActive, timeLeft]);
 
+  // --- INTERVAL SOUND LOGIC ---
+  useEffect(() => {
+    if (!isActive || timeLeft === 0 || timeLeft === targetDuration) return;
+
+    const elapsed = targetDuration - timeLeft;
+
+    // If elapsed time is greater than 0 and divisible by 120 (2 minutes)
+    if (elapsed > 0 && elapsed % 120 === 0) {
+      playSound('interval');
+    }
+  }, [timeLeft, isActive, targetDuration]); // Runs every second when active
+
   const startSession = (minutes) => {
     const seconds = minutes * 60;
     setTargetDuration(seconds);
@@ -32,17 +65,24 @@ const MeditationPage = ({ navigate }) => {
     setPhase('active');
     setIsActive(true);
     startTimeRef.current = Date.now();
+    
+    // Play start sound
+    playSound('start');
   };
 
   const handleFinish = async () => {
+    // Only play end sound if we finished naturally or manually stopped (and weren't already finished)
+    if (isActive) {
+      playSound('end');
+    }
+
     setIsActive(false);
     setPhase('complete');
     
-    // Calculate actual duration (in case they stopped early, or exact timing)
+    // Calculate actual duration
     const endTime = Date.now();
     const actualDurationSeconds = Math.round((endTime - startTimeRef.current) / 1000);
     
-    // Only save if they meditated for at least 10 seconds
     if (actualDurationSeconds > 10) {
       try {
         await db.meditation_sessions.add({
@@ -70,9 +110,20 @@ const MeditationPage = ({ navigate }) => {
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-500/20 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
       </div>
 
-      {/* Header / Exit */}
+      {/* Header / Controls */}
       <div className="relative z-10 p-6 flex justify-between items-center">
-        <h1 className="text-xl font-medium tracking-wide text-gray-200">Breathe</h1>
+        <div className="flex items-center gap-4">
+            <h1 className="text-xl font-medium tracking-wide text-gray-200">Breathe</h1>
+            {/* Mute Toggle */}
+            <button 
+                onClick={() => setIsMuted(!isMuted)}
+                className="text-gray-400 hover:text-white transition-colors"
+                title={isMuted ? "Unmute" : "Mute"}
+            >
+                {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            </button>
+        </div>
+
         <button 
           onClick={() => navigate('more')} 
           className="p-2 bg-white/10 rounded-full hover:bg-white/20 backdrop-blur-md transition-all"
