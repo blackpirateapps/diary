@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { diffWords } from 'diff';
 import { Clock, Play, SkipBack, SkipForward } from 'lucide-react';
-import { format } from 'date-fns'; // Optional, or use native Date
 
 const SessionVisualizer = ({ sessions = [] }) => {
   // Default to showing the latest version
@@ -27,7 +26,7 @@ const SessionVisualizer = ({ sessions = [] }) => {
     return diffWords(prevText, currentText);
   }, [activeSession, previousSession]);
 
-  // Safe formatting helper
+  // Safe formatting helper (Native Date, no external lib needed)
   const formatTime = (isoString) => {
     if (!isoString) return '';
     return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
