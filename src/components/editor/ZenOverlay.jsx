@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, SlidersHorizontal, X, Type, AlignJustify } from 'lucide-react';
@@ -9,9 +8,9 @@ import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
-import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
+import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin'; // Ensure this handles the "style as you write" logic
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { TRANSFORMERS, $convertFromMarkdownString, $convertToMarkdownString } from '@lexical/markdown';
+import { TRANSFORMERS, $convertFromMarkdownString, $convertToMarkdownString } from '@lexical/markdown'; // Required for shortcuts
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
@@ -51,15 +50,11 @@ const ContentInitPlugin = ({ content }) => {
 };
 
 // --- HELPER: SYNC CHANGES BACK TO MARKDOWN/JSON ---
-// Note: We sync back as Markdown for compatibility, or you can switch to JSON if preferred.
-// For Zen mode, keeping it simple with Markdown text update usually works best for the "Back" button preview.
 const StateSyncPlugin = ({ onChange, contentRef }) => {
   return (
     <OnChangePlugin
       onChange={(editorState) => {
-        // We save the full JSON state so the main editor doesn't lose formatting
         const jsonString = JSON.stringify(editorState.toJSON());
-        
         if (contentRef) contentRef.current = jsonString;
         onChange(jsonString);
       }}
@@ -270,7 +265,8 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
               
               <HistoryPlugin />
               <ListPlugin />
-              <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+              {/* Ensure transformers are passed to enable auto-formatting */}
+              <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
               
               {/* Correctly Load JSON or Markdown */}
               <ContentInitPlugin content={content} />

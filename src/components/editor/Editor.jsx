@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { marked } from 'marked'; //
+import DOMPurify from 'dompurify'; //
 
 import { db, useBlobUrl } from '../../db'; 
 import EntryPdfDocument from './EntryPdfDocument'; 
@@ -16,7 +18,7 @@ import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { TRANSFORMERS, $convertFromMarkdownString } from '@lexical/markdown';
+import { TRANSFORMERS, $convertFromMarkdownString, $convertToMarkdownString } from '@lexical/markdown'; // Added converter
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
@@ -47,8 +49,8 @@ const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: '
 
 // --- CUSTOM PLUGINS ---
 
-// 1. STATE SYNC & SESSION TRACKING PLUGIN
-const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate }) => {
+// 1. STATE SYNC & SESSION TRACKING PLUGIN (Updated for Markdown)
+const EditorStatePlugin = ({ content, onChange, onTextChange, onMarkdownChange, onSessionUpdate }) => {
   const [editor] = useLexicalComposerContext();
   const isFirstRender = useRef(true);
 
@@ -82,8 +84,11 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate })
         onChange(jsonString);
         editorState.read(() => {
             const textContent = $getRoot().getTextContent();
-            onTextChange(textContent);
-            onSessionUpdate(textContent); // Notify parent to check session logic
+            const markdownContent = $convertToMarkdownString(TRANSFORMERS);
+            
+            onTextChange(textContent); // For List Preview (Plain text)
+            onMarkdownChange(markdownContent); // For Editor Preview Tab (Markdown)
+            onSessionUpdate(textContent); 
         });
       }}
     />
@@ -130,29 +135,22 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const [content, setContent] = useState(entry?.content || '');
   const [previewText, setPreviewText] = useState(entry?.preview || ''); 
+  // Track Markdown specifically for the "Preview Mode" tab
+  const [markdownPreview, setMarkdownPreview] = useState(''); 
   
   // --- SESSION STATE ---
-  // MODIFIED: Automatically seed a "Baseline" session for legacy entries
   const [sessions, setSessions] = useState(() => {
-    // 1. If sessions exist, use them
-    if (entry?.sessions && entry.sessions.length > 0) {
-      return entry.sessions;
-    }
-    // 2. If no sessions but content exists (Legacy), create a baseline
+    if (entry?.sessions && entry.sessions.length > 0) return entry.sessions;
     if (entry?.content) {
       return [{
         startTime: entry.date || new Date().toISOString(),
         endTime: entry.date || new Date().toISOString(),
-        contentSnapshot: entry.preview || entry.content // Use raw text for snapshot
+        contentSnapshot: entry.preview || entry.content 
       }];
     }
-    // 3. New entry
     return [];
   });
   
-  // Initialize ref based on the LAST SAVED session.
-  // If we seeded a session above, entry.sessions is still empty here, so it defaults to 0.
-  // This causes the next edit to be treated as a "New Session" (Case 2), which is exactly what we want.
   const lastTypeTimeRef = useRef(null);
   if (lastTypeTimeRef.current === null) {
       if (entry?.sessions && entry.sessions.length > 0) {
@@ -160,10 +158,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         const lastEnd = last.endTime ? new Date(last.endTime).getTime() : 0;
         lastTypeTimeRef.current = isNaN(lastEnd) ? 0 : lastEnd;
       } else {
-        lastTypeTimeRef.current = 0; // Force new session if no history
+        lastTypeTimeRef.current = 0; 
       }
   }
-  // --------------------
 
   const [mood, setMood] = useState(entry?.mood || 5);
   const [location, setLocation] = useState(entry?.location || '');
@@ -180,7 +177,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const previewRef = useRef(previewText);
   previewRef.current = previewText;
 
-  // Track sessions reference for saving
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
 
@@ -208,12 +204,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const handleSessionUpdate = useCallback((currentText) => {
     const now = Date.now();
     const timeSinceLastType = now - lastTypeTimeRef.current;
-    const SESSION_TIMEOUT = 5 * 60 * 1000; // 5 Minutes
+    const SESSION_TIMEOUT = 5 * 60 * 1000; 
 
     setSessions(prevSessions => {
       let newSessions = [...prevSessions];
       
-      // Case 1: First session ever for this entry (New Entry)
       if (newSessions.length === 0) {
         newSessions.push({
           startTime: new Date().toISOString(),
@@ -221,8 +216,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           contentSnapshot: currentText
         });
       } 
-      // Case 2: Returned after a long break (> 5 mins) -> NEW SESSION
-      // This also handles the "First Edit of Legacy Entry" case, because lastTypeTimeRef is 0
       else if (timeSinceLastType > SESSION_TIMEOUT) {
         newSessions.push({
           startTime: new Date().toISOString(),
@@ -230,7 +223,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           contentSnapshot: currentText
         });
       } 
-      // Case 3: Continuing current session -> UPDATE END TIME & SNAPSHOT
       else {
         const lastIndex = newSessions.length - 1;
         newSessions[lastIndex] = {
@@ -244,7 +236,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
     lastTypeTimeRef.current = now;
   }, []);
-  // ---------------------
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -276,7 +267,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       tags, 
       images, 
       people: taggedPeople,
-      sessions: sessionsRef.current, // SAVE SESSIONS
+      sessions: sessionsRef.current,
       date: dateToSave.toISOString() 
     });
 
@@ -437,9 +428,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
                         <div className="min-h-[400px] relative">
                              {mode === 'preview' ? (
-                               <div className="prose dark:prose-invert max-w-none">
-                                  {/* Preview mode shows Time Travel UI below, editor hidden */}
-                               </div>
+                               <div 
+                                 className="prose dark:prose-invert max-w-none mb-10"
+                                 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(markdownPreview || previewText)) }}
+                               />
                              ) : null}
 
                              <div className={mode === 'preview' ? 'hidden' : 'block'}>
@@ -470,7 +462,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                    onTextChange={(text) => {
                                       setPreviewText(text);
                                       previewRef.current = text;
-                                   }} 
+                                   }}
+                                   onMarkdownChange={setMarkdownPreview} 
                                    onSessionUpdate={handleSessionUpdate}
                                  />
                                </LexicalComposer>
@@ -502,7 +495,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 </main>
 
                 <aside className="w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto order-1 lg:order-2">
-                    {/* ... Desktop Sidebar Content ... */}
                     <div className="mb-8 hidden lg:block">
                         <div className="flex items-center gap-2 text-[var(--accent-500)] mb-2 font-medium">
                             <Calendar size={18} />
