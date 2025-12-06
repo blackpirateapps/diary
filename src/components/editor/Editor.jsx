@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: Editor.jsx
+fullContent:
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun } from 'lucide-react';
@@ -391,6 +395,24 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                              </LexicalComposer>
                              {mode === 'preview' && <div className="absolute inset-0 z-10" />}
                         </div>
+
+                        {/* MOBILE ONLY: Tags and Sleep at the bottom */}
+                        <div className="lg:hidden mt-12 pt-8 border-t border-gray-100 dark:border-gray-800">
+                           <div className="mb-8">
+                              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
+                              <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
+                           </div>
+
+                           {todaysSleepSessions.length > 0 && (
+                              <div className="mb-20">
+                                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Sleep Data</label>
+                                  {todaysSleepSessions.map(session => <SleepWidget key={session.id} session={session} />)}
+                              </div>
+                           )}
+                           {/* Spacer for safe area if needed */}
+                           <div className="h-10"></div>
+                        </div>
+
                     </div>
                 </main>
 
@@ -428,18 +450,21 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             />
                         </div>
 
-                        <div>
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
-                            <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
-                        </div>
-
-                        {todaysSleepSessions.length > 0 && (
-                            <div>
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Sleep Data</label>
-                                {todaysSleepSessions.map(session => <SleepWidget key={session.id} session={session} />)}
+                        {/* DESKTOP ONLY: Tags and Sleep in sidebar */}
+                        <div className="hidden lg:block">
+                            <div className="mb-6">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
+                                <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
                             </div>
-                        )}
-                        <div className="lg:hidden h-20"></div>
+
+                            {todaysSleepSessions.length > 0 && (
+                                <div>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Sleep Data</label>
+                                    {todaysSleepSessions.map(session => <SleepWidget key={session.id} session={session} />)}
+                                </div>
+                            )}
+                        </div>
+                        <div className="lg:hidden h-2"></div>
                     </div>
                 </aside>
             </div>
@@ -450,3 +475,4 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 };
 
 export default Editor;
+}
