@@ -3,427 +3,435 @@ import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/render
 
 // --- STYLES ---
 const styles = StyleSheet.create({
-  // Base
+  // Base Page Layout
   page: {
-    paddingTop: 50,
-    paddingBottom: 50,
-    paddingHorizontal: 50, // Increased margins for book feel
+    padding: 48,
     backgroundColor: '#ffffff',
-    fontFamily: 'Times-Roman', // Changed to Serif for body text
-    fontSize: 12,
-    lineHeight: 1.6,
+    fontFamily: 'Times-Roman',
+    fontSize: 11,
+    lineHeight: 1.5,
     color: '#1f2937'
   },
   
-  // Book Cover
-  coverPage: {
+  // --- COVER PAGE ---
+  coverContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    alignItems: 'center',
+    paddingVertical: 40,
   },
-  coverTitle: {
-    fontSize: 44,
-    fontFamily: 'Helvetica-Bold', // Keep titles Sans for impact
-    color: '#111827',
-    marginBottom: 10,
-    textAlign: 'center'
-  },
-  coverYear: {
-    fontSize: 60,
-    fontFamily: 'Helvetica-Bold',
-    color: '#111827',
-    marginBottom: 30,
-    textAlign: 'center'
-  },
-  coverSubtitle: {
-    fontSize: 16,
-    fontFamily: 'Times-Roman',
-    color: '#4b5563',
+  coverTitleBlock: {
     marginBottom: 60,
-    textAlign: 'center',
-    fontStyle: 'italic'
-  },
-  coverStats: {
-    flexDirection: 'row',
-    gap: 60, // Increased spacing between stats
-    marginTop: 40,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingTop: 40
-  },
-  statItem: {
     alignItems: 'center'
   },
-  statValue: {
-    fontSize: 28,
+  coverTitle: {
+    fontSize: 32,
     fontFamily: 'Helvetica-Bold',
-    color: '#111827'
-  },
-  statLabel: {
-    fontSize: 10,
-    fontFamily: 'Helvetica',
-    color: '#6b7280',
-    marginTop: 8, // More space between value and label
+    color: '#111827',
+    marginBottom: 12,
+    textAlign: 'center',
     textTransform: 'uppercase',
     letterSpacing: 2
   },
-  
-  // Chapter Dividers
-  monthPage: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  monthTitle: {
-    fontSize: 36,
+  coverYear: {
+    fontSize: 80,
     fontFamily: 'Helvetica-Bold',
-    color: '#111827',
-    textTransform: 'uppercase',
-    letterSpacing: 6
+    color: '#000000',
+    textAlign: 'center',
+    letterSpacing: -2,
+    lineHeight: 1
   },
-  monthSubtitle: {
-    marginTop: 25, // Increased spacing significantly
+  coverSubtitle: {
     fontSize: 14,
     fontFamily: 'Times-Roman',
-    color: '#9ca3af',
+    color: '#4b5563',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: 40
+  },
+  coverStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 40,
+    marginTop: 40,
+    borderTopWidth: 1.5,
+    borderTopColor: '#e5e7eb',
+    paddingTop: 30,
+    width: '100%'
+  },
+  statItem: { alignItems: 'center', minWidth: 80 },
+  statValue: { fontSize: 20, fontFamily: 'Helvetica-Bold', color: '#111827', marginBottom: 4 },
+  statLabel: { fontSize: 9, fontFamily: 'Helvetica', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 1.5 },
+
+  // --- MONTH DIVIDER ---
+  monthPageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthTitle: {
+    fontSize: 30,
+    fontFamily: 'Helvetica-Bold',
+    color: '#000000',
+    textTransform: 'uppercase',
+    letterSpacing: 8,
+    marginBottom: 30
+  },
+  monthSubtitle: {
+    fontSize: 12,
+    fontFamily: 'Times-Roman',
+    color: '#6b7280',
     fontStyle: 'italic'
   },
 
-  // Entry Layout
+  // --- ENTRY LAYOUT ---
   entryContainer: {
-    marginBottom: 0,
-    // No bottom border needed as we are breaking pages now
+    marginBottom: 20,
+    flexDirection: 'column'
   },
   header: {
-    marginBottom: 20,
-    paddingBottom: 15,
+    marginBottom: 15,
+    paddingBottom: 10,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#d1d5db',
+    borderBottomColor: '#9ca3af',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end'
   },
   headerLeft: { flexDirection: 'column' },
-  headerRight: { flexDirection: 'column', alignItems: 'flex-end' },
+  dateMain: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: '#111827', marginBottom: 4 },
+  metaText: { color: '#4b5563', fontSize: 10, fontFamily: 'Helvetica' },
   
-  date: { 
-    fontSize: 22, 
-    fontFamily: 'Helvetica-Bold', 
-    color: '#111827', 
-    marginBottom: 4, 
-    lineHeight: 1 
-  },
-  time: { 
-    color: '#6b7280', 
-    fontSize: 11, 
-    fontFamily: 'Helvetica' 
-  },
-  location: {
-     fontFamily: 'Helvetica-Bold', 
-     textAlign: 'right', 
-     fontSize: 10,
-     color: '#4b5563'
-  },
-  
-  // Meta
-  metaContainer: { 
-    flexDirection: 'row', 
-    gap: 20, 
-    marginBottom: 25, 
-    fontSize: 10, 
-    color: '#6b7280',
-    fontFamily: 'Helvetica'
-  },
-  metaItem: { flexDirection: 'row', alignItems: 'center' },
-  
-  // Typography
+  // --- CONTENT STYLES (Ported for Renderer) ---
   body: { 
     marginBottom: 15, 
     textAlign: 'left',
-    fontSize: 12,
-    fontFamily: 'Times-Roman' // Explicitly Serif
+    fontSize: 11,
+    fontFamily: 'Times-Roman'
   },
-  paragraph: { marginBottom: 10 },
-  
-  // Markdown Styles
-  h1: { fontSize: 18, fontFamily: 'Helvetica-Bold', marginTop: 15, marginBottom: 8, color: '#111827' },
-  h2: { fontSize: 16, fontFamily: 'Helvetica-Bold', marginTop: 12, marginBottom: 6, color: '#374151' },
-  h3: { fontSize: 14, fontFamily: 'Helvetica-Bold', marginTop: 10, marginBottom: 4, color: '#4b5563' },
+  paragraph: { marginBottom: 8 },
+  // Headings
+  h1: { fontSize: 16, fontFamily: 'Helvetica-Bold', marginTop: 12, marginBottom: 6, color: '#111827' },
+  h2: { fontSize: 14, fontFamily: 'Helvetica-Bold', marginTop: 10, marginBottom: 4, color: '#374151' },
+  h3: { fontSize: 12, fontFamily: 'Helvetica-Bold', marginTop: 8, marginBottom: 2, color: '#4b5563' },
+  // Text Decos
   bold: { fontFamily: 'Times-Bold' },
   italic: { fontFamily: 'Times-Italic' },
-  
+  boldItalic: { fontFamily: 'Times-BoldItalic' },
+  underline: { textDecoration: 'underline' },
+  strikethrough: { textDecoration: 'line-through' },
+  codeInline: { fontFamily: 'Courier', backgroundColor: '#f3f4f6', fontSize: 10, padding: 2 },
+  // Blocks
   quoteBlock: {
-    borderLeftWidth: 3, 
-    borderLeftColor: '#e5e7eb', 
-    paddingLeft: 14, 
-    fontStyle: 'italic', 
-    color: '#4b5563', 
-    marginBottom: 12, 
-    marginTop: 6, 
-    fontFamily: 'Times-Italic'
+    borderLeftWidth: 2,
+    borderLeftColor: '#d1d5db',
+    paddingLeft: 10,
+    fontStyle: 'italic',
+    color: '#374151',
+    marginVertical: 8,
+    fontFamily: 'Times-Italic',
+    backgroundColor: '#f9fafb',
+    paddingVertical: 4
   },
-  
-  listContainer: { marginBottom: 10 },
-  listItem: { flexDirection: 'row', marginBottom: 4, paddingLeft: 8 },
-  listItemBullet: { width: 15, fontSize: 14, fontFamily: 'Helvetica' }, // Sans serif bullet looks cleaner
+  codeBlock: {
+    fontFamily: 'Courier',
+    backgroundColor: '#1f2937',
+    color: '#f3f4f6',
+    padding: 10,
+    fontSize: 10,
+    borderRadius: 4,
+    marginBottom: 8,
+    marginTop: 4
+  },
+  listContainer: { marginBottom: 6 },
+  listItem: { flexDirection: 'row', marginBottom: 3, paddingLeft: 4 },
+  listItemBullet: { width: 15, fontSize: 11, fontFamily: 'Times-Roman' },
   listItemContent: { flex: 1 },
 
-  // Images
-  galleryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 15, marginTop: 20 },
-  imageWrapper: { 
-    width: '47%', // Slightly less than 50 to account for gap
-    height: 180, 
-    marginBottom: 15, 
-    backgroundColor: '#f3f4f6', 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    borderRadius: 4 
+  // --- GALLERY ---
+  gallery: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
+  imageBox: { width: 150, height: 150, backgroundColor: '#f3f4f6' },
+  image: { width: '100%', height: '100%', objectFit: 'contain' },
+
+  // --- FOOTER ---
+  footer: {
+    flexDirection: 'row',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: '#f3f4f6',
+    gap: 15
   },
-  image: { width: '100%', height: '100%', objectFit: 'contain' }
+  footerItem: { flexDirection: 'row', alignItems: 'center' },
+  footerLabel: { fontFamily: 'Helvetica-Bold', fontSize: 9, color: '#374151', marginRight: 4 },
+  footerValue: { fontFamily: 'Helvetica', fontSize: 9, color: '#6b7280' }
 });
 
-// --- HELPER: Simple Markdown Formatter ---
-// Parses basic markdown (Bold, Italic, H1-H3, Lists, Blockquotes)
-const SimpleMarkdownRenderer = ({ text }) => {
-  if (!text) return null;
+// --- HELPER 1: PARSE INLINE CSS (Ported) ---
+const parseInlineStyle = (styleString) => {
+  if (!styleString) return {};
+  const customStyles = {};
+  const rules = styleString.split(';');
+  
+  rules.forEach(rule => {
+    const [key, val] = rule.split(':').map(s => s.trim());
+    if (!key || !val) return;
 
-  // Helper to process inline styles (Bold/Italic) within a string
-  const renderInline = (str) => {
-    // Split by bold (** or __)
-    const parts = str.split(/(\*\*|__)(.*?)\1/g); 
-    return parts.map((part, i) => {
-      if (part === '**' || part === '__') return null;
-      // Check if this part was inside the split match (it would be odd index 2, 5, etc in a full regex match, 
-      // but simplistic split puts the delimiter in array. 
-      // Let's use a simpler approach: check strict alternation if possible, 
-      // or just assume if previous was delimiter, this is content.
-      
-      // Easier RegEx approach for React-PDF map:
-      // We will assume the text passed here is a simple string line.
-      
-      // Let's try a very simple bold parser:
-      if (i % 3 === 2) { 
-        return <Text key={i} style={styles.bold}>{part}</Text>;
+    switch (key) {
+      case 'color': customStyles.color = val; break;
+      case 'background-color': customStyles.backgroundColor = val; break;
+      case 'font-size': customStyles.fontSize = parseFloat(val); break;
+      case 'font-family':
+        const lowerVal = val.toLowerCase();
+        if (lowerVal.includes('courier') || lowerVal.includes('mono')) customStyles.fontFamily = 'Courier';
+        else if (lowerVal.includes('times') || lowerVal.includes('serif')) customStyles.fontFamily = 'Times-Roman';
+        else customStyles.fontFamily = 'Helvetica';
+        break;
+      case 'text-decoration':
+        if (val.includes('underline')) customStyles.textDecoration = 'underline';
+        if (val.includes('line-through')) customStyles.textDecoration = 'line-through';
+        break;
+      default: break;
+    }
+  });
+  return customStyles;
+};
+
+// --- HELPER 2: MARKDOWN FALLBACK (Ported & Adapted for Serif) ---
+const MarkdownText = ({ text }) => {
+  if (!text) return null;
+  const lines = text.split('\n');
+
+  return lines.map((line, lineIdx) => {
+    if (line.startsWith('# ')) return <Text key={lineIdx} style={styles.h1}>{line.replace('# ', '')}</Text>;
+    if (line.startsWith('## ')) return <Text key={lineIdx} style={styles.h2}>{line.replace('## ', '')}</Text>;
+
+    const parts = line.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+
+    return (
+      <Text key={lineIdx} style={styles.paragraph}>
+        {parts.map((part, partIdx) => {
+          if (part.startsWith('**') && part.endsWith('**')) 
+            return <Text key={partIdx} style={styles.bold}>{part.slice(2, -2)}</Text>;
+          if (part.startsWith('*') && part.endsWith('*')) 
+            return <Text key={partIdx} style={styles.italic}>{part.slice(1, -1)}</Text>;
+          return <Text key={partIdx}>{part}</Text>;
+        })}
+      </Text>
+    );
+  });
+};
+
+// --- HELPER 3: RICH TEXT RENDERER (Ported & Adapted for Serif) ---
+const RichTextRenderer = ({ content }) => {
+  if (!content) return null;
+
+  let root;
+  try {
+    // 1. Try to parse as JSON (Lexical format)
+    const json = typeof content === 'string' ? JSON.parse(content) : content;
+    if (json.root) root = json.root;
+  } catch (e) {
+    // 2. Fallback to Markdown if not JSON
+    return <MarkdownText text={typeof content === 'string' ? content : ''} />;
+  }
+
+  if (!root) return <MarkdownText text={typeof content === 'string' ? content : ''} />;
+
+  const renderChildren = (children) => {
+    return children.map((node, index) => {
+      if (node.type === 'text') {
+        const isBold = (node.format & 1) !== 0;
+        const isItalic = (node.format & 2) !== 0;
+        
+        let customStyle = parseInlineStyle(node.style);
+
+        // --- FONT LOGIC (Adapted for Book/Times-Roman) ---
+        // If no explicit font family is set in styles, default to Times variants
+        if (!customStyle.fontFamily) {
+             if (isBold && isItalic) customStyle.fontFamily = 'Times-BoldItalic';
+             else if (isBold) customStyle.fontFamily = 'Times-Bold';
+             else if (isItalic) customStyle.fontFamily = 'Times-Italic';
+        }
+
+        const nodeStyles = [
+          customStyle,
+          (node.format & 4) ? styles.strikethrough : {},
+          (node.format & 8) ? styles.underline : {},
+          (node.format & 16) ? styles.codeInline : {},
+        ];
+        return <Text key={index} style={nodeStyles}>{node.text}</Text>;
       }
-      return <Text key={i}>{part}</Text>;
+      
+      if (node.type === 'linebreak') return <Text key={index}>{'\n'}</Text>;
+      
+      if (node.type === 'mention') {
+          return <Text key={index} style={{ color: '#2563eb', fontFamily: 'Helvetica-Bold' }}>@{node.text}</Text>;
+      }
+      
+      if (node.type === 'link' || node.type === 'autolink') {
+         return <Text key={index} style={{ color: '#2563eb', textDecoration: 'underline' }}>{renderChildren(node.children)}</Text>;
+      }
+      return null;
     });
   };
 
-  const lines = text.split('\n');
-
   return (
     <View>
-      {lines.map((line, index) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <Text key={index} style={{ height: 8 }}> </Text>; // Empty line spacing
-
-        // Headings
-        if (trimmed.startsWith('# ')) return <Text key={index} style={styles.h1}>{trimmed.replace('# ', '')}</Text>;
-        if (trimmed.startsWith('## ')) return <Text key={index} style={styles.h2}>{trimmed.replace('## ', '')}</Text>;
-        if (trimmed.startsWith('### ')) return <Text key={index} style={styles.h3}>{trimmed.replace('### ', '')}</Text>;
-
-        // Blockquote
-        if (trimmed.startsWith('> ')) {
+      {root.children.map((block, index) => {
+        const alignStyle = block.format ? { textAlign: block.format } : {};
+        
+        if (block.type === 'heading') {
+          const hStyle = block.tag === 'h1' ? styles.h1 : block.tag === 'h2' ? styles.h2 : styles.h3;
+          return <Text key={index} style={[hStyle, alignStyle]}>{renderChildren(block.children)}</Text>;
+        }
+        if (block.type === 'quote') {
+          return <View key={index} style={[styles.quoteBlock, alignStyle]}><Text>{renderChildren(block.children)}</Text></View>;
+        }
+        if (block.type === 'code') {
+           return <View key={index} style={styles.codeBlock}><Text>{renderChildren(block.children)}</Text></View>;
+        }
+        if (block.type === 'list') {
+          const isNumbered = block.listType === 'number';
           return (
-            <View key={index} style={styles.quoteBlock}>
-              <Text>{renderInline(trimmed.replace('> ', ''))}</Text>
+            <View key={index} style={styles.listContainer}>
+              {block.children.map((listItem, i) => (
+                <View key={i} style={styles.listItem}>
+                  <Text style={styles.listItemBullet}>{isNumbered ? `${listItem.value}.` : '•'}</Text>
+                  <View style={styles.listItemContent}>
+                     <Text style={[styles.paragraph, alignStyle]}>{renderChildren(listItem.children)}</Text>
+                  </View>
+                </View>
+              ))}
             </View>
           );
         }
-
-        // List Items
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          return (
-            <View key={index} style={styles.listItem}>
-              <Text style={styles.listItemBullet}>•</Text>
-              <View style={styles.listItemContent}>
-                <Text>{renderInline(trimmed.replace(/^[-*] /, ''))}</Text>
-              </View>
-            </View>
-          );
-        }
-
-        // Standard Paragraph
-        return (
-          <Text key={index} style={styles.paragraph}>
-            {renderInline(line)}
-          </Text>
-        );
+        return <Text key={index} style={[styles.paragraph, alignStyle]}>{renderChildren(block.children)}</Text>;
       })}
     </View>
   );
 };
 
-// --- RICH TEXT / CONTENT ROUTER ---
-const ContentRenderer = ({ content }) => {
-  if (!content) return null;
-
-  // If content is an object (Lexical JSON), we try to parse it. 
-  // If it's a string, we assume it's Markdown.
-  let isJson = typeof content === 'object';
-  if (typeof content === 'string' && content.trim().startsWith('{')) {
-    try {
-      JSON.parse(content);
-      isJson = true;
-    } catch (e) {
-      isJson = false;
-    }
-  }
-
-  // NOTE: For this fix, since you mentioned "raw markdown", 
-  // we are prioritizing the Markdown Renderer for string content.
-  // If you actually have Lexical JSON, the previous RichTextRenderer code 
-  // would be needed here, but let's stick to the Markdown fix.
-  
-  if (isJson) {
-     // If you have the complex JSON renderer from before, put it here.
-     // For now, let's extract raw text if it's JSON to be safe, or just render.
-     // Assuming current issue is with plain string markdown:
-     return <Text>Complex JSON content detected (Not rendered in this snippet)</Text>;
-  }
-
-  return <SimpleMarkdownRenderer text={content} />;
-};
-
-
-// --- ENTRY COMPONENT ---
+// --- ENTRY ITEM ---
 const EntryItem = ({ entry, moodLabel }) => {
   const dateObj = new Date(entry.date);
-  const dateString = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  const timeString = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  const yearString = dateObj.getFullYear();
+  const dateMain = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const dateSub = `${dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} • ${dateObj.getFullYear()}`;
 
   return (
-    // 'break' prop here forces this View to start on a new page
     <View style={styles.entryContainer} break>
-      {/* HEADER */}
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.date}>{dateString}</Text>
-          <Text style={styles.time}>{timeString} • {yearString}</Text>
+          <Text style={styles.dateMain}>{dateMain}</Text>
+          <Text style={styles.metaText}>{dateSub}</Text>
         </View>
         {entry.location && (
-          <View style={styles.headerRight}>
-            <Text style={styles.location}>{entry.location}</Text>
-            {entry.weather && <Text style={{ color: '#9ca3af', fontSize: 9, textAlign: 'right', marginTop: 2 }}>{entry.weather}</Text>}
+          <View>
+            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10, textAlign: 'right' }}>{entry.location}</Text>
+            {entry.weather && <Text style={{ fontSize: 9, color: '#9ca3af', textAlign: 'right' }}>{entry.weather}</Text>}
           </View>
         )}
       </View>
 
-      {/* BODY */}
+      {/* Content Body with RichTextRenderer */}
       <View style={styles.body}>
-        <ContentRenderer content={entry.content} />
+        <RichTextRenderer content={entry.content} />
       </View>
 
-      {/* META (Moved to bottom of entry for cleaner book look) */}
-      <View style={styles.metaContainer}>
-        <View style={styles.metaItem}>
-          <Text style={{ fontFamily: 'Helvetica-Bold' }}>Mood: </Text>
-          <Text>{moodLabel || 'Neutral'}</Text>
-        </View>
-        {entry.tags && entry.tags.length > 0 && (
-          <View style={[styles.metaItem, { marginLeft: 20 }]}>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Tags: </Text>
-              <Text>{entry.tags.join(', ')}</Text>
-          </View>
-        )}
-      </View>
-
-      {/* IMAGES */}
+      {/* Images */}
       {entry.images && entry.images.length > 0 && (
-        <View wrap={false}>
-          <View style={styles.galleryGrid}>
-            {entry.images.map((imgSrc, index) => (
-              <View key={index} style={styles.imageWrapper}>
-                <Image src={imgSrc} style={styles.image} />
-              </View>
-            ))}
-          </View>
+        <View style={styles.gallery} wrap={false}>
+          {entry.images.map((img, idx) => (
+             <View key={idx} style={styles.imageBox}>
+                <Image src={img} style={styles.image} />
+             </View>
+          ))}
         </View>
       )}
+
+      {/* Footer Meta */}
+      <View style={styles.footer}>
+        <View style={styles.footerItem}>
+          <Text style={styles.footerLabel}>MOOD:</Text>
+          <Text style={styles.footerValue}>{moodLabel || 'Neutral'}</Text>
+        </View>
+        {entry.tags && entry.tags.length > 0 && (
+          <View style={styles.footerItem}>
+             <Text style={styles.footerLabel}>TAGS:</Text>
+             <Text style={styles.footerValue}>{entry.tags.join(', ')}</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 };
 
-// --- MAIN DOCUMENT ---
-
+// --- MAIN PDF DOCUMENT ---
 const YearInReviewPdf = ({ entries, year }) => {
-  // Group Entries by Month
   const entriesByMonth = entries.reduce((acc, entry) => {
-    const date = new Date(entry.date);
-    const month = date.getMonth(); 
-    if (!acc[month]) acc[month] = [];
-    acc[month].push(entry);
+    const m = new Date(entry.date).getMonth();
+    if (!acc[m]) acc[m] = [];
+    acc[m].push(entry);
     return acc;
   }, {});
-
-  const sortedMonths = Object.keys(entriesByMonth).sort((a, b) => a - b);
-  sortedMonths.forEach(m => {
-    entriesByMonth[m].sort((a, b) => new Date(a.date) - new Date(b.date));
-  });
+  
+  const sortedMonths = Object.keys(entriesByMonth).sort((a,b) => a - b);
+  sortedMonths.forEach(m => entriesByMonth[m].sort((a,b) => new Date(a.date) - new Date(b.date)));
 
   const totalEntries = entries.length;
-  const moodSum = entries.reduce((acc, curr) => acc + (curr.mood || 5), 0);
-  const avgMood = totalEntries > 0 ? (moodSum / totalEntries).toFixed(1) : 0;
+  const moodAvg = totalEntries ? (entries.reduce((a,c) => a + (c.mood||5),0)/totalEntries).toFixed(1) : 0;
   
-  // Estimate words
-  const totalWords = entries.reduce((acc, curr) => {
-      let txt = curr.preview || ''; 
-      if(!txt && typeof curr.content === 'string') txt = curr.content;
-      return acc + txt.split(' ').length;
+  const wordCount = entries.reduce((acc, curr) => {
+     // Safe estimation even with JSON content
+     const txt = typeof curr.content === 'string' ? curr.content : JSON.stringify(curr.content);
+     return acc + txt.split(/\s+/).length;
   }, 0);
 
-  const monthNames = [ "January", "February", "March", "April", "May", "June", 
-    "July", "August", "September", "October", "November", "December" ];
-
-  const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const MOOD_LABELS = { 1:'Awful', 2:'Bad', 3:'Sad', 4:'Meh', 5:'Okay', 6:'Good', 7:'Great', 8:'Happy', 9:'Loved', 10:'Amazing' };
 
   return (
     <Document>
       {/* COVER PAGE */}
       <Page size="A4" style={styles.page}>
-        <View style={styles.coverPage}>
-          <Text style={styles.coverTitle}>Year in Review</Text>
-          <Text style={styles.coverYear}>{year}</Text>
-          <Text style={styles.coverSubtitle}>The Collected Memories & Thoughts</Text>
-          
-          <View style={styles.coverStats}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{totalEntries}</Text>
-              <Text style={styles.statLabel}>Entries</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{avgMood}</Text>
-              <Text style={styles.statLabel}>Avg Mood</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{(totalWords / 1000).toFixed(1)}k</Text>
-              <Text style={styles.statLabel}>Words</Text>
-            </View>
+        <View style={styles.coverContainer}>
+          <View style={styles.coverTitleBlock}>
+            <Text style={styles.coverTitle}>YEAR IN REVIEW</Text>
+            <Text style={styles.coverYear}>{year}</Text>
+          </View>
+          <Text style={styles.coverSubtitle}>A collection of moments, thoughts, and memories.</Text>
+          <View style={styles.coverStatsRow}>
+             <View style={styles.statItem}>
+               <Text style={styles.statValue}>{totalEntries}</Text>
+               <Text style={styles.statLabel}>Entries</Text>
+             </View>
+             <View style={styles.statItem}>
+               <Text style={styles.statValue}>{moodAvg}</Text>
+               <Text style={styles.statLabel}>Avg Mood</Text>
+             </View>
+             <View style={styles.statItem}>
+               <Text style={styles.statValue}>{(wordCount/1000).toFixed(1)}k</Text>
+               <Text style={styles.statLabel}>Words</Text>
+             </View>
           </View>
         </View>
       </Page>
 
-      {/* MONTHLY CHAPTERS */}
-      {sortedMonths.map((monthKey) => (
-        <React.Fragment key={monthKey}>
-          {/* Month Divider Page */}
+      {/* MONTHLY SECTIONS */}
+      {sortedMonths.map(monthIndex => (
+        <React.Fragment key={monthIndex}>
           <Page size="A4" style={styles.page}>
-             <View style={styles.monthPage}>
-                <Text style={styles.monthTitle}>{monthNames[monthKey]}</Text>
-                <Text style={styles.monthSubtitle}>{entriesByMonth[monthKey].length} Entries</Text>
+             <View style={styles.monthPageContainer}>
+                <Text style={styles.monthTitle}>{monthNames[monthIndex]}</Text>
+                <Text style={styles.monthSubtitle}>{entriesByMonth[monthIndex].length} Entries recorded</Text>
              </View>
           </Page>
-
-          {/* Entries - Loop directly here, but each EntryItem has 'break' prop */}
-          {entriesByMonth[monthKey].map((entry) => (
-            <EntryItem 
-                key={entry.id} 
-                entry={entry} 
-                moodLabel={MOODS_LABELS[entry.mood]} 
-            />
-          ))}
+          <Page size="A4" style={styles.page}>
+             {entriesByMonth[monthIndex].map(entry => (
+                <EntryItem key={entry.id} entry={entry} moodLabel={MOOD_LABELS[entry.mood]} />
+             ))}
+          </Page>
         </React.Fragment>
       ))}
     </Document>
