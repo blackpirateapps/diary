@@ -1,27 +1,33 @@
-import {useEffect} from "react";
+import { useEffect } from "react";
 
-export default function AndroidBackspaceFixPlugin() {
+export default function AndroidImeBackspaceFix() {
   useEffect(() => {
-    let lastEventTime = 0;
+    let lastDeleteTime = 0;
 
-    const handleBeforeInput = (e) => {
+    const handler = (e) => {
+      // FUTO keyboard fires deleteContentBackward twice:
+      // 1) synthetic beforeinput
+      // 2) real keydown Backspace follows immediately
+
       if (e.inputType === "deleteContentBackward") {
         const now = Date.now();
 
-        // Prevent duplicate delete events (Android sends two)
-        if (now - lastEventTime < 25) {
+        // FUTO's duplicate events occur ~0–12ms apart
+        if (now - lastDeleteTime < 20) {
+          e.stopImmediatePropagation();
           e.preventDefault();
           return;
         }
 
-        lastEventTime = now;
+        lastDeleteTime = now;
       }
     };
 
-    document.addEventListener("beforeinput", handleBeforeInput, true);
+    document.addEventListener("beforeinput", handler, true);
 
-    return () =>
-      document.removeEventListener("beforeinput", handleBeforeInput, true);
+    return () => {
+      document.removeEventListener("beforeinput", handler, true);
+    };
   }, []);
 
   return null;
