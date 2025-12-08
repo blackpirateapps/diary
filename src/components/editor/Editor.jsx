@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check } from 'lucide-react'; 
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -297,6 +298,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
 
+  // New Ref for the hidden file input used by the InsertDropDown
+  const fileInputRef = useRef(null);
+
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -442,6 +446,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   };
 
+  // NEW: Handler for the dropdown to trigger the hidden input
+  const handleInsertImage = () => {
+    fileInputRef.current?.click();
+  };
+
   const handleLocation = async () => {
     if (loadingLocation) return;
     setLoadingLocation(true);
@@ -520,6 +529,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                 <button onClick={() => { if(window.confirm('Delete image?')) { setImages(i => i.filter((_,x) => x !== imgIndex)); setImgIndex(0); saveData(true); } }} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:bg-red-600"><Trash2 size={16}/></button>
                             </div>
                         )}
+
+                    {/* HIDDEN INPUT FOR INSERT DROPDOWN */}
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handleImageUpload} 
+                    />
 
                     <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 lg:px-12 lg:py-12">
                         <div className="lg:hidden mb-6">
