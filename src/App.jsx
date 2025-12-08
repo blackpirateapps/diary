@@ -4,8 +4,8 @@ import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db';
 import {
   BarChart2, Grid, Home, Map as MapIcon, Menu,
   Settings, Book, Moon, MessageCircle, Coffee, Calendar,
-  History, Users, Loader2
-} from 'lucide-react';
+  History, Users, Loader2, PanelLeft
+} from 'lucide-react'; // ADDED: PanelLeft icon
 
 // --- LAZY LOAD IMPORTS ---
 const MeditationPage = lazy(() => import('./components/MeditationPage'));
@@ -49,6 +49,8 @@ const App = () => {
   const [appName, setAppName] = useState(() => localStorage.getItem('app_name') || 'Journal');
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('app_theme') === 'dark');
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('app_accent') || 'blue');
+  // NEW STATE: Sidebar visibility
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); 
 
   // --- ROUTING LOGIC ---
   const getHash = () => window.location.hash.replace('#', '') || 'journal';
@@ -218,12 +220,25 @@ const App = () => {
     <div className="min-h-screen bg-[#F3F4F6] dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-300 flex">
       
       {/* SIDEBAR */}
-      <aside className="hidden md:flex flex-col w-64 fixed h-full bg-[#f8f9fa] dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 p-4 z-50">
-        <div className="mb-6 px-2">
+      <aside 
+        className={`fixed h-full bg-[#f8f9fa] dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 p-4 z-50 
+                   transition-all duration-300 ease-in-out
+                   ${isSidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full'} 
+                   hidden md:flex flex-col`}
+      >
+        <div className="mb-6 px-2 flex items-center justify-between">
            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
               <Book className="text-[var(--accent-500)]" size={24} />
               {appName}
            </h1>
+           {/* Sidebar collapse button on desktop */}
+           <button 
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-1 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                title="Collapse Sidebar"
+            >
+                <PanelLeft size={20} />
+            </button>
         </div>
         <nav className="space-y-1 flex-1 overflow-y-auto no-scrollbar">
           <div className="pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Journal</div>
@@ -250,8 +265,21 @@ const App = () => {
       </aside>
 
       {/* CONTENT AREA */}
-      <div className="flex-1 w-full min-h-screen md:pl-64 transition-all">
-        {/* MODIFIED: Removed 'max-w-xl' so Editor can take full width when active. Removed 'relative' */}
+      <div 
+        className={`flex-1 w-full min-h-screen transition-all duration-300 ease-in-out
+                    ${isSidebarOpen ? 'md:pl-64' : 'md:pl-0'}`} // Conditional padding
+      >
+         {/* Sidebar Toggle Button (Visible when sidebar is collapsed) */}
+        {!isSidebarOpen && (
+            <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="fixed top-4 left-4 z-50 p-2 rounded-full bg-[var(--accent-500)] text-white shadow-lg hover:bg-[var(--accent-600)] transition-colors hidden md:block"
+                title="Open Sidebar"
+            >
+                <PanelLeft size={24} />
+            </button>
+        )}
+        
         <div className="md:max-w-full mx-auto pb-20 md:pb-8 min-h-screen"> 
           
           {isImporting && (
@@ -323,7 +351,7 @@ const App = () => {
         </div>
       </div>
 
-      {/* MOBILE NAV */}
+      {/* MOBILE NAV (Unchanged, mobile always uses the bottom bar) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-40 pb-safe transition-colors">
         <div className="max-w-xl mx-auto flex justify-around py-3">
           <button onClick={() => { navigate('journal'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'journal' && !showFlashback ? 'text-[var(--accent-600)]' : 'text-gray-400 dark:text-gray-500'}`}>
