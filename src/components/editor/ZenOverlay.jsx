@@ -164,6 +164,21 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
       contentRef.current = content;
   }, [content]);
 
+  // BUG FIX: Added ref to focus the editor automatically on mount,
+  // which helps stabilize the mobile cursor position.
+  const contentEditableRef = useRef(null);
+  
+  // Auto-focus on activation
+  useEffect(() => {
+    if (isActive && contentEditableRef.current) {
+        // Use a timeout to ensure Lexical has fully rendered the state before focusing
+        setTimeout(() => {
+            contentEditableRef.current.focus();
+        }, 100); 
+    }
+  }, [isActive]);
+
+
   const initialConfig = useMemo(() => ({
     namespace: 'ZenEditor',
     theme: {
@@ -194,8 +209,6 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
   return (
     <AnimatePresence>
       <motion.div 
-        // MODIFIED: Added overflow-y-auto to root for native page scrolling feel
-        // REMOVED: animate-slideUp, flex-col items-center (moved inner)
         className="fixed inset-0 z-[60] bg-white dark:bg-gray-950 overflow-y-auto"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -211,6 +224,9 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
             line-height: ${settings.lineHeight};
             outline: none;
             min-height: 60vh;
+            /* BUG FIX: Ensure no unnecessary transforms or fixed/absolute positioning that interfere with mobile text input */
+            position: relative; 
+            z-index: 10;
           }
           .dark .zen-placeholder { color: #4b5563; }
         `}</style>
@@ -256,7 +272,11 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
                   
                   <RichTextPlugin
                     contentEditable={
-                      <ContentEditable className="zen-editor-content text-gray-800 dark:text-gray-200" />
+                      // BUG FIX: Added ref to ContentEditable for explicit focus control
+                      <ContentEditable 
+                        className="zen-editor-content text-gray-800 dark:text-gray-200"
+                        ref={contentEditableRef} // Assign ref here
+                      />
                     }
                     placeholder={
                       <div className="absolute top-8 left-0 text-gray-300 pointer-events-none zen-placeholder" style={{
