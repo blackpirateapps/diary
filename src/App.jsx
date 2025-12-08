@@ -65,14 +65,13 @@ const App = () => {
   };
 
   // --- STATE ---
-  const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [editingEntry, setEditingEntry] = useState(null);
+  // Editor state - using routing approach
+  const [currentEntryId, setCurrentEntryId] = useState(null);
   const [showFlashback, setShowFlashback] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState(null);
 
-  // We do NOT use "|| []" here so we can detect the 'undefined' loading state
   const entries = useLiveQuery(() => db.entries.orderBy('date').reverse().toArray());
 
   const dateInputRef = useRef(null);
@@ -110,35 +109,6 @@ const App = () => {
     };
   }, [isDarkMode, accentColor]);
 
-  // --- URL ROUTING HANDLER (FIXED) ---
-  useEffect(() => {
-    // If entries are still loading, do nothing
-    if (!entries) return;
-
-    if (currentRoute.startsWith('entry/')) {
-      const id = currentRoute.split('/')[1];
-      
-      // FIX: Use String() comparison to handle both Number and String IDs
-      const entry = entries.find(e => String(e.id) === id);
-      
-      if (entry) {
-        setEditingEntry(entry);
-        setIsEditorOpen(true);
-      } else {
-        // Entry ID not found (invalid URL or deleted), return to list
-        // This prevents getting stuck on a blank screen
-        navigate('journal');
-      }
-    } else {
-      // If we are NOT in an entry route, ensure editor is closed
-      // This handles the browser "Back" button correctly
-      if (isEditorOpen && editingEntry && entries.some(e => e.id === editingEntry.id)) {
-        setIsEditorOpen(false);
-        setEditingEntry(null);
-      }
-    }
-  }, [currentRoute, entries, isEditorOpen, editingEntry]);
-
   // --- ACTIONS ---
   const handleSaveEntry = async (entry) => {
     try {
@@ -151,20 +121,13 @@ const App = () => {
 
   const handleDeleteEntry = async (id) => {
     if (!id) {
-      setIsEditorOpen(false);
-      setEditingEntry(null);
+      navigate('journal');
       return;
     }
     if (window.confirm('Are you sure you want to delete this entry?')) {
       try {
         await db.entries.delete(id);
-        // If we are on the entry page, go back to list
-        if (currentRoute.startsWith('entry/')) {
-          navigate('journal');
-        } else {
-          setIsEditorOpen(false);
-          setEditingEntry(null);
-        }
+        navigate('journal');
       } catch (error) {
         console.error("Failed to delete:", error);
       }
@@ -176,17 +139,18 @@ const App = () => {
     const existing = entries?.find(e => new Date(e.date).toDateString() === dateStr);
     
     if (existing) {
-      navigate(`entry/${existing.id}`);
+      setCurrentEntryId(existing.id);
+      navigate('editor');
     } else {
-      // Create new entry in modal (doesn't change URL until saved, or you can assign ID here)
-      setEditingEntry({ id: Date.now().toString(), date: date.toISOString() });
-      setIsEditorOpen(true);
+      // Create new entry
+      setCurrentEntryId(null);
+      navigate('editor');
     }
   };
 
   const openEditEditor = (entry) => {
-    // This updates the URL, triggering the useEffect above
-    navigate(`entry/${entry.id}`);
+    setCurrentEntryId(entry.id);
+    navigate('editor');
   };
 
   const handleDateSelect = (e) => {
@@ -299,7 +263,14 @@ const App = () => {
           )}
 
           <Suspense fallback={<PageLoader />}>
-            {showFlashback || currentRoute === 'flashback' ? (
+            {currentRoute === 'editor' ? (
+              <Editor
+                entry={entries?.find(e => e.id === currentEntryId)}
+                onClose={() => navigate('journal')}
+                onSave={handleSaveEntry}
+                onDelete={handleDeleteEntry}
+              />
+            ) : showFlashback || currentRoute === 'flashback' ? (
               <FlashbackPage 
                 entries={entries || []} 
                 onBack={() => { setShowFlashback(false); if(currentRoute === 'flashback') navigate('journal'); }} 
@@ -348,25 +319,6 @@ const App = () => {
           {/* Hidden Inputs */}
           <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
           <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".zip" />
-          
-          {/* EDITOR / ENTRY PAGE */}
-          {isEditorOpen && (
-             <Suspense fallback={<div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
-                <Editor
-                  entry={editingEntry}
-                  onClose={() => { 
-                    if (currentRoute.startsWith('entry/')) {
-                        navigate('journal');
-                    } else {
-                        setIsEditorOpen(false); 
-                        setEditingEntry(null); 
-                    }
-                  }}
-                  onSave={handleSaveEntry}
-                  onDelete={() => handleDeleteEntry(editingEntry?.id)}
-                />
-             </Suspense>
-          )}
         </div>
       </div>
 
