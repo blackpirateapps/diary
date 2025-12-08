@@ -444,7 +444,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 py-6">
-        <<EditorHeader 
+        <EditorHeader 
               onClose={onClose} saveStatus={saveStatus} onZen={() => setIsZenMode(true)} 
               onExport={handleExportPdf} isExporting={isExporting} onDelete={() => { if(window.confirm('Delete?')) onDelete(entryId); }}
               toggleMode={() => setMode(m => m === 'edit' ? 'preview' : 'edit')} mode={mode} 
