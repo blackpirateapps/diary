@@ -23,8 +23,9 @@ import { CodeNode } from '@lexical/code';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
 // --- MENTIONS IMPORTS ---
-import { $nodesOfType, $getRoot, TextNode } from 'lexical';
-import { MentionNode, $createMentionNode } from './nodes/MentionNode'; 
+import { $nodesOfType, $getRoot } from 'lexical';
+// IMPORTED $isMentionNode to check node type
+import { MentionNode, $createMentionNode, $isMentionNode } from './nodes/MentionNode'; 
 import MentionsPlugin from './MentionsPlugin';
 
 import { pdf } from '@react-pdf/renderer';
@@ -135,25 +136,42 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   return null;
 };
 
-// --- NEW COMPONENT: PEOPLE SUGGESTIONS SIDEBAR ---
+// --- PEOPLE SUGGESTIONS SIDEBAR (UPDATED) ---
 const PeopleSuggestions = ({ contentText }) => {
   const [editor] = useLexicalComposerContext();
   const people = useLiveQuery(() => db.people.toArray()) || [];
   const [suggestions, setSuggestions] = useState([]);
 
   useEffect(() => {
-    const matches = findPeopleMatches(contentText, people);
-    // Filter matches to unique people for the UI list
-    const unique = [];
-    const seen = new Set();
-    matches.forEach(m => {
-        if(!seen.has(m.person.id)) {
-            seen.add(m.person.id);
-            unique.push(m);
-        }
+    // Instead of checking the string `contentText` (which contains all text),
+    // we iterate through the actual editor nodes.
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      const textNodes = root.getAllTextNodes();
+      const matches = [];
+      const uniqueIds = new Set();
+
+      textNodes.forEach(node => {
+        // IMPORTANT: If the node is already a MentionNode, ignore it.
+        // This ensures the tooltip disappears once the conversion happens.
+        if ($isMentionNode(node)) return;
+
+        const text = node.getTextContent();
+        // Check for matches in this specific text node
+        const nodeMatches = findPeopleMatches(text, people);
+        
+        nodeMatches.forEach(m => {
+             // Avoid duplicates in the list
+             if (!uniqueIds.has(m.person.id)) {
+                 uniqueIds.add(m.person.id);
+                 matches.push(m);
+             }
+        });
+      });
+      
+      setSuggestions(matches);
     });
-    setSuggestions(unique);
-  }, [contentText, people]);
+  }, [contentText, people, editor]);
 
   const replaceWithMention = (person, matchWord) => {
     editor.update(() => {
@@ -161,31 +179,34 @@ const PeopleSuggestions = ({ contentText }) => {
         const textNodes = root.getAllTextNodes();
         
         for (const node of textNodes) {
+            // Skip if already a mention
+            if ($isMentionNode(node)) continue;
+
             const text = node.getTextContent();
-            // Simple regex to find the word boundary
+            // Regex to find the word (case-insensitive boundary)
             const regex = new RegExp(`\\b${matchWord}\\b`, 'i');
             const match = regex.exec(text);
             
             if (match) {
-                // We found the text node containing the word.
-                // We need to split it and insert the mention.
                 const startOffset = match.index;
                 const endOffset = startOffset + match[0].length;
                 
                 let targetNode = node;
                 
+                // Split node if needed to isolate the word
                 if (startOffset > 0) {
                     targetNode = targetNode.splitText(startOffset)[1];
                 }
                 if (targetNode) {
-                    // Split again to isolate the word
-                    const remainingNode = targetNode.splitText(match[0].length)[1]; // The part after
+                    if (targetNode.getTextContent().length > match[0].length) {
+                         targetNode.splitText(match[0].length);
+                    }
                     
-                    // targetNode is now just the word. Replace it.
+                    // Replace the isolated text node with a MentionNode
                     const mentionNode = $createMentionNode(person.name, person.id, null);
                     targetNode.replace(mentionNode);
                 }
-                break; // Stop after first replacement for better UX
+                break; // Stop after first match
             }
         }
     });
@@ -204,7 +225,6 @@ const PeopleSuggestions = ({ contentText }) => {
                 <div key={person.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                         <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex-shrink-0">
-                             {/* Small avatar if available would go here */}
                              <span className="flex items-center justify-center w-full h-full text-[10px] font-bold">{person.name[0]}</span>
                         </div>
                         <div className="flex flex-col min-w-0">
@@ -548,7 +568,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             entry={entry}
           />
 
-          {/* LexicalComposer wraps the entire layout to allow sidebar interaction */}
           <LexicalComposer initialConfig={initialConfig}>
             <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
                 <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col order-2 lg:order-1 max-w-full overflow-x-hidden">
@@ -654,7 +673,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                              )}
                         </div>
 
-                        {/* MOBILE ONLY: Tags and Sleep at the bottom */}
                         <div className="lg:hidden mt-12 pt-8 border-t border-gray-100 dark:border-gray-800">
                            <div className="mb-8">
                               <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
