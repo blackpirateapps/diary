@@ -6,9 +6,9 @@ const styles = StyleSheet.create({
   page: {
     padding: 40,
     backgroundColor: '#ffffff',
-    fontFamily: 'Times-Roman',
+    fontFamily: 'Helvetica', // Changed to Helvetica as a neutral default base
     fontSize: 11,
-    lineHeight: 1.3,
+    lineHeight: 1.5,
     color: '#1f2937'
   },
   header: {
@@ -32,7 +32,7 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 22,
-    fontFamily: 'Times-Bold',
+    fontFamily: 'Helvetica-Bold',
     color: '#111827',
     marginBottom: 2,
     lineHeight: 1
@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
   time: {
     color: '#6b7280',
     fontSize: 10,
-    fontFamily: 'Times-Roman',
+    fontFamily: 'Helvetica',
   },
   metaContainer: {
     flexDirection: 'row',
@@ -56,55 +56,57 @@ const styles = StyleSheet.create({
   },
   body: {
     marginBottom: 15,
-    textAlign: 'justify'
+    textAlign: 'left'
   },
   
   // --- TYPOGRAPHY ---
-  paragraph: { marginBottom: 4 },
-  h1: { fontSize: 16, fontFamily: 'Times-Bold', marginTop: 12, marginBottom: 4, color: '#111827' },
-  h2: { fontSize: 13, fontFamily: 'Times-Bold', marginTop: 10, marginBottom: 2, color: '#374151' },
-  h3: { fontSize: 12, fontFamily: 'Times-Bold', marginTop: 8, marginBottom: 2, color: '#4b5563' },
+  paragraph: { marginBottom: 6 },
+  h1: { fontSize: 18, fontFamily: 'Helvetica-Bold', marginTop: 12, marginBottom: 6, color: '#111827' },
+  h2: { fontSize: 15, fontFamily: 'Helvetica-Bold', marginTop: 10, marginBottom: 4, color: '#374151' },
+  h3: { fontSize: 13, fontFamily: 'Helvetica-Bold', marginTop: 8, marginBottom: 2, color: '#4b5563' },
   
   // --- INLINE STYLES ---
-  bold: { fontFamily: 'Times-Bold' },
-  italic: { fontFamily: 'Times-Italic' },
+  bold: { fontFamily: 'Helvetica-Bold' },
+  italic: { fontFamily: 'Helvetica-Oblique' },
+  boldItalic: { fontFamily: 'Helvetica-BoldOblique' },
   underline: { textDecoration: 'underline' },
   strikethrough: { textDecoration: 'line-through' },
-  codeInline: { fontFamily: 'Courier', backgroundColor: '#f3f4f6', fontSize: 10 },
+  codeInline: { fontFamily: 'Courier', backgroundColor: '#f3f4f6', fontSize: 10, padding: 2 },
 
   // --- BLOCKS ---
   quoteBlock: {
     borderLeftWidth: 2,
     borderLeftColor: '#d1d5db',
-    paddingLeft: 8,
+    paddingLeft: 10,
     fontStyle: 'italic',
     color: '#4b5563',
-    marginBottom: 6,
-    marginTop: 2
+    marginBottom: 8,
+    marginTop: 4,
+    backgroundColor: '#f9fafb',
+    paddingVertical: 4
   },
   codeBlock: {
     fontFamily: 'Courier',
-    backgroundColor: '#f9fafb',
-    padding: 8,
+    backgroundColor: '#1f2937',
+    color: '#f3f4f6',
+    padding: 10,
     fontSize: 10,
     borderRadius: 4,
-    marginBottom: 6,
-    marginTop: 2,
-    borderWidth: 0.5,
-    borderColor: '#e5e7eb'
+    marginBottom: 8,
+    marginTop: 4
   },
   listContainer: {
-    marginBottom: 4
+    marginBottom: 6
   },
   listItem: {
     flexDirection: 'row',
-    marginBottom: 2,
+    marginBottom: 3,
     paddingLeft: 4
   },
   listItemBullet: {
     width: 15,
     fontSize: 11,
-    fontFamily: 'Times-Roman'
+    fontFamily: 'Helvetica'
   },
   listItemContent: {
     flex: 1
@@ -113,7 +115,7 @@ const styles = StyleSheet.create({
   // --- SECTIONS ---
   sectionTitle: {
     fontSize: 12,
-    fontFamily: 'Times-Bold',
+    fontFamily: 'Helvetica-Bold',
     color: '#111827',
     marginTop: 15,
     marginBottom: 8,
@@ -139,12 +141,12 @@ const styles = StyleSheet.create({
     fontSize: 10
   },
   sleepLabel: {
-    fontFamily: 'Times-Bold',
+    fontFamily: 'Helvetica-Bold',
     width: 80,
     color: '#374151'
   },
   sleepValue: {
-    fontFamily: 'Times-Roman',
+    fontFamily: 'Helvetica',
     color: '#111827'
   },
 
@@ -173,13 +175,13 @@ const styles = StyleSheet.create({
 // --- HELPER: FALLBACK MARKDOWN PARSER (Legacy support) ---
 const MarkdownText = ({ text }) => {
   if (!text) return null;
-  const lines = text.split('\\n');
+  const lines = text.split('\n');
 
   return lines.map((line, lineIdx) => {
     if (line.startsWith('# ')) return <Text key={lineIdx} style={styles.h1}>{line.replace('# ', '')}</Text>;
     if (line.startsWith('## ')) return <Text key={lineIdx} style={styles.h2}>{line.replace('## ', '')}</Text>;
 
-    const parts = line.split(/(\\*\\*.*?\\*\\*|\\*.*?\\*)/g);
+    const parts = line.split(/(\*\*.*?\*\*|\*.*?\*)/g);
 
     return (
       <Text key={lineIdx} style={styles.paragraph}>
@@ -191,6 +193,50 @@ const MarkdownText = ({ text }) => {
       </Text>
     );
   });
+};
+
+// --- HELPER: PARSE INLINE CSS ---
+const parseInlineStyle = (styleString) => {
+  if (!styleString) return {};
+  const customStyles = {};
+  const rules = styleString.split(';');
+  
+  rules.forEach(rule => {
+    const [key, val] = rule.split(':').map(s => s.trim());
+    if (!key || !val) return;
+
+    switch (key) {
+      case 'color':
+        customStyles.color = val;
+        break;
+      case 'background-color':
+        customStyles.backgroundColor = val;
+        break;
+      case 'font-size':
+        // React-PDF expects numbers for font size
+        customStyles.fontSize = parseFloat(val);
+        break;
+      case 'font-family':
+        // Map common web fonts to PDF standard fonts
+        const lowerVal = val.toLowerCase();
+        if (lowerVal.includes('courier') || lowerVal.includes('mono')) {
+          customStyles.fontFamily = 'Courier';
+        } else if (lowerVal.includes('times') || lowerVal.includes('serif') || lowerVal.includes('georgia')) {
+          customStyles.fontFamily = 'Times-Roman';
+        } else {
+          customStyles.fontFamily = 'Helvetica';
+        }
+        break;
+      case 'text-decoration':
+        if (val.includes('underline')) customStyles.textDecoration = 'underline';
+        if (val.includes('line-through')) customStyles.textDecoration = 'line-through';
+        break;
+      default:
+        break;
+    }
+  });
+  
+  return customStyles;
 };
 
 // --- HELPER: LEXICAL JSON RENDERER ---
@@ -212,27 +258,57 @@ const RichTextRenderer = ({ content }) => {
   const renderChildren = (children) => {
     return children.map((node, index) => {
       if (node.type === 'text') {
-        // Lexical formats are bitmasks: 1=Bold, 2=Italic, 4=Strikethrough, 8=Underline, 16=Code
-        const style = [
-          node.format & 1 ? styles.bold : {},
-          node.format & 2 ? styles.italic : {},
-          node.format & 4 ? styles.strikethrough : {},
-          node.format & 8 ? styles.underline : {},
-          node.format & 16 ? styles.codeInline : {},
+        const isBold = (node.format & 1) !== 0;
+        const isItalic = (node.format & 2) !== 0;
+        
+        // Handle font family logic specifically for bold/italic/bold-italic
+        // React-PDF handles this via explicit font families, not a 'fontWeight' prop
+        let baseFont = styles.page.fontFamily; // Default
+        
+        // Parse custom style first to check if font-family is overridden
+        const customStyle = parseInlineStyle(node.style);
+        if (customStyle.fontFamily) {
+            // Mapping for custom fonts if needed, simplified here
+            if (customStyle.fontFamily === 'Times-Roman') {
+                 if (isBold && isItalic) customStyle.fontFamily = 'Times-BoldItalic';
+                 else if (isBold) customStyle.fontFamily = 'Times-Bold';
+                 else if (isItalic) customStyle.fontFamily = 'Times-Italic';
+            } else if (customStyle.fontFamily === 'Helvetica') {
+                 if (isBold && isItalic) customStyle.fontFamily = 'Helvetica-BoldOblique';
+                 else if (isBold) customStyle.fontFamily = 'Helvetica-Bold';
+                 else if (isItalic) customStyle.fontFamily = 'Helvetica-Oblique';
+            } else if (customStyle.fontFamily === 'Courier') {
+                 if (isBold && isItalic) customStyle.fontFamily = 'Courier-BoldOblique';
+                 else if (isBold) customStyle.fontFamily = 'Courier-Bold';
+                 else if (isItalic) customStyle.fontFamily = 'Courier-Oblique';
+            }
+        } else {
+            // Default styling logic
+            if (isBold && isItalic) customStyle.fontFamily = 'Helvetica-BoldOblique';
+            else if (isBold) customStyle.fontFamily = 'Helvetica-Bold';
+            else if (isItalic) customStyle.fontFamily = 'Helvetica-Oblique';
+        }
+
+        const nodeStyles = [
+          customStyle, // Custom font, color, size
+          (node.format & 4) ? styles.strikethrough : {},
+          (node.format & 8) ? styles.underline : {},
+          (node.format & 16) ? styles.codeInline : {},
         ];
-        return <Text key={index} style={style}>{node.text}</Text>;
+
+        return <Text key={index} style={nodeStyles}>{node.text}</Text>;
       }
       
       if (node.type === 'linebreak') {
-        return <Text key={index}>{'\\n'}</Text>;
+        return <Text key={index}>{'\n'}</Text>;
       }
 
-      // Handle Mentions (render as styled text)
+      // Handle Mentions
       if (node.type === 'mention') {
-          return <Text key={index} style={{ color: '#2563eb', fontFamily: 'Times-Bold' }}>@{node.text}</Text>;
+          return <Text key={index} style={{ color: '#2563eb', fontFamily: 'Helvetica-Bold' }}>@{node.text}</Text>;
       }
 
-      // Handle Links/AutoLinks (render children with link style)
+      // Handle Links/AutoLinks
       if (node.type === 'link' || node.type === 'autolink') {
          return <Text key={index} style={{ color: '#2563eb', textDecoration: 'underline' }}>{renderChildren(node.children)}</Text>;
       }
@@ -245,16 +321,19 @@ const RichTextRenderer = ({ content }) => {
   return (
     <View>
       {root.children.map((block, index) => {
+        // Handle Alignment
+        const alignStyle = block.format ? { textAlign: block.format } : {};
+
         // Headings
         if (block.type === 'heading') {
           const hStyle = block.tag === 'h1' ? styles.h1 : block.tag === 'h2' ? styles.h2 : styles.h3;
-          return <Text key={index} style={hStyle}>{renderChildren(block.children)}</Text>;
+          return <Text key={index} style={[hStyle, alignStyle]}>{renderChildren(block.children)}</Text>;
         }
         
         // Blockquote
         if (block.type === 'quote') {
           return (
-            <View key={index} style={styles.quoteBlock}>
+            <View key={index} style={[styles.quoteBlock, alignStyle]}>
               <Text>{renderChildren(block.children)}</Text>
             </View>
           );
@@ -269,7 +348,7 @@ const RichTextRenderer = ({ content }) => {
            );
         }
 
-        // Lists (Unordered & Ordered)
+        // Lists
         if (block.type === 'list') {
           const isNumbered = block.listType === 'number';
           return (
@@ -277,10 +356,10 @@ const RichTextRenderer = ({ content }) => {
               {block.children.map((listItem, i) => (
                 <View key={i} style={styles.listItem}>
                   <Text style={styles.listItemBullet}>
-                    {isNumbered ? \`\${listItem.value}.\` : '•'}
+                    {isNumbered ? `${listItem.value}.` : '•'}
                   </Text>
                   <View style={styles.listItemContent}>
-                     <Text style={styles.paragraph}>{renderChildren(listItem.children)}</Text>
+                     <Text style={[styles.paragraph, alignStyle]}>{renderChildren(listItem.children)}</Text>
                   </View>
                 </View>
               ))}
@@ -290,7 +369,7 @@ const RichTextRenderer = ({ content }) => {
 
         // Default Paragraph
         return (
-          <Text key={index} style={styles.paragraph}>
+          <Text key={index} style={[styles.paragraph, alignStyle]}>
             {renderChildren(block.children)}
           </Text>
         );
@@ -321,7 +400,7 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
           </View>
           {entry.location && (
             <View style={styles.headerRight}>
-              <Text style={{ fontFamily: 'Times-Bold', textAlign: 'right' }}>{entry.location}</Text>
+              <Text style={{ fontFamily: 'Helvetica-Bold', textAlign: 'right' }}>{entry.location}</Text>
               {entry.weather && <Text style={{ color: '#6b7280', fontSize: 10, textAlign: 'right' }}>{entry.weather}</Text>}
             </View>
           )}
@@ -330,12 +409,12 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
         {/* META */}
         <View style={styles.metaContainer}>
           <View style={styles.metaItem}>
-            <Text style={{ fontFamily: 'Times-Bold' }}>Mood: </Text>
+            <Text style={{ fontFamily: 'Helvetica-Bold' }}>Mood: </Text>
             <Text>{moodLabel || 'Neutral'}</Text>
           </View>
           {entry.tags && entry.tags.length > 0 && (
             <View style={[styles.metaItem, { marginLeft: 20 }]}>
-               <Text style={{ fontFamily: 'Times-Bold' }}>Tags: </Text>
+               <Text style={{ fontFamily: 'Helvetica-Bold' }}>Tags: </Text>
                <Text>{entry.tags.join(', ')}</Text>
             </View>
           )}

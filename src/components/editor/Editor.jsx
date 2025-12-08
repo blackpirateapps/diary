@@ -176,7 +176,7 @@ const PeopleSuggestions = ({ contentText }) => {
             if ($isMentionNode(node)) continue;
 
             const text = node.getTextContent();
-            const regex = new RegExp(\`\\\\b\${matchWord}\\\\b\`, 'i');
+            const regex = new RegExp(`\\b${matchWord}\\b`, 'i');
             const match = regex.exec(text);
             
             if (match) {
@@ -245,11 +245,11 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
           <span className="font-semibold text-gray-800 dark:text-gray-100">
             {entry?.id ? 'Edit Entry' : 'New Entry'}
           </span>
-          <span className={\`text-xs font-medium px-2 py-0.5 rounded-full \${
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
             saveStatus === 'saved' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400' :
             saveStatus === 'saving' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400' :
             'text-gray-400 dark:text-gray-600'
-          }\`}>
+          }`}>
             {saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : ''}
           </span>
         </div>
@@ -366,7 +366,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     new Date(session.startTime).toDateString() === currentDate.toDateString()
   );
 
-  const wordCount = previewText.trim().split(/\\s+/).filter(Boolean).length;
+  const wordCount = previewText.trim().split(/\s+/).filter(Boolean).length;
 
   const handleSessionUpdate = useCallback((currentText, currentJSON) => {
     const now = Date.now();
@@ -494,16 +494,16 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       setLocationLat(latitude); setLocationLng(longitude);
       
       try {
-        const wRes = await fetch(\`https://api.open-meteo.com/v1/forecast?latitude=\${latitude}&longitude=\${longitude}&current_weather=true\`);
+        const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
         if (wRes.ok) {
            const d = await wRes.json();
-           setWeather(\`\${getWeatherLabel(d.current_weather.weathercode)}, \${Math.round(d.current_weather.temperature)}°C\`);
+           setWeather(`${getWeatherLabel(d.current_weather.weathercode)}, ${Math.round(d.current_weather.temperature)}°C`);
         }
-        const locRes = await fetch(\`https://nominatim.openstreetmap.org/reverse?format=json&lat=\${latitude}&lon=\${longitude}&zoom=18&addressdetails=1\`);
+        const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
         if (locRes.ok) {
             const d = await locRes.json();
             const parts = [d.address.road || d.address.building, d.address.city || d.address.town || d.address.suburb].filter(Boolean);
-            setLocation(parts.length ? parts.join(', ') : \`\${latitude.toFixed(4)}, \${longitude.toFixed(4)}\`);
+            setLocation(parts.length ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
         }
         setTimeout(() => saveData(true), 200);
       } catch (e) { console.error(e); } finally { setLoadingLocation(false); }
@@ -514,12 +514,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     setIsExporting(true);
     try {
       const pdfImages = await Promise.all(images.map(img => blobToJpeg(img)));
-      // Use full content (JSON) if available, falling back to preview text only if null
-      const contentToExport = content || previewText;
-      const doc = <EntryPdfDocument entry={{ id: entryId, content: contentToExport, mood, location, weather, tags, images: pdfImages.filter(Boolean), date: currentDate.toISOString() }} moodLabel={MOODS_LABELS[mood]} sleepSessions={todaysSleepSessions} />;
+      const doc = <EntryPdfDocument entry={{ id: entryId, content: previewText || content, mood, location, weather, tags, images: pdfImages.filter(Boolean), date: currentDate.toISOString() }} moodLabel={MOODS_LABELS[mood]} sleepSessions={todaysSleepSessions} />;
       const blob = await pdf(doc).toBlob();
-      saveAs(blob, \`Journal_\${currentDate.toISOString().split('T')[0]}.pdf\`);
-    } catch (err) { console.error(err); alert("PDF Failed"); } finally { setIsExporting(false); }
+      saveAs(blob, `Journal_${currentDate.toISOString().split('T')[0]}.pdf`);
+    } catch (err) { alert("PDF Failed"); } finally { setIsExporting(false); }
   };
 
   const initialConfig = useMemo(() => ({
