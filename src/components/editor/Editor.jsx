@@ -30,11 +30,22 @@ import MentionsPlugin from './MentionsPlugin';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
-// REMOVED: import ToolbarPlugin from './ToolbarPlugin';
 import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
 import SleepWidget from './SleepWidget';
+// REMOVED: import ToolbarPlugin from './ToolbarPlugin';
 import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtils';
+
+// --- DEBOUNCE UTILITY (Copied from ZenOverlay for self-containment) ---
+const debounce = (func, delay) => {
+  let timeout;
+  return function(...args) {
+    const context = this;
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(context, args), delay);
+  };
+};
+// --- END DEBOUNCE UTILITY ---
 
 const BlobImage = ({ src, ...props }) => {
   const url = useBlobUrl(src);
@@ -45,7 +56,7 @@ const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: '
 
 // --- CUSTOM PLUGINS ---
 
-// 1. STATE SYNC & SESSION TRACKING PLUGIN
+// 1. STATE SYNC & SESSION TRACKING PLUGIN (MODIFIED for state stability)
 const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate }) => {
   const [editor] = useLexicalComposerContext();
   const isFirstRender = useRef(true);
@@ -77,11 +88,17 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate })
     <OnChangePlugin
       onChange={(editorState) => {
         const jsonString = JSON.stringify(editorState.toJSON());
-        onChange(jsonString);
+        
+        // 1. Immediately update the main content state (Lexical's own read mechanism requires this)
+        onChange(jsonString); 
+        
         editorState.read(() => {
             const textContent = $getRoot().getTextContent();
-            onTextChange(textContent);
-            // Pass BOTH plain text (for logic) and JSON (for restoration)
+            
+            // 2. Immediately update the text ref (for immediate word count/save)
+            onTextChange(textContent); 
+            
+            // 3. Debounce the heavy session/preview update (to prevent re-renders mid-typing)
             onSessionUpdate(textContent, jsonString); 
         });
       }}
@@ -89,7 +106,7 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate })
   );
 };
 
-// 2. MENTIONS TRACKER
+// 2. MENTIONS TRACKER (Unchanged)
 const MentionsTracker = ({ onChange }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -104,7 +121,7 @@ const MentionsTracker = ({ onChange }) => {
   return null;
 };
 
-// 3. MODE PLUGIN
+// 3. MODE PLUGIN (Unchanged)
 const EditorModePlugin = ({ mode }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -113,15 +130,13 @@ const EditorModePlugin = ({ mode }) => {
   return null;
 };
 
-// 4. TIME TRAVEL PLUGIN (NEW)
-// This listens to the selected session index and updates the editor content accordingly
+// 4. TIME TRAVEL PLUGIN (Unchanged)
 const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   const [editor] = useLexicalComposerContext();
   
   useEffect(() => {
     if (!isPreviewMode || !sessions || sessions.length === 0) return;
     
-    // Safety check for index
     const index = Math.min(Math.max(0, activeIndex), sessions.length - 1);
     const session = sessions[index];
     const content = session?.contentSnapshot;
@@ -130,7 +145,6 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
 
     editor.update(() => {
         try {
-            // Try to parse as JSON (Rich Text Snapshot)
             const jsonState = JSON.parse(content);
             if (jsonState.root) {
                 const editorState = editor.parseEditorState(jsonState);
@@ -138,8 +152,6 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
                 return;
             }
         } catch (e) {
-            // Fallback: It's plain text/markdown (Legacy Snapshot)
-            // We treat it as Markdown to preserve basic lists/headers if possible
             $convertFromMarkdownString(String(content), TRANSFORMERS);
         }
     });
@@ -148,7 +160,7 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   return null;
 };
 
-// --- NEW PAGE HEADER COMPONENT ---
+// --- NEW PAGE HEADER COMPONENT (Unchanged) ---
 const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExporting, onDelete, toggleMode, mode }) => {
     return (
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-4 flex items-center justify-between flex-shrink-0">
@@ -295,45 +307,51 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const wordCount = previewText.trim().split(/\s+/).filter(Boolean).length;
 
-  // --- SESSION LOGIC ---
-  const handleSessionUpdate = useCallback((currentText, currentJSON) => {
-    const now = Date.now();
-    const timeSinceLastType = now - lastTypeTimeRef.current;
-    const SESSION_TIMEOUT = 5 * 60 * 1000; 
+  // --- SESSION LOGIC (MODIFIED: Use Debounce) ---
+  const debouncedSessionUpdate = useMemo(
+      () => debounce((currentText, currentJSON) => {
+          const now = Date.now();
+          const timeSinceLastType = now - lastTypeTimeRef.current;
+          const SESSION_TIMEOUT = 5 * 60 * 1000; 
+          const snapshotToSave = currentJSON || currentText;
 
-    // We save the JSON if available to preserve formatting, otherwise text
-    const snapshotToSave = currentJSON || currentText;
+          // Update the session state (the heavy operation)
+          setSessions(prevSessions => {
+              let newSessions = [...prevSessions];
+              
+              if (newSessions.length === 0 || timeSinceLastType > SESSION_TIMEOUT) {
+                  newSessions.push({
+                      startTime: new Date().toISOString(),
+                      endTime: new Date().toISOString(),
+                      contentSnapshot: snapshotToSave
+                  });
+              } else {
+                  const lastIndex = newSessions.length - 1;
+                  newSessions[lastIndex] = {
+                      ...newSessions[lastIndex],
+                      endTime: new Date().toISOString(),
+                      contentSnapshot: snapshotToSave
+                  };
+              }
+              return newSessions;
+          });
 
-    setSessions(prevSessions => {
-      let newSessions = [...prevSessions];
+          // This needs to be set after the debounce delay
+          lastTypeTimeRef.current = now; 
+      }, 500), // Debounce for 500ms
+      []
+  );
+
+  const handleSessionUpdateWrapper = useCallback((currentText, currentJSON) => {
+      // 1. Update the local preview state immediately for responsive word count/metadata bar
+      setPreviewText(currentText);
       
-      if (newSessions.length === 0) {
-        newSessions.push({
-          startTime: new Date().toISOString(),
-          endTime: new Date().toISOString(),
-          contentSnapshot: snapshotToSave
-        });
-      } 
-      else if (timeSinceLastType > SESSION_TIMEOUT) {
-        newSessions.push({
-          startTime: new Date().toISOString(),
-          endTime: new Date().toISOString(),
-          contentSnapshot: snapshotToSave
-        });
-      } 
-      else {
-        const lastIndex = newSessions.length - 1;
-        newSessions[lastIndex] = {
-          ...newSessions[lastIndex],
-          endTime: new Date().toISOString(),
-          contentSnapshot: snapshotToSave
-        };
-      }
-      return newSessions;
-    });
+      // 2. Debounce the actual session/storage update
+      debouncedSessionUpdate(currentText, currentJSON);
+  }, [debouncedSessionUpdate]);
 
-    lastTypeTimeRef.current = now;
-  }, []);
+  // --- END MODIFIED SESSION LOGIC ---
+
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -375,12 +393,13 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   useEffect(() => {
     if (content !== (entry?.content || '')) {
+      // Note: Auto-save will still run based on content state changes, but session tracking is debounced.
       const timer = setTimeout(() => saveData(true), 1000);
       return () => clearTimeout(timer);
     }
   }, [content, saveData, entry?.content]);
 
-  // Handlers
+  // Handlers (Unchanged)
   const handleZenBack = (finalContent) => {
     if (typeof finalContent === 'string') {
         contentRef.current = finalContent; 
@@ -512,7 +531,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
                         <div className="min-h-[400px] relative">
                              <LexicalComposer initialConfig={initialConfig}>
-                               {/* REMOVED: {mode === 'edit' && <ToolbarPlugin />} */}
+                               {/* No ToolbarPlugin, relying on browser/Lexical defaults */}
                                
                                <EditorModePlugin mode={mode} />
                                <MentionsPlugin />
@@ -546,10 +565,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                    content={content} 
                                    onChange={setContent} 
                                    onTextChange={(text) => {
-                                      setPreviewText(text);
                                       previewRef.current = text;
                                    }}
-                                   onSessionUpdate={handleSessionUpdate}
+                                   onSessionUpdate={handleSessionUpdateWrapper}
                                  />
                                )}
                              </LexicalComposer>

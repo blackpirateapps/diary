@@ -10,12 +10,23 @@ import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin'; 
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { TRANSFORMERS, $convertFromMarkdownString, $convertToMarkdownString } from '@lexical/markdown'; 
+import { TRANSFORMERS, $convertFromMarkdownString } from '@lexical/markdown'; 
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
 import { CodeNode } from '@lexical/code';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
+
+// --- DEBOUNCE UTILITY ---
+const debounce = (func, delay) => {
+  let timeout;
+  return function(...args) {
+    const context = this;
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(context, args), delay);
+  };
+};
+// --- END DEBOUNCE UTILITY ---
 
 // --- HELPER: INITIALIZE EDITOR SMARTLY (JSON OR MARKDOWN) ---
 const ContentInitPlugin = ({ content }) => {
@@ -47,23 +58,32 @@ const ContentInitPlugin = ({ content }) => {
   return null;
 };
 
-// --- HELPER: SYNC CHANGES BACK TO MARKDOWN/JSON ---
+// --- HELPER: SYNC CHANGES BACK TO MARKDOWN/JSON (MODIFIED) ---
 const StateSyncPlugin = ({ onChange, contentRef }) => {
+  const debouncedOnChange = useMemo(
+    () => debounce((jsonString) => {
+      onChange(jsonString);
+    }, 500), // Debounce for 500ms
+    [onChange]
+  );
+
   return (
     <OnChangePlugin
       onChange={(editorState) => {
-        const jsonString = JSON.stringify(editorState.toJSON());
-        if (contentRef) contentRef.current = jsonString;
-        onChange(jsonString);
+        // Immediate update to ref for saving on back button press
+        editorState.read(() => {
+            if (contentRef) contentRef.current = JSON.stringify(editorState.toJSON());
+        });
+        
+        // Debounced update to parent state (setContent)
+        debouncedOnChange(JSON.stringify(editorState.toJSON()));
       }}
     />
   );
 };
 
-// --- SETTINGS POPUP COMPONENT (Removed font settings, kept general UI) ---
+// --- SETTINGS POPUP COMPONENT (Kept simplified) ---
 const ZenSettingsPopup = ({ settings, setSettings, onClose }) => {
-  // NOTE: Settings functionality is stripped down here as the dynamic font styles are removed.
-  // We keep the structure but simplify the content to avoid external dependencies.
   const handleChange = (key, value) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
@@ -87,7 +107,6 @@ const ZenSettingsPopup = ({ settings, setSettings, onClose }) => {
       <div className="space-y-4 text-sm text-gray-600 dark:text-gray-400">
         <p>Dynamic font settings are currently disabled to ensure maximum compatibility and stability on mobile devices.</p>
         
-        {/* Example placeholder for non-font setting */}
         <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Line Spacing (Example)</label>
            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
@@ -110,27 +129,21 @@ const ZenSettingsPopup = ({ settings, setSettings, onClose }) => {
 
 // --- MAIN COMPONENT ---
 const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
-  // Local Settings State (Simplified)
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('zen_settings');
-    // We remove font defaults but keep the ability to track some settings if needed later.
     return saved ? JSON.parse(saved) : { spacing: 'Default' };
   });
 
   const [showSettings, setShowSettings] = useState(false);
   const contentRef = useRef(content);
 
-  // Sync ref on mount
   useEffect(() => {
       contentRef.current = content;
   }, [content]);
 
-  // Removed ContentEditable ref and auto-focus logic
-
   const initialConfig = useMemo(() => ({
     namespace: 'ZenEditor',
     theme: {
-      // NOTE: Using minimal classes that only define block structure, not font styles
       paragraph: 'mb-4',
       heading: {
         h1: 'text-3xl font-bold mb-4 mt-6',
@@ -164,9 +177,6 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }}
       >
-        {/* REMOVED: Dynamic <style> block */}
-
-        {/* CONTAINER FOR PAGE LAYOUT */}
         <div className="min-h-screen flex flex-col items-center">
             
             {/* TOP BAR */}
@@ -207,14 +217,10 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
                   
                   <RichTextPlugin
                     contentEditable={
-                      // ONLY CLASS for ContentEditable (Matches Lexical Playground, minimal style)
-                      <ContentEditable 
-                        className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]"
-                      />
+                      <ContentEditable className="outline-none min-h-[400px] text-gray-800 dark:text-gray-200 p-0" />
                     }
                     placeholder={
-                      // Use generic placeholder styling
-                      <div className="absolute top-8 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl">
+                      <div className="absolute top-0 left-0 text-gray-300 dark:text-gray-700 pointer-events-none select-none">
                         Start writing...
                       </div>
                     }
