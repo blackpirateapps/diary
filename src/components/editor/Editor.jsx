@@ -3,6 +3,15 @@ import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, C
 import { useLiveQuery } from 'dexie-react-hooks';
 import AndroidBackspaceFixPlugin from './AndroidBackspaceFixPlugin';
 import BackspaceFixPlugin from './BackspaceFixPlugin';
+// Editor.jsx top imports (add these)
+import ToolbarPlugin from './ToolbarPlugin';
+import BlockFormatDropDown from './BlockFormatDropDown';
+import FontSizeDropDown from './FontSizeDropDown';
+import FontFamilyDropDown from './FontFamilyDropDown';
+import InsertDropDown from './InsertDropDown';
+import ColorPickerPlugin from './ColorPickerPlugin';
+import FloatingTextFormatToolbarPlugin from './FloatingTextFormatToolbarPlugin';
+import FloatingLinkEditorPlugin from './FloatingLinkEditorPlugin';
 
 import { db, useBlobUrl } from '../../db'; 
 import EntryPdfDocument from './EntryPdfDocument'; 
@@ -534,6 +543,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                              <LexicalComposer initialConfig={initialConfig}>
                                {/* No ToolbarPlugin, relying on browser/Lexical defaults */}
                                <AndroidBackspaceFixPlugin />
+                               <BlockFormatDropDown />
+              <FontSizeDropDown />
+       <FontFamilyDropDown />
+        <InsertDropDown onInsertImage={() => /* open file picker & save to db */ } />
+  <ColorPickerPlugin />
 
                                <EditorModePlugin mode={mode} />
                                <MentionsPlugin />
