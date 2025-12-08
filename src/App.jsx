@@ -2,14 +2,12 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, migrateFromLocalStorage, exportToZip, importFromZip } from './db'; 
 import {
-  BarChart2, Grid, Home, Map as MapIcon, Trash2, Menu,
+  BarChart2, Grid, Home, Map as MapIcon, Menu,
   Settings, Book, Moon, MessageCircle, Coffee, Calendar,
-  History, Users, Loader2 // Added Loader2 for loading state
+  History, Users, Loader2
 } from 'lucide-react';
 
-// --- LAZY LOAD IMPORTS (CODE SPLITTING) ---
-
-// 1. Default Exports (Simple lazy load)
+// --- LAZY LOAD IMPORTS ---
 const MeditationPage = lazy(() => import('./components/MeditationPage'));
 const YearInReviewPage = lazy(() => import('./components/YearInReviewPage'));
 const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
@@ -20,17 +18,14 @@ const MediaGallery = lazy(() => import('./components/MediaGallery'));
 const FlashbackPage = lazy(() => import('./components/FlashbackPage'));
 const MapPage = lazy(() => import('./components/MapPage'));
 
-// 2. Named Exports (Helper pattern to extracting specific components)
 const SleepPage = lazy(() => import('./components/SleepPage').then(module => ({ default: module.SleepPage })));
 const WhatsAppPage = lazy(() => import('./components/WhatsAppPage').then(module => ({ default: module.WhatsAppPage })));
 const PeoplePage = lazy(() => import('./components/PeoplePage').then(module => ({ default: module.PeoplePage })));
 
-// 3. Grouped Named Exports (From MorePages.jsx)
 const MoreMenu = lazy(() => import('./components/MorePages').then(module => ({ default: module.MoreMenu })));
 const SettingsPage = lazy(() => import('./components/MorePages').then(module => ({ default: module.SettingsPage })));
 const AboutPage = lazy(() => import('./components/MorePages').then(module => ({ default: module.AboutPage })));
 const ThemesPage = lazy(() => import('./components/MorePages').then(module => ({ default: module.ThemesPage })));
-
 
 // --- THEME ENGINE CONSTANTS ---
 const ACCENT_COLORS = {
@@ -41,7 +36,6 @@ const ACCENT_COLORS = {
   rose:   { 50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 500: '#f43f5e', 600: '#e11d48' },
 };
 
-// --- LOADING COMPONENT ---
 const PageLoader = () => (
   <div className="flex flex-col items-center justify-center h-[50vh] text-gray-400">
     <Loader2 size={32} className="animate-spin mb-2 text-[var(--accent-500)]" />
@@ -50,57 +44,9 @@ const PageLoader = () => (
 );
 
 const App = () => {
-  // --- APP PREFERENCES STATE ---
   const [appName, setAppName] = useState(() => localStorage.getItem('app_name') || 'Journal');
-  
-  // THEME STATE
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('app_theme') === 'dark');
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('app_accent') || 'blue');
-
-  // --- GLOBAL FONT LOADER (FOR ZEN MODE) ---
-  useEffect(() => {
-    const loadFont = () => {
-      const saved = localStorage.getItem('zen_settings');
-      if (saved) {
-        const { googleFontUrl } = JSON.parse(saved);
-        if (googleFontUrl && googleFontUrl.startsWith('http')) {
-           const oldLink = document.getElementById('zen-font-link');
-           if (oldLink) oldLink.remove();
-
-           const link = document.createElement('link');
-           link.id = 'zen-font-link';
-           link.rel = 'stylesheet';
-           link.href = googleFontUrl;
-           document.head.appendChild(link);
-        }
-      }
-    };
-    loadFont();
-    window.addEventListener('zen-settings-changed', loadFont);
-    return () => window.removeEventListener('zen-settings-changed', loadFont);
-  }, []);
-
-  // --- THEME ENGINE EFFECT ---
-  useEffect(() => {
-    const root = document.documentElement;
-    const colors = ACCENT_COLORS[accentColor] || ACCENT_COLORS.blue;
-
-    if (isDarkMode) {
-      root.classList.add('dark');
-      localStorage.setItem('app_theme', 'dark');
-    } else {
-      root.classList.remove('dark');
-      localStorage.setItem('app_theme', 'light');
-    }
-
-    root.style.setProperty('--accent-50', colors[50]);
-    root.style.setProperty('--accent-100', colors[100]);
-    root.style.setProperty('--accent-200', colors[200]);
-    root.style.setProperty('--accent-500', colors[500]);
-    root.style.setProperty('--accent-600', colors[600]);
-    
-    localStorage.setItem('app_accent', accentColor);
-  }, [isDarkMode, accentColor]);
 
   // --- ROUTING LOGIC ---
   const getHash = () => window.location.hash.replace('#', '') || 'journal';
@@ -124,16 +70,33 @@ const App = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState(null);
 
-  const entries = useLiveQuery(
-    () => db.entries.orderBy('date').reverse().toArray(), 
-    []
-  ) || [];
+  // Note: Removed "|| []" to detect loading state (undefined means loading)
+  const entries = useLiveQuery(() => db.entries.orderBy('date').reverse().toArray());
 
   const dateInputRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // --- INIT & MIGRATION ---
+  // --- THEME & INIT EFFECT ---
   useEffect(() => {
+    const root = document.documentElement;
+    const colors = ACCENT_COLORS[accentColor] || ACCENT_COLORS.blue;
+
+    if (isDarkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('app_theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('app_theme', 'light');
+    }
+
+    root.style.setProperty('--accent-50', colors[50]);
+    root.style.setProperty('--accent-100', colors[100]);
+    root.style.setProperty('--accent-200', colors[200]);
+    root.style.setProperty('--accent-500', colors[500]);
+    root.style.setProperty('--accent-600', colors[600]);
+    
+    localStorage.setItem('app_accent', accentColor);
+    
     migrateFromLocalStorage();
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
@@ -143,30 +106,35 @@ const App = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [isDarkMode, accentColor]);
 
-  // --- URL ROUTING EFFECT (NEW) ---
+  // --- URL ROUTING HANDLER ---
   useEffect(() => {
+    // Wait for Dexie to load entries
+    if (!entries) return;
+
     if (currentRoute.startsWith('entry/')) {
       const id = currentRoute.split('/')[1];
-      if (entries.length > 0) {
-        const entry = entries.find(e => e.id === id);
-        if (entry) {
-          setEditingEntry(entry);
-          setIsEditorOpen(true);
-        }
+      const entry = entries.find(e => e.id === id);
+      
+      if (entry) {
+        setEditingEntry(entry);
+        setIsEditorOpen(true);
+      } else {
+        // Entry ID not found in database (invalid URL), return to list
+        navigate('journal');
       }
     } else {
-      // If we navigate away from an entry URL, ensure editor is closed
-      // Only close if we were viewing an existing entry (to avoid closing "New Entry" modal which stays on base route)
+      // If we are NOT in an entry route, and not explicitly creating a new entry (modal mode), ensure editor is closed
+      // This handles the "Back" button correctly
       if (isEditorOpen && editingEntry && entries.some(e => e.id === editingEntry.id)) {
         setIsEditorOpen(false);
         setEditingEntry(null);
       }
     }
-  }, [currentRoute, entries]);
+  }, [currentRoute, entries, isEditorOpen, editingEntry]);
 
-  // --- CRUD OPERATIONS ---
+  // --- ACTIONS ---
   const handleSaveEntry = async (entry) => {
     try {
       await db.entries.put(entry);
@@ -182,34 +150,38 @@ const App = () => {
       setEditingEntry(null);
       return;
     }
-    try {
-      await db.entries.delete(id);
-      // Navigate back to list if we deleted the current entry
-      if (currentRoute.startsWith('entry/')) {
-        navigate('journal');
-      } else {
-        setIsEditorOpen(false);
-        setEditingEntry(null);
+    if (window.confirm('Are you sure you want to delete this entry?')) {
+      try {
+        await db.entries.delete(id);
+        // If we were on the dedicated page, go back to list
+        if (currentRoute.startsWith('entry/')) {
+          navigate('journal');
+        } else {
+          setIsEditorOpen(false);
+          setEditingEntry(null);
+        }
+      } catch (error) {
+        console.error("Failed to delete:", error);
       }
-    } catch (error) {
-      console.error("Failed to delete:", error);
     }
   };
 
   const openNewEditor = (date = new Date()) => {
+    // Check if entry exists for this date to avoid duplicates
     const dateStr = date.toDateString();
-    const existing = entries.find(e => new Date(e.date).toDateString() === dateStr);
+    const existing = entries?.find(e => new Date(e.date).toDateString() === dateStr);
+    
     if (existing) {
-      // If entry already exists for this date, go to its URL
       navigate(`entry/${existing.id}`);
     } else {
+      // Open empty editor in "Creation Mode" (Modal)
       setEditingEntry({ id: Date.now().toString(), date: date.toISOString() });
       setIsEditorOpen(true);
     }
   };
 
   const openEditEditor = (entry) => {
-    // Navigate to unique URL
+    // Updates URL hash, triggering the Effect above to open the editor
     navigate(`entry/${entry.id}`);
   };
 
@@ -239,16 +211,9 @@ const App = () => {
     try {
       if (file.name.toLowerCase().endsWith('.zip')) {
         const count = await importFromZip(file);
-        alert(`Success! Imported ${count} entries from ZIP archive.`);
-      } else if (file.name.toLowerCase().endsWith('.json')) {
-        const text = await file.text();
-        const data = JSON.parse(text);
-        const incomingEntries = Array.isArray(data) ? data : (data.entries || []);
-        if (incomingEntries.length === 0) throw new Error("No entries found in JSON.");
-        await db.entries.bulkPut(incomingEntries);
-        alert(`Success! Imported ${incomingEntries.length} legacy entries.`);
+        alert(`Success! Imported ${count} entries.`);
       } else {
-        throw new Error("Unsupported file type.");
+        throw new Error("Please upload a .zip backup file.");
       }
     } catch (err) {
       console.error("Import Error:", err);
@@ -261,7 +226,6 @@ const App = () => {
 
   const isMoreRoute = ['more', 'settings', 'about', 'themes', 'people'].includes(currentRoute);
 
-  // --- SIDEBAR NAV COMPONENT (DESKTOP) ---
   const SidebarItem = ({ route, icon: Icon, label, activeCheck, onClick }) => (
     <button
       onClick={() => { 
@@ -285,7 +249,7 @@ const App = () => {
   return (
     <div className="min-h-screen bg-[#F3F4F6] dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-300 flex">
       
-      {/* --- DESKTOP SIDEBAR --- */}
+      {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex flex-col w-64 fixed h-full bg-[#f8f9fa] dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 p-4 z-50">
         <div className="mb-6 px-2">
            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
@@ -293,9 +257,7 @@ const App = () => {
               {appName}
            </h1>
         </div>
-        
         <nav className="space-y-1 flex-1 overflow-y-auto no-scrollbar">
-          
           <div className="pb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Journal</div>
           <SidebarItem route="journal" icon={Home} label="Entries" activeCheck={currentRoute === 'journal'} />
           <SidebarItem route="map" icon={MapIcon} label="Atlas" activeCheck={currentRoute === 'map'} />
@@ -314,56 +276,37 @@ const App = () => {
           <SidebarItem route="meditation" icon={Coffee} label="Meditation" activeCheck={currentRoute === 'meditation'} />
           <SidebarItem route="year-review" icon={Calendar} label="Year in Review" activeCheck={currentRoute === 'year-review'} />
         </nav>
-
         <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
            <SidebarItem route="settings" icon={Settings} label="Settings" activeCheck={currentRoute === 'settings'} />
         </div>
       </aside>
 
-      {/* --- MAIN CONTENT AREA --- */}
+      {/* MAIN CONTENT AREA */}
       <div className="flex-1 w-full min-h-screen md:pl-64 transition-all">
         <div className="max-w-xl md:max-w-full mx-auto pb-20 md:pb-8 relative min-h-screen">
           
-          {/* IMPORT SPINNER */}
+          {/* IMPORT OVERLAY */}
           {isImporting && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
               <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-slideUp">
-                <div className="w-8 h-8 border-4 border-[var(--accent-500)] border-t-transparent rounded-full animate-spin"></div>
+                <Loader2 size={32} className="animate-spin text-[var(--accent-500)]" />
                 <p className="font-semibold text-gray-700 dark:text-gray-200">Processing backup...</p>
               </div>
             </div>
           )}
 
-          {/* ERROR MODAL */}
-          {importError && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl max-w-sm w-full animate-slideUp">
-                <div className="flex items-center gap-3 text-red-500 mb-2">
-                  <Trash2 size={24} />
-                  <h3 className="font-bold text-lg">Import Failed</h3>
-                </div>
-                <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">{importError}</p>
-                <button onClick={() => setImportError(null)} className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-white font-medium py-2 rounded-xl">Close</button>
-              </div>
-            </div>
-          )}
-
-          {/* PAGE ROUTING (Wrapped in Suspense) */}
           <Suspense fallback={<PageLoader />}>
             {showFlashback || currentRoute === 'flashback' ? (
               <FlashbackPage 
-                entries={entries} 
-                onBack={() => { 
-                  setShowFlashback(false);
-                  if(currentRoute === 'flashback') navigate('journal');
-                }} 
+                entries={entries || []} 
+                onBack={() => { setShowFlashback(false); if(currentRoute === 'flashback') navigate('journal'); }} 
                 onEdit={(entry) => { setShowFlashback(false); openEditEditor(entry); }}
               />
             ) : (
               <>
                 {(currentRoute === 'journal' || currentRoute === 'calendar' || currentRoute === 'tags') && (
                   <JournalList
-                    entries={entries}
+                    entries={entries || []}
                     appName={appName}
                     onEdit={openEditEditor}
                     onCreate={() => openNewEditor()}
@@ -371,43 +314,28 @@ const App = () => {
                     onImport={handleImport}
                     onExport={handleExport}
                     isOffline={isOffline}
-                    isImporting={isImporting}
                     onOpenFlashback={() => setShowFlashback(true)}
                     initialView={currentRoute === 'calendar' ? 'calendar' : 'list'}
                   />
                 )}
-                {currentRoute === 'map' && <MapPage entries={entries} onEdit={openEditEditor} />}
-                {currentRoute === 'stats' && <StatsPage entries={entries} isDarkMode={isDarkMode} />}
-                {currentRoute === 'media' && <MediaGallery entries={entries} onEdit={openEditEditor} />}
+                {currentRoute === 'map' && <MapPage entries={entries || []} onEdit={openEditEditor} />}
+                {currentRoute === 'stats' && <StatsPage entries={entries || []} isDarkMode={isDarkMode} navigate={navigate} />}
+                {currentRoute === 'media' && <MediaGallery entries={entries || []} onEdit={openEditEditor} />}
                 
-                {/* Additional Pages */}
+                {/* Pages */}
                 {currentRoute === 'more' && <MoreMenu navigate={navigate} />}
                 {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
                 {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
                 {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />}
-                {currentRoute === 'people' && <PeoplePage navigate={navigate} />}
+                {currentRoute === 'people' && <PeoplePage navigate={navigate} onEdit={openEditEditor} />}
                 {currentRoute === 'year-review' && <YearInReviewPage navigate={navigate} />}
                 {currentRoute === 'privacy' && <PrivacyPolicy navigate={navigate} />}
                 
                 {currentRoute === 'themes' && (
-                  <ThemesPage 
-                    navigate={navigate}
-                    isDarkMode={isDarkMode}
-                    setIsDarkMode={setIsDarkMode}
-                    accentColor={accentColor}
-                    setAccentColor={setAccentColor}
-                  />
+                  <ThemesPage navigate={navigate} isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} accentColor={accentColor} setAccentColor={setAccentColor} />
                 )}
-                
                 {currentRoute === 'settings' && (
-                  <SettingsPage 
-                    navigate={navigate} 
-                    appName={appName} 
-                    setAppName={setAppName} 
-                    onExport={handleExport} 
-                    onImport={() => fileInputRef.current?.click()}
-                    importInputRef={fileInputRef} 
-                  />
+                  <SettingsPage navigate={navigate} appName={appName} setAppName={setAppName} onExport={handleExport} onImport={() => fileInputRef.current?.click()} importInputRef={fileInputRef} />
                 )}
                 {currentRoute === 'about' && <AboutPage navigate={navigate} />}
               </>
@@ -416,11 +344,11 @@ const App = () => {
 
           {/* Hidden Inputs */}
           <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
-          <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".zip,.json" />
+          <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".zip" />
           
-          {/* Editor (Also lazy loaded via Suspense if needed, though usually overlaid) */}
+          {/* EDITOR (Acts as Page or Modal) */}
           {isEditorOpen && (
-             <Suspense fallback={<div className="fixed inset-0 z-50 bg-white/50 backdrop-blur-sm flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
+             <Suspense fallback={<div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
                 <Editor
                   entry={editingEntry}
                   onClose={() => { 
@@ -432,19 +360,19 @@ const App = () => {
                     }
                   }}
                   onSave={handleSaveEntry}
-                  onDelete={handleDeleteEntry}
+                  onDelete={() => handleDeleteEntry(editingEntry?.id)}
                 />
              </Suspense>
           )}
         </div>
       </div>
 
-      {/* --- MOBILE BOTTOM NAVIGATION (Hidden on MD+) --- */}
+      {/* MOBILE NAV */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-40 pb-safe transition-colors">
         <div className="max-w-xl mx-auto flex justify-around py-3">
           <button onClick={() => { navigate('journal'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'journal' && !showFlashback ? 'text-[var(--accent-600)]' : 'text-gray-400 dark:text-gray-500'}`}>
             <Home size={22} strokeWidth={currentRoute === 'journal' ? 2.5 : 2} />
-            <span className="text-[10px] font-medium">{appName.length > 8 ? 'Journal' : appName}</span>
+            <span className="text-[10px] font-medium">Home</span>
           </button>
           
           <button onClick={() => { navigate('map'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'map' ? 'text-[var(--accent-600)]' : 'text-gray-400 dark:text-gray-500'}`}>
