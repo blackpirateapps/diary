@@ -24,7 +24,6 @@ import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
 // --- MENTIONS IMPORTS ---
 import { $nodesOfType, $getRoot } from 'lexical';
-// IMPORTED $isMentionNode to check node type
 import { MentionNode, $createMentionNode, $isMentionNode } from './nodes/MentionNode'; 
 import MentionsPlugin from './MentionsPlugin';
 
@@ -136,15 +135,13 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   return null;
 };
 
-// --- PEOPLE SUGGESTIONS SIDEBAR (UPDATED) ---
+// --- PEOPLE SUGGESTIONS SIDEBAR ---
 const PeopleSuggestions = ({ contentText }) => {
   const [editor] = useLexicalComposerContext();
   const people = useLiveQuery(() => db.people.toArray()) || [];
   const [suggestions, setSuggestions] = useState([]);
 
   useEffect(() => {
-    // Instead of checking the string `contentText` (which contains all text),
-    // we iterate through the actual editor nodes.
     editor.getEditorState().read(() => {
       const root = $getRoot();
       const textNodes = root.getAllTextNodes();
@@ -152,16 +149,13 @@ const PeopleSuggestions = ({ contentText }) => {
       const uniqueIds = new Set();
 
       textNodes.forEach(node => {
-        // IMPORTANT: If the node is already a MentionNode, ignore it.
-        // This ensures the tooltip disappears once the conversion happens.
+        // Ignore matches if they are already MentionNodes
         if ($isMentionNode(node)) return;
 
         const text = node.getTextContent();
-        // Check for matches in this specific text node
         const nodeMatches = findPeopleMatches(text, people);
         
         nodeMatches.forEach(m => {
-             // Avoid duplicates in the list
              if (!uniqueIds.has(m.person.id)) {
                  uniqueIds.add(m.person.id);
                  matches.push(m);
@@ -179,21 +173,17 @@ const PeopleSuggestions = ({ contentText }) => {
         const textNodes = root.getAllTextNodes();
         
         for (const node of textNodes) {
-            // Skip if already a mention
             if ($isMentionNode(node)) continue;
 
             const text = node.getTextContent();
-            // Regex to find the word (case-insensitive boundary)
             const regex = new RegExp(`\\b${matchWord}\\b`, 'i');
             const match = regex.exec(text);
             
             if (match) {
                 const startOffset = match.index;
                 const endOffset = startOffset + match[0].length;
-                
                 let targetNode = node;
                 
-                // Split node if needed to isolate the word
                 if (startOffset > 0) {
                     targetNode = targetNode.splitText(startOffset)[1];
                 }
@@ -201,12 +191,10 @@ const PeopleSuggestions = ({ contentText }) => {
                     if (targetNode.getTextContent().length > match[0].length) {
                          targetNode.splitText(match[0].length);
                     }
-                    
-                    // Replace the isolated text node with a MentionNode
                     const mentionNode = $createMentionNode(person.name, person.id, null);
                     targetNode.replace(mentionNode);
                 }
-                break; // Stop after first match
+                break;
             }
         }
     });
@@ -554,7 +542,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         onBack={handleZenBack} 
       />
 
-      <div className="flex flex-col min-h-[calc(100vh-56px)] lg:min-h-full"> 
+      <div className="flex flex-col h-[calc(100dvh-60px)] md:h-screen w-full bg-white dark:bg-gray-950">
           <EditorPageHeader 
             onClose={onClose} 
             saveStatus={saveStatus} 
@@ -569,10 +557,22 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           />
 
           <LexicalComposer initialConfig={initialConfig}>
-            <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
-                <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col order-2 lg:order-1 max-w-full overflow-x-hidden">
+            <div className="flex-1 flex overflow-hidden lg:flex-row bg-white dark:bg-gray-950">
+                
+                {/* LEFT: MAIN CONTENT */}
+                <div className="flex-1 flex flex-col relative min-w-0">
                     
-                    {images.length > 0 && (
+                    {/* Fixed Toolbar Area */}
+                    {mode === 'edit' && (
+                        <div className="z-10 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm">
+                            <ToolbarPlugin />
+                        </div>
+                    )}
+
+                    {/* Scrollable Content Area */}
+                    <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
+                        
+                        {images.length > 0 && (
                             <div 
                                 style={{ height: "16rem" }}
                                 className="w-full relative group bg-gray-50 dark:bg-gray-900 flex-shrink-0"
@@ -583,115 +583,120 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             </div>
                         )}
 
-                    <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 lg:px-12 lg:py-12">
-                        <div className="lg:hidden mb-6">
-                            <div className="flex items-baseline gap-3 mb-1">
-                                <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{currentDate.toLocaleDateString(undefined, { weekday: 'long' })}</h2>
-                                <span className="text-xl text-gray-400 dark:text-gray-500 font-medium">{currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</span>
+                        <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 lg:px-12 lg:py-12">
+                            
+                            {/* Mobile Date Header */}
+                            <div className="lg:hidden mb-6">
+                                <div className="flex items-baseline gap-3 mb-1">
+                                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{currentDate.toLocaleDateString(undefined, { weekday: 'long' })}</h2>
+                                    <span className="text-xl text-gray-400 dark:text-gray-500 font-medium">{currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</span>
+                                </div>
+                            </div>
+
+                            {/* Mobile Metadata */}
+                            <div className="lg:hidden mb-8">
+                                <MetadataBar 
+                                    mood={mood} setMood={setMood} isMoodOpen={isMoodOpen} setIsMoodOpen={setIsMoodOpen} onSave={saveData}
+                                    location={location} onLocationClick={handleLocation} loadingLocation={loadingLocation}
+                                    weather={weather} uploading={uploading} onImageUpload={handleImageUpload}
+                                    isSidebar={false}
+                                />
+                            </div>
+
+                            <div className="min-h-[400px] relative pb-20">
+                                <EditorModePlugin mode={mode} />
+                                <MentionsPlugin />
+                                <MentionsTracker onChange={setTaggedPeople} />
+                                
+                                <TimeTravelPlugin 
+                                    sessions={sessions} 
+                                    activeIndex={previewSessionIndex} 
+                                    isPreviewMode={mode === 'preview'} 
+                                />
+
+                                <RichTextPlugin
+                                    contentEditable={
+                                    <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
+                                    }
+                                    placeholder={
+                                    <div className="absolute top-0 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
+                                        Start writing here...
+                                    </div>
+                                    }
+                                    ErrorBoundary={LexicalErrorBoundary}
+                                />
+                                <HistoryPlugin />
+                                <ListPlugin />
+                                <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
+                                
+                                {mode === 'edit' && (
+                                    <EditorStatePlugin 
+                                    content={content} 
+                                    onChange={setContent} 
+                                    onTextChange={(text) => {
+                                        setPreviewText(text);
+                                        previewRef.current = text;
+                                    }}
+                                    onSessionUpdate={handleSessionUpdate}
+                                    />
+                                )}
+
+                                {mode === 'preview' && (
+                                    <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-6">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <Clock size={18} className="text-[var(--accent-500)]" />
+                                        <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Time Travel</h3>
+                                    </div>
+                                    
+                                    <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
+                                        <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
+                                            <span>Start</span>
+                                            <span>
+                                            Session {previewSessionIndex + 1} / {sessions.length}
+                                            </span>
+                                            <span>Now</span>
+                                        </div>
+                                        <input 
+                                            type="range" 
+                                            min={0} 
+                                            max={sessions.length - 1} 
+                                            value={previewSessionIndex}
+                                            onChange={(e) => setPreviewSessionIndex(Number(e.target.value))}
+                                            className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
+                                        />
+                                        <div className="text-center mt-2 text-xs text-gray-400">
+                                            {sessions[previewSessionIndex]?.endTime 
+                                                ? new Date(sessions[previewSessionIndex].endTime).toLocaleTimeString() 
+                                                : 'Unknown Time'}
+                                        </div>
+                                    </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Mobile Tags/Sleep */}
+                            <div className="lg:hidden mt-12 pt-8 border-t border-gray-100 dark:border-gray-800">
+                                <div className="mb-8">
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
+                                    <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
+                                </div>
+
+                                {todaysSleepSessions.length > 0 && (
+                                    <div className="mb-20">
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Sleep Data</label>
+                                        {todaysSleepSessions.map(session => <SleepWidget key={session.id} session={session} />)}
+                                    </div>
+                                )}
+                                <div className="h-10"></div>
                             </div>
                         </div>
+                    </main>
+                </div>
 
-                        <div className="lg:hidden mb-8">
-                             <MetadataBar 
-                                mood={mood} setMood={setMood} isMoodOpen={isMoodOpen} setIsMoodOpen={setIsMoodOpen} onSave={saveData}
-                                location={location} onLocationClick={handleLocation} loadingLocation={loadingLocation}
-                                weather={weather} uploading={uploading} onImageUpload={handleImageUpload}
-                                isSidebar={false}
-                            />
-                        </div>
-
-                        <div className="min-h-[400px] relative">
-                               {mode === 'edit' && <ToolbarPlugin />}
-                               
-                               <EditorModePlugin mode={mode} />
-                               <MentionsPlugin />
-                               <MentionsTracker onChange={setTaggedPeople} />
-                               
-                               <TimeTravelPlugin 
-                                  sessions={sessions} 
-                                  activeIndex={previewSessionIndex} 
-                                  isPreviewMode={mode === 'preview'} 
-                               />
-
-                               <RichTextPlugin
-                                 contentEditable={
-                                   <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
-                                 }
-                                 placeholder={
-                                   <div className="absolute top-16 lg:top-14 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
-                                     Start writing here...
-                                   </div>
-                                 }
-                                 ErrorBoundary={LexicalErrorBoundary}
-                               />
-                               <HistoryPlugin />
-                               <ListPlugin />
-                               <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
-                               
-                               {mode === 'edit' && (
-                                 <EditorStatePlugin 
-                                   content={content} 
-                                   onChange={setContent} 
-                                   onTextChange={(text) => {
-                                      setPreviewText(text);
-                                      previewRef.current = text;
-                                   }}
-                                   onSessionUpdate={handleSessionUpdate}
-                                 />
-                               )}
-
-                             {mode === 'preview' && (
-                                <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-6">
-                                   <div className="flex items-center gap-2 mb-4">
-                                      <Clock size={18} className="text-[var(--accent-500)]" />
-                                      <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Time Travel</h3>
-                                   </div>
-                                   
-                                   <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
-                                      <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
-                                         <span>Start</span>
-                                         <span>
-                                            Session {previewSessionIndex + 1} / {sessions.length}
-                                         </span>
-                                         <span>Now</span>
-                                      </div>
-                                      <input 
-                                        type="range" 
-                                        min={0} 
-                                        max={sessions.length - 1} 
-                                        value={previewSessionIndex}
-                                        onChange={(e) => setPreviewSessionIndex(Number(e.target.value))}
-                                        className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
-                                      />
-                                      <div className="text-center mt-2 text-xs text-gray-400">
-                                         {sessions[previewSessionIndex]?.endTime 
-                                            ? new Date(sessions[previewSessionIndex].endTime).toLocaleTimeString() 
-                                            : 'Unknown Time'}
-                                      </div>
-                                   </div>
-                                </div>
-                             )}
-                        </div>
-
-                        <div className="lg:hidden mt-12 pt-8 border-t border-gray-100 dark:border-gray-800">
-                           <div className="mb-8">
-                              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
-                              <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
-                           </div>
-
-                           {todaysSleepSessions.length > 0 && (
-                              <div className="mb-20">
-                                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Sleep Data</label>
-                                  {todaysSleepSessions.map(session => <SleepWidget key={session.id} session={session} />)}
-                              </div>
-                           )}
-                           <div className="h-10"></div>
-                        </div>
-
-                    </div>
-                </main>
-
-                <aside className="w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto order-1 lg:order-2">
+                {/* RIGHT: SIDEBAR */}
+                <aside className="w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto no-scrollbar">
+                    
+                    {/* Desktop Date/Time Header */}
                     <div className="mb-8 hidden lg:block">
                         <div className="flex items-center gap-2 text-[var(--accent-500)] mb-2 font-medium">
                             <Calendar size={18} />
