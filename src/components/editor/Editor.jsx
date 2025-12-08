@@ -120,6 +120,7 @@ const EditorModePlugin = ({ mode }) => {
 const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   const [editor] = useLexicalComposerContext();
   
+  // FIX: Added sessions, activeIndex, isPreviewMode to dependencies
   useEffect(() => {
     if (!isPreviewMode || !sessions || sessions.length === 0) return;
     
@@ -394,6 +395,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     } catch (err) { alert("PDF Failed"); } finally { setIsExporting(false); }
   };
 
+  // FIX: Added 'mode' to the dependency array
   const initialConfig = useMemo(() => ({
     namespace: 'MainEditor',
     theme: {
@@ -406,7 +408,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
-  }), []); 
+  }), [mode]); 
 
   return (
     <>
