@@ -1,7 +1,7 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 
-// --- STYLES (Inherited from EntryPdfDocument + Book Styles) ---
+// --- STYLES (Matched exactly to EntryPdfDocument) ---
 const styles = StyleSheet.create({
   // Base
   page: {
@@ -13,7 +13,7 @@ const styles = StyleSheet.create({
     color: '#1f2937'
   },
   
-  // Book Specifics
+  // Book Cover
   coverPage: {
     flex: 1,
     alignItems: 'center',
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1
   },
   
-  // Chapter (Month) Breaks
+  // Chapter Dividers
   monthPage: {
     flex: 1,
     justifyContent: 'center',
@@ -95,14 +95,14 @@ const styles = StyleSheet.create({
   metaContainer: { flexDirection: 'row', gap: 15, marginBottom: 10, fontSize: 10, color: '#4b5563' },
   metaItem: { flexDirection: 'row', alignItems: 'center' },
   
-  // Content Components
+  // Typography
   body: { marginBottom: 15, textAlign: 'left' },
   paragraph: { marginBottom: 6 },
   h1: { fontSize: 16, fontFamily: 'Helvetica-Bold', marginTop: 10, marginBottom: 6, color: '#111827' },
   h2: { fontSize: 14, fontFamily: 'Helvetica-Bold', marginTop: 8, marginBottom: 4, color: '#374151' },
   h3: { fontSize: 12, fontFamily: 'Helvetica-Bold', marginTop: 6, marginBottom: 2, color: '#4b5563' },
   
-  // Inline
+  // Inline Styles
   bold: { fontFamily: 'Helvetica-Bold' },
   italic: { fontFamily: 'Helvetica-Oblique' },
   codeInline: { fontFamily: 'Courier', backgroundColor: '#f3f4f6', fontSize: 10, padding: 2 },
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: '100%', objectFit: 'contain' }
 });
 
-// --- HELPERS (Copied from EntryPdfDocument) ---
+// --- HELPERS ---
 
 const MarkdownText = ({ text }) => {
   if (!text) return null;
@@ -143,22 +143,36 @@ const parseInlineStyle = (styleString) => {
   styleString.split(';').forEach(rule => {
     const [key, val] = rule.split(':').map(s => s.trim());
     if (key === 'color') customStyles.color = val;
-    if (key === 'font-family' && val.toLowerCase().includes('mono')) customStyles.fontFamily = 'Courier';
-    if (key === 'font-family' && val.toLowerCase().includes('serif')) customStyles.fontFamily = 'Times-Roman';
+    // Map common fonts
+    const lowerVal = val.toLowerCase();
+    if (key === 'font-family') {
+        if (lowerVal.includes('mono')) customStyles.fontFamily = 'Courier';
+        else if (lowerVal.includes('serif')) customStyles.fontFamily = 'Times-Roman';
+        else customStyles.fontFamily = 'Helvetica';
+    }
   });
   return customStyles;
 };
 
-// Rich Text Renderer (Exact Logic from EntryPdfDocument)
+// Rich Text Renderer
 const RichTextRenderer = ({ content }) => {
   if (!content) return null;
+  
   let root;
   try {
-    const json = JSON.parse(content);
-    if (json.root) root = json.root;
-  } catch (e) { return <MarkdownText text={content} />; }
+    // Check if content is already an object (sometimes DB stores it as object)
+    if (typeof content === 'object') {
+        root = content.root || content;
+    } else {
+        const json = JSON.parse(content);
+        if (json.root) root = json.root;
+    }
+  } catch (e) { 
+    // Fallback to Markdown if parsing fails
+    return <MarkdownText text={typeof content === 'string' ? content : ''} />; 
+  }
 
-  if (!root) return <MarkdownText text={content} />;
+  if (!root) return <MarkdownText text={typeof content === 'string' ? content : ''} />;
 
   const renderChildren = (children) => {
     return children.map((node, index) => {
@@ -167,7 +181,9 @@ const RichTextRenderer = ({ content }) => {
         const isItalic = (node.format & 2) !== 0;
         
         let customStyle = parseInlineStyle(node.style);
-        if (!customStyle.fontFamily) {
+        
+        // Font Family Logic (Bold/Italic)
+        if (!customStyle.fontFamily || customStyle.fontFamily === 'Helvetica') {
            if (isBold && isItalic) customStyle.fontFamily = 'Helvetica-BoldOblique';
            else if (isBold) customStyle.fontFamily = 'Helvetica-Bold';
            else if (isItalic) customStyle.fontFamily = 'Helvetica-Oblique';
@@ -181,9 +197,17 @@ const RichTextRenderer = ({ content }) => {
         ];
         return <Text key={index} style={nodeStyles}>{node.text}</Text>;
       }
+      
       if (node.type === 'linebreak') return <Text key={index}>{'\n'}</Text>;
-      if (node.type === 'mention') return <Text key={index} style={{ color: '#2563eb', fontFamily: 'Helvetica-Bold' }}>@{node.text}</Text>;
-      if (node.type === 'link' || node.type === 'autolink') return <Text key={index} style={{ color: '#2563eb', textDecoration: 'underline' }}>{renderChildren(node.children)}</Text>;
+      
+      if (node.type === 'mention') {
+          return <Text key={index} style={{ color: '#2563eb', fontFamily: 'Helvetica-Bold' }}>@{node.text}</Text>;
+      }
+      
+      if (node.type === 'link' || node.type === 'autolink') {
+          return <Text key={index} style={{ color: '#2563eb', textDecoration: 'underline' }}>{renderChildren(node.children)}</Text>;
+      }
+      
       return null;
     });
   };
@@ -222,15 +246,15 @@ const RichTextRenderer = ({ content }) => {
   );
 };
 
-// --- BOOK COMPONENTS ---
-
+// --- ENTRY COMPONENT ---
+// FIXED: Removed 'wrap={false}' to fix overlapping issues with long entries
 const EntryItem = ({ entry, moodLabel }) => {
   const dateObj = new Date(entry.date);
   const dateString = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const timeString = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <View wrap={false} style={styles.entryContainer}>
+    <View style={styles.entryContainer}>
       {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -283,31 +307,29 @@ const EntryItem = ({ entry, moodLabel }) => {
 // --- MAIN DOCUMENT ---
 
 const YearInReviewPdf = ({ entries, year }) => {
-  // 1. Group Entries by Month
+  // Group Entries by Month
   const entriesByMonth = entries.reduce((acc, entry) => {
     const date = new Date(entry.date);
-    const month = date.getMonth(); // 0-11
+    const month = date.getMonth(); 
     if (!acc[month]) acc[month] = [];
     acc[month].push(entry);
     return acc;
   }, {});
 
-  // 2. Sort Months and Entries
   const sortedMonths = Object.keys(entriesByMonth).sort((a, b) => a - b);
   sortedMonths.forEach(m => {
     entriesByMonth[m].sort((a, b) => new Date(a.date) - new Date(b.date));
   });
 
-  // 3. Calculate Stats
   const totalEntries = entries.length;
   const moodSum = entries.reduce((acc, curr) => acc + (curr.mood || 5), 0);
   const avgMood = totalEntries > 0 ? (moodSum / totalEntries).toFixed(1) : 0;
   
-  // Rough word count estimation
+  // Estimate words
   const totalWords = entries.reduce((acc, curr) => {
-      // Very rough estimate based on JSON string length if complex parsing is too heavy
-      // Or if you pass a plain text preview, use that. Assuming content string here.
-      return acc + (curr.content ? curr.content.split(' ').length : 0);
+      let txt = curr.preview || ''; 
+      if(!txt && typeof curr.content === 'string' && !curr.content.trim().startsWith('{')) txt = curr.content;
+      return acc + txt.split(' ').length;
   }, 0);
 
   const monthNames = [ "January", "February", "March", "April", "May", "June", 
@@ -344,7 +366,7 @@ const YearInReviewPdf = ({ entries, year }) => {
       {/* MONTHLY CHAPTERS */}
       {sortedMonths.map((monthKey) => (
         <React.Fragment key={monthKey}>
-          {/* Month Divider Page */}
+          {/* Month Divider */}
           <Page size="A4" style={styles.page}>
              <View style={styles.monthPage}>
                 <Text style={styles.monthTitle}>{monthNames[monthKey]}</Text>
@@ -352,7 +374,7 @@ const YearInReviewPdf = ({ entries, year }) => {
              </View>
           </Page>
 
-          {/* Entries for this Month */}
+          {/* Entries (Continuous Flow) */}
           <Page size="A4" style={styles.page}>
             {entriesByMonth[monthKey].map((entry) => (
               <EntryItem 
