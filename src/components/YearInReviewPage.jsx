@@ -6,7 +6,7 @@ import { saveAs } from 'file-saver';
 import { Calendar, Book, BarChart3, Download, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 
 import YearInReviewPdf from './YearInReviewPdf'; // The component we just made
-import { blobToJpeg } from './editorUtils'; // Reusing your existing utility
+import { blobToJpeg } from './editor/editorUtils'; // Reusing your existing utility
 
 const StatCard = ({ icon: Icon, label, value, subLabel, colorClass }) => (
   <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col items-center text-center">
