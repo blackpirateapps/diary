@@ -1,18 +1,11 @@
-import React from 'react';
+// MentionNode.jsx
 import {
-  DecoratorNode,
+  TextNode,
   $applyNodeReplacement,
-  $isNodeSelection,
-  RangeSelection,
 } from 'lexical';
 
-/**
- * MentionNode implemented as a DecoratorNode.
- * DecoratorNode gives us a true atomic behaviour in the editor DOM and React rendering,
- * which prevents selection/backspace glitches that can happen with TextNode-based mentions.
- */
-
-export class MentionNode extends DecoratorNode {
+// Keep the exported helpers since BackspaceFixPlugin imports $isMentionNode
+export class MentionNode extends TextNode {
   __mention;
   __id;
   __src;
@@ -22,110 +15,90 @@ export class MentionNode extends DecoratorNode {
   }
 
   static clone(node) {
-    return new MentionNode(node.__mention, node.__id, node.__src, node.__key);
+    return new MentionNode(node.__mention, node.__id, node.__src, node.__text, node.__key);
   }
 
-  constructor(mentionName, id = null, src = null, key) {
-    super(key);
+  static importJSON(serializedNode) {
+    // Preserve text content as fallback
+    const node = $createMentionNode(serializedNode.mention, serializedNode.id, serializedNode.src);
+    node.setTextContent(serializedNode.text);
+    node.setFormat(serializedNode.format);
+    node.setDetail(serializedNode.detail);
+    node.setMode(serializedNode.mode);
+    node.setStyle(serializedNode.style);
+    return node;
+  }
+
+  constructor(mentionName, id, src, text, key) {
+    // default text is the mention label
+    super(text ?? mentionName, key);
     this.__mention = mentionName;
     this.__id = id;
     this.__src = src;
   }
 
-  // Export a simple JSON representation
   exportJSON() {
     return {
-      type: 'mention',
-      version: 1,
+      ...super.exportJSON(),
       mention: this.__mention,
       id: this.__id,
       src: this.__src,
+      type: 'mention',
+      version: 1,
     };
   }
 
-  // Import from serialized JSON
-  static importJSON(serializedNode) {
-    return $createMentionNode(
-      serializedNode.mention,
-      serializedNode.id,
-      serializedNode.src
-    );
-  }
+  createDOM(config) {
+    const dom = super.createDOM(config);
 
-  // DecoratorNode: mark as inline so it flows with text
-  isInline() {
-    return true;
-  }
+    // Ensure the mention renders as an inline atomic-ish span visually.
+    // We do NOT make it contentEditable=false at the DOM level because it is a text node;
+    // instead we keep styling and click behavior. The BackspaceFixPlugin will guard deletion.
+    dom.style.backgroundColor = 'transparent';
+    dom.style.border = 'none';
+    dom.style.borderRadius = '0';
+    dom.style.padding = '0';
+    dom.style.color = 'var(--accent-600)';
+    dom.style.fontWeight = '600';
+    dom.style.display = 'inline-block';
+    dom.style.cursor = 'pointer';
+    dom.style.textDecoration = 'none';
 
-  // We don't need to update DOM because React handles it via decorate()
-  updateDOM() {
-    return false;
-  }
+    dom.onmouseenter = () => {
+      dom.style.textDecoration = 'underline';
+    };
+    dom.onmouseleave = () => {
+      dom.style.textDecoration = 'none';
+    };
 
-  /**
-   * The decorate() method returns a React element that will be mounted in the editor.
-   * Keep the element minimal and make sure it doesn't steal focus/selection in a way
-   * that would confuse Lexical.
-   */
-  decorate() {
-    const mention = this.__mention ?? '';
-    const id = this.__id;
+    dom.className = 'mention-node';
 
-    // Click handler: prevent default focus/selection change and do navigation
-    const onClick = (e) => {
+    dom.onclick = (e) => {
+      // Stop propagation so clicks do not move the caret unexpectedly on some IMEs
       e.preventDefault();
       e.stopPropagation();
 
-      // Save selected person id and navigate via hash (you can adjust this)
-      if (id !== null && id !== undefined) {
-        try {
-          localStorage.setItem('open_person_id', String(id));
-        } catch (err) {
-          // ignore localStorage errors
-        }
+      try {
+        localStorage.setItem('open_person_id', this.__id);
+      } catch (err) {
+        // ignore storage errors
       }
       window.location.hash = 'people';
     };
 
-    // Render a span with styling similar to your original
-    return (
-      <span
-        role="button"
-        tabIndex={-1} // not tabbable to avoid stealing keyboard focus
-        onClick={onClick}
-        className="mention-node"
-        style={{
-          backgroundColor: 'transparent',
-          border: 'none',
-          borderRadius: 0,
-          padding: 0,
-          color: 'var(--accent-600)',
-          fontWeight: 600,
-          display: 'inline-block',
-          cursor: 'pointer',
-          textDecoration: 'none',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.textDecoration = 'underline';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.textDecoration = 'none';
-        }}
-      >
-        {mention}
-      </span>
-    );
+    return dom;
+  }
+
+  isTextEntity() {
+    return true;
   }
 }
 
-/**
- * Helper to create and insert a MentionNode.
- * Use $applyNodeReplacement to insert this node in place of the active node.
- */
-export function $createMentionNode(mentionName, id = null, src = null) {
-  const node = new MentionNode(mentionName, id, src);
-  // Return the node replacement (call site should apply it inside an editor update)
-  return $applyNodeReplacement(node);
+export function $createMentionNode(mentionName, id, src) {
+  const mentionNode = new MentionNode(mentionName, id, src);
+  // Keep it as a TextNode with the mention text content so it integrates with formatting and selection.
+  // Do not attempt to force 'atomic' mode here — handle deletion behavior at plugin layer (more reliable across IMEs).
+  return $applyNodeReplacement(mentionNode);
 }
 
 export function $isMentionNode(node) {
