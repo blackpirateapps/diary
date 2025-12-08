@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, SlidersHorizontal, X, Type, AlignJustify } from 'lucide-react';
+import { ChevronLeft, SlidersHorizontal, X } from 'lucide-react';
 
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
@@ -60,8 +60,10 @@ const StateSyncPlugin = ({ onChange, contentRef }) => {
   );
 };
 
-// --- SETTINGS POPUP COMPONENT ---
+// --- SETTINGS POPUP COMPONENT (Removed font settings, kept general UI) ---
 const ZenSettingsPopup = ({ settings, setSettings, onClose }) => {
+  // NOTE: Settings functionality is stripped down here as the dynamic font styles are removed.
+  // We keep the structure but simplify the content to avoid external dependencies.
   const handleChange = (key, value) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
@@ -76,68 +78,31 @@ const ZenSettingsPopup = ({ settings, setSettings, onClose }) => {
       className="absolute top-16 right-0 md:right-6 w-72 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800 p-5 z-[70]"
     >
       <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-800 pb-3">
-        <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Reading Settings</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Zen Display Settings</h3>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
           <X size={16} />
         </button>
       </div>
 
-      <div className="space-y-5">
-        {/* Font Family */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Typeface</label>
-          <input 
-            type="text" 
-            value={settings.fontFamily}
-            onChange={(e) => handleChange('fontFamily', e.target.value)}
-            placeholder="Inter, Serif..."
-            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--accent-500)] dark:text-white"
-          />
-        </div>
-
-        {/* Font Size */}
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Size</label>
-            <span className="text-xs text-gray-500">{settings.fontSize}px</span>
-          </div>
-          <input 
-            type="range" min="14" max="32" step="1"
-            value={settings.fontSize}
-            onChange={(e) => handleChange('fontSize', Number(e.target.value))}
-            className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
-          />
-        </div>
-
-        {/* Weight */}
-        <div className="space-y-2">
-           <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Weight</label>
+      <div className="space-y-4 text-sm text-gray-600 dark:text-gray-400">
+        <p>Dynamic font settings are currently disabled to ensure maximum compatibility and stability on mobile devices.</p>
+        
+        {/* Example placeholder for non-font setting */}
+        <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+           <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Line Spacing (Example)</label>
            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-             {['300', '400', '600'].map(w => (
+             {['Default', 'Wide'].map(w => (
                <button
                  key={w}
-                 onClick={() => handleChange('fontWeight', w)}
-                 className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${settings.fontWeight === w ? 'bg-white dark:bg-gray-700 text-black dark:text-white shadow-sm' : 'text-gray-400'}`}
+                 onClick={() => handleChange('spacing', w)}
+                 className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${settings.spacing === w ? 'bg-white dark:bg-gray-700 text-black dark:text-white shadow-sm' : 'text-gray-400'}`}
                >
-                 {w === '300' ? 'Thin' : w === '400' ? 'Reg' : 'Bold'}
+                 {w}
                </button>
              ))}
            </div>
         </div>
 
-        {/* Line Height */}
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Spacing</label>
-            <span className="text-xs text-gray-500">{settings.lineHeight}x</span>
-          </div>
-          <input 
-            type="range" min="1.2" max="2.4" step="0.1"
-            value={settings.lineHeight}
-            onChange={(e) => handleChange('lineHeight', Number(e.target.value))}
-            className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
-          />
-        </div>
       </div>
     </motion.div>
   );
@@ -145,15 +110,11 @@ const ZenSettingsPopup = ({ settings, setSettings, onClose }) => {
 
 // --- MAIN COMPONENT ---
 const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
-  // Local Settings State
+  // Local Settings State (Simplified)
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('zen_settings');
-    return saved ? JSON.parse(saved) : {
-      fontFamily: 'Inter',
-      fontSize: 18,
-      fontWeight: '400',
-      lineHeight: 1.6
-    };
+    // We remove font defaults but keep the ability to track some settings if needed later.
+    return saved ? JSON.parse(saved) : { spacing: 'Default' };
   });
 
   const [showSettings, setShowSettings] = useState(false);
@@ -164,24 +125,12 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
       contentRef.current = content;
   }, [content]);
 
-  // BUG FIX: Added ref to focus the editor automatically on mount,
-  // which helps stabilize the mobile cursor position.
-  const contentEditableRef = useRef(null);
-  
-  // Auto-focus on activation
-  useEffect(() => {
-    if (isActive && contentEditableRef.current) {
-        // Use a timeout to ensure Lexical has fully rendered the state before focusing
-        setTimeout(() => {
-            contentEditableRef.current.focus();
-        }, 100); 
-    }
-  }, [isActive]);
-
+  // Removed ContentEditable ref and auto-focus logic
 
   const initialConfig = useMemo(() => ({
     namespace: 'ZenEditor',
     theme: {
+      // NOTE: Using minimal classes that only define block structure, not font styles
       paragraph: 'mb-4',
       heading: {
         h1: 'text-3xl font-bold mb-4 mt-6',
@@ -215,23 +164,9 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }}
       >
-        {/* Inject Styles Dynamically */}
-        <style>{`
-          .zen-editor-content {
-            font-family: ${settings.fontFamily}, sans-serif;
-            font-size: ${settings.fontSize}px;
-            font-weight: ${settings.fontWeight};
-            line-height: ${settings.lineHeight};
-            outline: none;
-            min-height: 60vh;
-            /* BUG FIX: Ensure no unnecessary transforms or fixed/absolute positioning that interfere with mobile text input */
-            position: relative; 
-            z-index: 10;
-          }
-          .dark .zen-placeholder { color: #4b5563; }
-        `}</style>
+        {/* REMOVED: Dynamic <style> block */}
 
-        {/* CONTAINER FOR PAGE LAYOUT (Min-Height ensures full page feel) */}
+        {/* CONTAINER FOR PAGE LAYOUT */}
         <div className="min-h-screen flex flex-col items-center">
             
             {/* TOP BAR */}
@@ -265,24 +200,21 @@ const ZenOverlay = ({ isActive, content, setContent, onBack }) => {
               </AnimatePresence>
             </div>
             
-            {/* EDITOR AREA - Grows to fill space, clicks outside close settings */}
+            {/* EDITOR AREA - Clicks outside close settings */}
             <div className="flex-1 w-full max-w-3xl px-6 pb-32" onClick={() => setShowSettings(false)}>
               <div className="py-8 relative">
                 <LexicalComposer initialConfig={initialConfig}>
                   
                   <RichTextPlugin
                     contentEditable={
-                      // BUG FIX: Added ref to ContentEditable for explicit focus control
+                      // ONLY CLASS for ContentEditable (Matches Lexical Playground, minimal style)
                       <ContentEditable 
-                        className="zen-editor-content text-gray-800 dark:text-gray-200"
-                        ref={contentEditableRef} // Assign ref here
+                        className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]"
                       />
                     }
                     placeholder={
-                      <div className="absolute top-8 left-0 text-gray-300 pointer-events-none zen-placeholder" style={{
-                        fontFamily: settings.fontFamily,
-                        fontSize: `${settings.fontSize}px`,
-                      }}>
+                      // Use generic placeholder styling
+                      <div className="absolute top-8 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl">
                         Start writing...
                       </div>
                     }
