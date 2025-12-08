@@ -393,7 +393,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   useEffect(() => {
     if (content !== (entry?.content || '')) {
-      // Note: Auto-save will still run based on content state changes, but session tracking is debounced.
       const timer = setTimeout(() => saveData(true), 1000);
       return () => clearTimeout(timer);
     }
