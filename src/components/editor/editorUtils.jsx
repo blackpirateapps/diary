@@ -98,31 +98,6 @@ export const Styles = () => (
       color: #111827;
     }
     .dark .native-input { color: #e5e7eb; }
-    
-    .wmde-markdown { 
-      background-color: transparent !important; 
-      color: #111827 !important; 
-      font-family: inherit !important; 
-      font-size: 17px; 
-      line-height: 1.6;
-    }
-    .dark .wmde-markdown { color: #d1d5db !important; }
-    
-    .w-md-editor { box-shadow: none !important; border: none !important; background-color: transparent !important; }
-    .w-md-editor-toolbar { display: none; }
-    .w-md-editor-content { background-color: transparent !important; }
-    
-    .wmde-markdown h1 { border-bottom: none !important; font-weight: 800; font-size: 1.6em; margin-top: 1.2em; margin-bottom: 0.5em; color: #111827 !important; letter-spacing: -0.02em; }
-    .dark .wmde-markdown h1 { color: #f9fafb !important; }
-    
-    .wmde-markdown h2 { border-bottom: none !important; font-weight: 700; font-size: 1.3em; margin-top: 1.2em; margin-bottom: 0.5em; color: #1f2937 !important; letter-spacing: -0.01em; }
-    .dark .wmde-markdown h2 { color: #f3f4f6 !important; }
-    
-    .wmde-markdown blockquote { border-left: 3px solid var(--accent-200) !important; color: #4b5563 !important; padding-left: 1em !important; margin-left: 0 !important; font-style: italic; }
-    .dark .wmde-markdown blockquote { border-left: 3px solid var(--accent-800) !important; color: #9ca3af !important; }
-    
-    .wmde-markdown a { color: var(--accent-500) !important; text-decoration: none !important; font-weight: 500; }
-    .wmde-markdown a:hover { text-decoration: underline !important; }
 
     textarea { caret-color: var(--accent-500); }
   `}</style>

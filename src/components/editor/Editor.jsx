@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-// REMOVED: motion, AnimatePresence as per previous request
 import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check } from 'lucide-react'; 
 import { useLiveQuery } from 'dexie-react-hooks';
 
@@ -31,10 +30,10 @@ import MentionsPlugin from './MentionsPlugin';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
+// REMOVED: import ToolbarPlugin from './ToolbarPlugin';
 import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
 import SleepWidget from './SleepWidget';
-import ToolbarPlugin from './ToolbarPlugin';
 import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtils';
 
 const BlobImage = ({ src, ...props }) => {
@@ -453,31 +452,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const initialConfig = useMemo(() => ({
     namespace: 'MainEditor',
-    theme: {
-      // MODIFIED: Simplified styles to be block-level, removing custom fonts/sizes from the theme
-      paragraph: 'mb-4',
-      heading: { 
-        h1: 'text-3xl font-bold mb-4 mt-6', 
-        h2: 'text-2xl font-bold mb-3 mt-5', 
-        h3: 'text-xl font-bold mb-2 mt-4' 
-      },
-      list: { 
-        ul: 'list-disc ml-5 mb-4', 
-        ol: 'list-decimal ml-5 mb-4' 
-      },
-      quote: 'border-l-4 border-gray-300 pl-4 italic my-4 text-gray-500',
-      text: { 
-        bold: 'font-bold', 
-        italic: 'italic', 
-        underline: 'underline', 
-        // Using minimal, standard classes for inline elements
-        code: 'bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 font-mono text-sm text-pink-500' 
-      }
-    },
+    // theme: { /* Removed custom styles for stability */ }
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
-  }), [mode]); // Dependency on mode is crucial
+  }), [mode]); 
 
   return (
     <>
@@ -533,7 +512,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
                         <div className="min-h-[400px] relative">
                              <LexicalComposer initialConfig={initialConfig}>
-                               {mode === 'edit' && <ToolbarPlugin />}
+                               {/* REMOVED: {mode === 'edit' && <ToolbarPlugin />} */}
                                
                                <EditorModePlugin mode={mode} />
                                <MentionsPlugin />
@@ -547,12 +526,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
                                <RichTextPlugin
                                  contentEditable={
-                                   // MODIFIED: Simplified ContentEditable classes to only control basic appearance/spacing
-                                   <ContentEditable className="outline-none text-base lg:text-lg text-gray-800 dark:text-gray-200 leading-normal min-h-[400px] p-0" />
+                                   // Minimal classes: only outline-none and layout controls
+                                   <ContentEditable className="outline-none min-h-[400px] text-gray-800 dark:text-gray-200 p-0" />
                                  }
                                  placeholder={
-                                   // MODIFIED: Simplified Placeholder classes
-                                   <div className="absolute top-0 lg:top-0 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-base lg:text-lg select-none">
+                                   // Minimal classes: only positioning and color
+                                   <div className="absolute top-0 left-0 text-gray-300 dark:text-gray-700 pointer-events-none select-none">
                                      Start writing here...
                                    </div>
                                  }
