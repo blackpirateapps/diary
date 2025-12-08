@@ -406,7 +406,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
-  }), [mode]); 
+  }), []); 
 
   return (
     <>
@@ -423,28 +423,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             onClick={() => { saveData(false); onClose(); }}
         />
 
-        <div className="min-h-screen bg-white dark:bg-gray-900 pb-20">
-                  {/* Back Button Header */}
-      <div className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        <div className="flex items-center justify-between px-4 py-3">
-          <button
-            onClick={() => { saveData(false); onClose(); }}
-            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-          >
-            <ChevronLeft size={24} />
-            <span className="font-medium">Back</span>
-          </button>
-
-          <div className="flex items-center gap-2">
-            {saveStatus === 'saving' && <span className="text-sm text-gray-500">Saving...</span>}
-            {saveStatus === 'saved' && <span className="text-sm text-green-500">Saved ✓</span>}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        <EditorHeader 
+        <motion.div 
+            className="fixed inset-0 lg:inset-8 lg:max-w-7xl lg:mx-auto bg-white dark:bg-gray-950 lg:rounded-2xl lg:shadow-2xl z-50 flex flex-col overflow-hidden font-sans transition-colors border border-gray-100 dark:border-gray-800 h-[100dvh] lg:h-auto" 
+            variants={containerVariants} initial="hidden" animate="visible" exit="exit"
+        >
+            <EditorHeader 
               onClose={onClose} saveStatus={saveStatus} onZen={() => setIsZenMode(true)} 
               onExport={handleExportPdf} isExporting={isExporting} onDelete={() => { if(window.confirm('Delete?')) onDelete(entryId); }}
               toggleMode={() => setMode(m => m === 'edit' ? 'preview' : 'edit')} mode={mode} 
@@ -635,10 +618,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     </div>
                 </aside>
             </div>
-        </div> {/* <-- Closing the max-w-4xl div */}
-        
-        </div> {/* <-- FIX: Closing the min-h-screen div */}
-
         </motion.div>
       </AnimatePresence>
     </>
