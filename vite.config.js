@@ -30,6 +30,15 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/png'
           }
+        ],
+        shortcuts: [
+          {
+            name: "Write Today",
+            short_name: "Write",
+            description: "Write your diary today",
+            url: "/#editor",
+            icons: [{ src: "pwa-192x192.png", sizes: "192x192", type: "image/png" }]
+          }
         ]
       },
       workbox: {
