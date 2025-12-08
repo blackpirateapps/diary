@@ -1,10 +1,5 @@
-// MentionNode.jsx
-import {
-  TextNode,
-  $applyNodeReplacement,
-} from 'lexical';
+import { TextNode, $applyNodeReplacement } from 'lexical';
 
-// Keep the exported helpers since BackspaceFixPlugin imports $isMentionNode
 export class MentionNode extends TextNode {
   __mention;
   __id;
@@ -19,7 +14,6 @@ export class MentionNode extends TextNode {
   }
 
   static importJSON(serializedNode) {
-    // Preserve text content as fallback
     const node = $createMentionNode(serializedNode.mention, serializedNode.id, serializedNode.src);
     node.setTextContent(serializedNode.text);
     node.setFormat(serializedNode.format);
@@ -30,7 +24,6 @@ export class MentionNode extends TextNode {
   }
 
   constructor(mentionName, id, src, text, key) {
-    // default text is the mention label
     super(text ?? mentionName, key);
     this.__mention = mentionName;
     this.__id = id;
@@ -50,40 +43,41 @@ export class MentionNode extends TextNode {
 
   createDOM(config) {
     const dom = super.createDOM(config);
-
-    // Ensure the mention renders as an inline atomic-ish span visually.
-    // We do NOT make it contentEditable=false at the DOM level because it is a text node;
-    // instead we keep styling and click behavior. The BackspaceFixPlugin will guard deletion.
+    
+    // --- STYLING: MINIMAL TEXT ONLY ---
     dom.style.backgroundColor = 'transparent';
     dom.style.border = 'none';
     dom.style.borderRadius = '0';
     dom.style.padding = '0';
-    dom.style.color = 'var(--accent-600)';
+    
+    // Text Appearance
+    dom.style.color = 'var(--accent-600)'; // Just the accent color
     dom.style.fontWeight = '600';
-    dom.style.display = 'inline-block';
+    dom.style.display = 'inline-block'; // Keeps it atomic
     dom.style.cursor = 'pointer';
     dom.style.textDecoration = 'none';
 
+    // Hover Effect
     dom.onmouseenter = () => {
       dom.style.textDecoration = 'underline';
     };
     dom.onmouseleave = () => {
       dom.style.textDecoration = 'none';
     };
+    
+    dom.className = 'mention-node'; 
 
-    dom.className = 'mention-node';
-
+    // --- NAVIGATION CLICK HANDLER ---
     dom.onclick = (e) => {
-      // Stop propagation so clicks do not move the caret unexpectedly on some IMEs
-      e.preventDefault();
-      e.stopPropagation();
-
-      try {
+        // Prevent editor cursor shifts or focus stealing if needed
+        e.preventDefault(); 
+        e.stopPropagation();
+        
+        // 1. Save target ID for PeoplePage to read
         localStorage.setItem('open_person_id', this.__id);
-      } catch (err) {
-        // ignore storage errors
-      }
-      window.location.hash = 'people';
+        
+        // 2. Trigger Navigation via Hash
+        window.location.hash = 'people';
     };
 
     return dom;
@@ -96,8 +90,7 @@ export class MentionNode extends TextNode {
 
 export function $createMentionNode(mentionName, id, src) {
   const mentionNode = new MentionNode(mentionName, id, src);
-  // Keep it as a TextNode with the mention text content so it integrates with formatting and selection.
-  // Do not attempt to force 'atomic' mode here — handle deletion behavior at plugin layer (more reliable across IMEs).
+  mentionNode.setMode('segmented').toggleDirectionless();
   return $applyNodeReplacement(mentionNode);
 }
 
