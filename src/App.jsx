@@ -18,16 +18,18 @@ const MediaGallery = lazy(() => import('./components/MediaGallery'));
 const FlashbackPage = lazy(() => import('./components/FlashbackPage'));
 const MapPage = lazy(() => import('./components/MapPage'));
 
+// Lazy load named exports
 const SleepPage = lazy(() => import('./components/SleepPage').then(module => ({ default: module.SleepPage })));
 const WhatsAppPage = lazy(() => import('./components/WhatsAppPage').then(module => ({ default: module.WhatsAppPage })));
 const PeoplePage = lazy(() => import('./components/PeoplePage').then(module => ({ default: module.PeoplePage })));
 
+// More Menu Pages
 const MoreMenu = lazy(() => import('./components/MorePages').then(module => ({ default: module.MoreMenu })));
 const SettingsPage = lazy(() => import('./components/MorePages').then(module => ({ default: module.SettingsPage })));
 const AboutPage = lazy(() => import('./components/MorePages').then(module => ({ default: module.AboutPage })));
 const ThemesPage = lazy(() => import('./components/MorePages').then(module => ({ default: module.ThemesPage })));
 
-// --- THEME ENGINE CONSTANTS ---
+// --- THEME CONSTANTS ---
 const ACCENT_COLORS = {
   blue:   { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 500: '#3b82f6', 600: '#2563eb' },
   violet: { 50: '#f5f3ff', 100: '#ede9fe', 200: '#ddd6fe', 500: '#8b5cf6', 600: '#7c3aed' },
@@ -70,7 +72,7 @@ const App = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState(null);
 
-  // Note: Removed "|| []" to detect loading state (undefined means loading)
+  // We do NOT use "|| []" here so we can detect the 'undefined' loading state
   const entries = useLiveQuery(() => db.entries.orderBy('date').reverse().toArray());
 
   const dateInputRef = useRef(null);
@@ -108,25 +110,28 @@ const App = () => {
     };
   }, [isDarkMode, accentColor]);
 
-  // --- URL ROUTING HANDLER ---
+  // --- URL ROUTING HANDLER (FIXED) ---
   useEffect(() => {
-    // Wait for Dexie to load entries
+    // If entries are still loading, do nothing
     if (!entries) return;
 
     if (currentRoute.startsWith('entry/')) {
       const id = currentRoute.split('/')[1];
-      const entry = entries.find(e => e.id === id);
+      
+      // FIX: Use String() comparison to handle both Number and String IDs
+      const entry = entries.find(e => String(e.id) === id);
       
       if (entry) {
         setEditingEntry(entry);
         setIsEditorOpen(true);
       } else {
-        // Entry ID not found in database (invalid URL), return to list
+        // Entry ID not found (invalid URL or deleted), return to list
+        // This prevents getting stuck on a blank screen
         navigate('journal');
       }
     } else {
-      // If we are NOT in an entry route, and not explicitly creating a new entry (modal mode), ensure editor is closed
-      // This handles the "Back" button correctly
+      // If we are NOT in an entry route, ensure editor is closed
+      // This handles the browser "Back" button correctly
       if (isEditorOpen && editingEntry && entries.some(e => e.id === editingEntry.id)) {
         setIsEditorOpen(false);
         setEditingEntry(null);
@@ -153,7 +158,7 @@ const App = () => {
     if (window.confirm('Are you sure you want to delete this entry?')) {
       try {
         await db.entries.delete(id);
-        // If we were on the dedicated page, go back to list
+        // If we are on the entry page, go back to list
         if (currentRoute.startsWith('entry/')) {
           navigate('journal');
         } else {
@@ -167,21 +172,20 @@ const App = () => {
   };
 
   const openNewEditor = (date = new Date()) => {
-    // Check if entry exists for this date to avoid duplicates
     const dateStr = date.toDateString();
     const existing = entries?.find(e => new Date(e.date).toDateString() === dateStr);
     
     if (existing) {
       navigate(`entry/${existing.id}`);
     } else {
-      // Open empty editor in "Creation Mode" (Modal)
+      // Create new entry in modal (doesn't change URL until saved, or you can assign ID here)
       setEditingEntry({ id: Date.now().toString(), date: date.toISOString() });
       setIsEditorOpen(true);
     }
   };
 
   const openEditEditor = (entry) => {
-    // Updates URL hash, triggering the Effect above to open the editor
+    // This updates the URL, triggering the useEffect above
     navigate(`entry/${entry.id}`);
   };
 
@@ -249,7 +253,7 @@ const App = () => {
   return (
     <div className="min-h-screen bg-[#F3F4F6] dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-300 flex">
       
-      {/* DESKTOP SIDEBAR */}
+      {/* SIDEBAR */}
       <aside className="hidden md:flex flex-col w-64 fixed h-full bg-[#f8f9fa] dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 p-4 z-50">
         <div className="mb-6 px-2">
            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
@@ -281,11 +285,10 @@ const App = () => {
         </div>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
+      {/* CONTENT AREA */}
       <div className="flex-1 w-full min-h-screen md:pl-64 transition-all">
         <div className="max-w-xl md:max-w-full mx-auto pb-20 md:pb-8 relative min-h-screen">
           
-          {/* IMPORT OVERLAY */}
           {isImporting && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
               <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-slideUp">
@@ -346,7 +349,7 @@ const App = () => {
           <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
           <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".zip" />
           
-          {/* EDITOR (Acts as Page or Modal) */}
+          {/* EDITOR / ENTRY PAGE */}
           {isEditorOpen && (
              <Suspense fallback={<div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
                 <Editor
