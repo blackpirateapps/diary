@@ -1,14 +1,8 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check } from 'lucide-react'; 
 import { useLiveQuery } from 'dexie-react-hooks';
 import BackspaceFixPlugin from './BackspaceFixPlugin';
-// Editor.jsx top imports (add these)
-import ToolbarPlugin from './ToolbarPlugin';
-import BlockFormatDropDown from './BlockFormatDropDown';
-import FontSizeDropDown from './FontSizeDropDown';
-import FontFamilyDropDown from './FontFamilyDropDown';
-import InsertDropDown from './InsertDropDown';
+import ToolbarPlugin from './ToolbarPlugin'; // New unified toolbar
 import ColorPickerPlugin from './ColorPickerPlugin';
 import FloatingTextFormatToolbarPlugin from './FloatingTextFormatToolbarPlugin';
 import FloatingLinkEditorPlugin from './FloatingLinkEditorPlugin';
@@ -44,10 +38,9 @@ import { saveAs } from 'file-saver';
 import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
 import SleepWidget from './SleepWidget';
-// REMOVED: import ToolbarPlugin from './ToolbarPlugin';
 import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtils';
 
-// --- DEBOUNCE UTILITY (Copied from ZenOverlay for self-containment) ---
+// --- DEBOUNCE UTILITY ---
 const debounce = (func, delay) => {
   let timeout;
   return function(...args) {
@@ -56,7 +49,6 @@ const debounce = (func, delay) => {
     timeout = setTimeout(() => func.apply(context, args), delay);
   };
 };
-// --- END DEBOUNCE UTILITY ---
 
 const BlobImage = ({ src, ...props }) => {
   const url = useBlobUrl(src);
@@ -67,12 +59,10 @@ const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: '
 
 // --- CUSTOM PLUGINS ---
 
-// 1. STATE SYNC & SESSION TRACKING PLUGIN (MODIFIED for state stability)
 const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate }) => {
   const [editor] = useLexicalComposerContext();
   const isFirstRender = useRef(true);
 
-  // Initialize State
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
@@ -94,22 +84,14 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate })
     }
   }, [content, editor]);
 
-  // Sync Changes & Track Sessions
   return (
     <OnChangePlugin
       onChange={(editorState) => {
         const jsonString = JSON.stringify(editorState.toJSON());
-        
-        // 1. Immediately update the main content state (Lexical's own read mechanism requires this)
         onChange(jsonString); 
-        
         editorState.read(() => {
             const textContent = $getRoot().getTextContent();
-            
-            // 2. Immediately update the text ref (for immediate word count/save)
             onTextChange(textContent); 
-            
-            // 3. Debounce the heavy session/preview update (to prevent re-renders mid-typing)
             onSessionUpdate(textContent, jsonString); 
         });
       }}
@@ -117,7 +99,6 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate })
   );
 };
 
-// 2. MENTIONS TRACKER (Unchanged)
 const MentionsTracker = ({ onChange }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -132,7 +113,6 @@ const MentionsTracker = ({ onChange }) => {
   return null;
 };
 
-// 3. MODE PLUGIN (Unchanged)
 const EditorModePlugin = ({ mode }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -141,7 +121,6 @@ const EditorModePlugin = ({ mode }) => {
   return null;
 };
 
-// 4. TIME TRAVEL PLUGIN (Unchanged)
 const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   const [editor] = useLexicalComposerContext();
   
@@ -171,7 +150,6 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   return null;
 };
 
-// --- NEW PAGE HEADER COMPONENT (Unchanged) ---
 const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExporting, onDelete, toggleMode, mode }) => {
     return (
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-4 flex items-center justify-between flex-shrink-0">
@@ -191,7 +169,6 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Toggle Edit/Preview Mode */}
           <button 
             onClick={toggleMode}
             className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
@@ -200,7 +177,6 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
             {mode === 'edit' ? <Check size={20} /> : <Pencil size={20} />}
           </button>
 
-          {/* Delete Button */}
           {entry?.id && (
             <button 
               onClick={() => { if(window.confirm('Delete?')) onDelete(entry.id); }} 
@@ -211,7 +187,6 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
             </button>
           )}
 
-          {/* Export Button (PDF) */}
           <button 
             onClick={onExport} 
             disabled={isExporting}
@@ -221,7 +196,6 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
             {isExporting ? <span className="text-sm">...</span> : 'PDF'}
           </button>
           
-          {/* Zen Mode Button */}
           <button 
             onClick={onZen} 
             className="p-2 rounded-full bg-[var(--accent-500)] text-white hover:bg-[var(--accent-600)] transition-colors"
@@ -233,8 +207,6 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
       </header>
     );
 };
-// --- END NEW PAGE HEADER COMPONENT ---
-
 
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [entryId] = useState(entry?.id || Date.now().toString());
@@ -246,23 +218,20 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [content, setContent] = useState(entry?.content || '');
   const [previewText, setPreviewText] = useState(entry?.preview || ''); 
   
-  // --- SESSION STATE ---
   const [sessions, setSessions] = useState(() => {
     if (entry?.sessions && entry.sessions.length > 0) return entry.sessions;
     if (entry?.content) {
       return [{
         startTime: entry.date || new Date().toISOString(),
         endTime: entry.date || new Date().toISOString(),
-        contentSnapshot: entry.content // Legacy: Start with existing content
+        contentSnapshot: entry.content
       }];
     }
     return [];
   });
 
-  // State for the Visualizer Slider
   const [previewSessionIndex, setPreviewSessionIndex] = useState(sessions.length - 1);
 
-  // Sync preview index when sessions update (auto-follow latest)
   useEffect(() => {
       if (mode === 'edit') {
           setPreviewSessionIndex(sessions.length - 1);
@@ -298,7 +267,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
 
-  // New Ref for the hidden file input used by the InsertDropDown
+  // Ref for the hidden file input used by ToolbarPlugin
   const fileInputRef = useRef(null);
 
   const [isMoodOpen, setIsMoodOpen] = useState(false);
@@ -309,11 +278,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
   
-  const [zenSettings] = useState(() => {
-     const saved = localStorage.getItem('zen_settings');
-     return saved ? JSON.parse(saved) : {};
-  });
-
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
   const todaysSleepSessions = sleepSessions.filter(session => 
     new Date(session.startTime).toDateString() === currentDate.toDateString()
@@ -321,7 +285,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const wordCount = previewText.trim().split(/\s+/).filter(Boolean).length;
 
-  // --- SESSION LOGIC (MODIFIED: Use Debounce) ---
   const debouncedSessionUpdate = useMemo(
       () => debounce((currentText, currentJSON) => {
           const now = Date.now();
@@ -329,7 +292,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           const SESSION_TIMEOUT = 5 * 60 * 1000; 
           const snapshotToSave = currentJSON || currentText;
 
-          // Update the session state (the heavy operation)
           setSessions(prevSessions => {
               let newSessions = [...prevSessions];
               
@@ -350,22 +312,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
               return newSessions;
           });
 
-          // This needs to be set after the debounce delay
           lastTypeTimeRef.current = now; 
-      }, 500), // Debounce for 500ms
+      }, 500), 
       []
   );
 
   const handleSessionUpdateWrapper = useCallback((currentText, currentJSON) => {
-      // 1. Update the local preview state immediately for responsive word count/metadata bar
       setPreviewText(currentText);
-      
-      // 2. Debounce the actual session/storage update
       debouncedSessionUpdate(currentText, currentJSON);
   }, [debouncedSessionUpdate]);
-
-  // --- END MODIFIED SESSION LOGIC ---
-
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -412,7 +367,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   }, [content, saveData, entry?.content]);
 
-  // Handlers (Unchanged)
   const handleZenBack = (finalContent) => {
     if (typeof finalContent === 'string') {
         contentRef.current = finalContent; 
@@ -446,7 +400,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   };
 
-  // NEW: Handler for the dropdown to trigger the hidden input
+  // Defined here to fix the ReferenceError
   const handleInsertImage = () => {
     fileInputRef.current?.click();
   };
@@ -489,7 +443,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const initialConfig = useMemo(() => ({
     namespace: 'MainEditor',
-    // theme: { /* Removed custom styles for stability */ }
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
@@ -530,7 +483,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             </div>
                         )}
 
-                    {/* HIDDEN INPUT FOR INSERT DROPDOWN */}
                     <input 
                       type="file" 
                       ref={fileInputRef} 
@@ -558,16 +510,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
                         <div className="min-h-[400px] relative">
                              <LexicalComposer initialConfig={initialConfig}>
-                               {/* No ToolbarPlugin, relying on browser/Lexical defaults */}
-                               <BlockFormatDropDown />
-              <FontSizeDropDown />
-       <FontFamilyDropDown />
-        <InsertDropDown onInsertImage={handleInsertImage} />
-  <ColorPickerPlugin />
-
+                               {/* New Unified Toolbar */}
+                               <ToolbarPlugin onInsertImage={handleInsertImage} />
+                               
+                               {/* Other Functional Plugins */}
                                <EditorModePlugin mode={mode} />
                                <MentionsPlugin />
                                <MentionsTracker onChange={setTaggedPeople} />
+                               <BackspaceFixPlugin />
+                               <ColorPickerPlugin /> 
                                
                                <TimeTravelPlugin 
                                   sessions={sessions} 
@@ -577,12 +528,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
                                <RichTextPlugin
                                  contentEditable={
-                                   // Minimal classes: only outline-none and layout controls
-                                   <ContentEditable className="outline-none min-h-[400px] text-gray-800 dark:text-gray-200 p-0" />
+                                   <ContentEditable className="outline-none min-h-[400px] text-gray-800 dark:text-gray-200 p-2" />
                                  }
                                  placeholder={
-                                   // Minimal classes: only positioning and color
-                                   <div className="absolute top-0 left-0 text-gray-300 dark:text-gray-700 pointer-events-none select-none">
+                                   <div className="absolute top-14 left-2 text-gray-300 dark:text-gray-700 pointer-events-none select-none">
                                      Start writing here...
                                    </div>
                                  }
@@ -604,7 +553,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                )}
                              </LexicalComposer>
 
-                             {/* TIME TRAVEL SLIDER (Visible only in Preview Mode) */}
                              {mode === 'preview' && (
                                 <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-6">
                                    <div className="flex items-center gap-2 mb-4">
@@ -638,7 +586,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                              )}
                         </div>
 
-                        {/* MOBILE ONLY: Tags and Sleep at the bottom */}
                         <div className="lg:hidden mt-12 pt-8 border-t border-gray-100 dark:border-gray-800">
                            <div className="mb-8">
                               <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
