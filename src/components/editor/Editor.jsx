@@ -546,7 +546,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                <BlockFormatDropDown />
               <FontSizeDropDown />
        <FontFamilyDropDown />
-        <InsertDropDown onInsertImage={() => /* open file picker & save to db */ } />
+        <InsertDropDown onInsertImage={() =>  } />
   <ColorPickerPlugin />
 
                                <EditorModePlugin mode={mode} />
