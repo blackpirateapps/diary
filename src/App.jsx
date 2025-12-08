@@ -145,6 +145,27 @@ const App = () => {
     };
   }, []);
 
+  // --- URL ROUTING EFFECT (NEW) ---
+  useEffect(() => {
+    if (currentRoute.startsWith('entry/')) {
+      const id = currentRoute.split('/')[1];
+      if (entries.length > 0) {
+        const entry = entries.find(e => e.id === id);
+        if (entry) {
+          setEditingEntry(entry);
+          setIsEditorOpen(true);
+        }
+      }
+    } else {
+      // If we navigate away from an entry URL, ensure editor is closed
+      // Only close if we were viewing an existing entry (to avoid closing "New Entry" modal which stays on base route)
+      if (isEditorOpen && editingEntry && entries.some(e => e.id === editingEntry.id)) {
+        setIsEditorOpen(false);
+        setEditingEntry(null);
+      }
+    }
+  }, [currentRoute, entries]);
+
   // --- CRUD OPERATIONS ---
   const handleSaveEntry = async (entry) => {
     try {
@@ -163,8 +184,13 @@ const App = () => {
     }
     try {
       await db.entries.delete(id);
-      setIsEditorOpen(false);
-      setEditingEntry(null);
+      // Navigate back to list if we deleted the current entry
+      if (currentRoute.startsWith('entry/')) {
+        navigate('journal');
+      } else {
+        setIsEditorOpen(false);
+        setEditingEntry(null);
+      }
     } catch (error) {
       console.error("Failed to delete:", error);
     }
@@ -174,16 +200,17 @@ const App = () => {
     const dateStr = date.toDateString();
     const existing = entries.find(e => new Date(e.date).toDateString() === dateStr);
     if (existing) {
-      setEditingEntry(existing);
+      // If entry already exists for this date, go to its URL
+      navigate(`entry/${existing.id}`);
     } else {
       setEditingEntry({ id: Date.now().toString(), date: date.toISOString() });
+      setIsEditorOpen(true);
     }
-    setIsEditorOpen(true);
   };
 
   const openEditEditor = (entry) => {
-    setEditingEntry(entry);
-    setIsEditorOpen(true);
+    // Navigate to unique URL
+    navigate(`entry/${entry.id}`);
   };
 
   const handleDateSelect = (e) => {
@@ -396,7 +423,14 @@ const App = () => {
              <Suspense fallback={<div className="fixed inset-0 z-50 bg-white/50 backdrop-blur-sm flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
                 <Editor
                   entry={editingEntry}
-                  onClose={() => { setIsEditorOpen(false); setEditingEntry(null); }}
+                  onClose={() => { 
+                    if (currentRoute.startsWith('entry/')) {
+                        navigate('journal');
+                    } else {
+                        setIsEditorOpen(false); 
+                        setEditingEntry(null); 
+                    }
+                  }}
                   onSave={handleSaveEntry}
                   onDelete={handleDeleteEntry}
                 />
