@@ -90,7 +90,9 @@ export class MentionNode extends TextNode {
 
 export function $createMentionNode(mentionName, id, src) {
   const mentionNode = new MentionNode(mentionName, id, src);
-  mentionNode.setMode('segmented').toggleDirectionless().toggleUnmergeable();
+  // FIX: Change to 'atomic' mode. Combined with toggleDirectionless and toggleUnmergeable, this 
+  // should fully treat the node as a single, atomic character, correcting the backspace issue.
+  mentionNode.setMode('atomic').toggleDirectionless().toggleUnmergeable();
   return $applyNodeReplacement(mentionNode);
 }
 
