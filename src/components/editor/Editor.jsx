@@ -531,7 +531,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         <div className="min-h-[400px] relative">
                              <LexicalComposer initialConfig={initialConfig}>
                                {/* No ToolbarPlugin, relying on browser/Lexical defaults */}
-                               
+                               <AndroidBackspaceFixPlugin />
+
                                <EditorModePlugin mode={mode} />
                                <MentionsPlugin />
                                <MentionsTracker onChange={setTaggedPeople} />
