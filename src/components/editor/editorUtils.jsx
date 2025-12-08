@@ -7,7 +7,7 @@ export const getWeatherLabel = (code) => {
   if (code >= 45 && code <= 48) return 'Fog';
   if (code >= 51 && code <= 67) return 'Drizzle/Rain';
   if (code >= 71 && code <= 77) return 'Snow';
-  if (code >= 80 && rod } return 'Showers';
+  if (code >= 80 && code <= 82) return 'Showers';
   if (code >= 95 && code <= 99) return 'Thunderstorm';
   return 'Unknown';
 };
@@ -90,5 +90,15 @@ export const Styles = () => (
   <style>{`
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    .native-input {
+      font-family: inherit;
+      font-size: 15px;
+      line-height: 1.5;
+      color: #111827;
+    }
+    .dark .native-input { color: #e5e7eb; }
+
+    textarea { caret-color: var(--accent-500); }
   `}</style>
 );
