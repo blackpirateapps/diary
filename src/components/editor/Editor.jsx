@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check } from 'lucide-react'; 
 import { useLiveQuery } from 'dexie-react-hooks';
-import AndroidBackspaceFixPlugin from './AndroidBackspaceFixPlugin';
 import BackspaceFixPlugin from './BackspaceFixPlugin';
 // Editor.jsx top imports (add these)
 import ToolbarPlugin from './ToolbarPlugin';
@@ -542,7 +541,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         <div className="min-h-[400px] relative">
                              <LexicalComposer initialConfig={initialConfig}>
                                {/* No ToolbarPlugin, relying on browser/Lexical defaults */}
-                               <AndroidBackspaceFixPlugin />
                                <BlockFormatDropDown />
               <FontSizeDropDown />
        <FontFamilyDropDown />
