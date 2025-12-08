@@ -514,7 +514,20 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     setIsExporting(true);
     try {
       const pdfImages = await Promise.all(images.map(img => blobToJpeg(img)));
-      const doc = <EntryPdfDocument entry={{ id: entryId, content: previewText || content, mood, location, weather, tags, images: pdfImages.filter(Boolean), date: currentDate.toISOString() }} moodLabel={MOODS_LABELS[mood]} sleepSessions={todaysSleepSessions} />;
+      const doc = <EntryPdfDocument 
+          entry={{ 
+            id: entryId, 
+            content: content, // <--- This holds the formatting JSON
+            mood, 
+            location, 
+            weather, 
+            tags, 
+            images: pdfImages.filter(Boolean), 
+            date: currentDate.toISOString() 
+          }} 
+          moodLabel={MOODS_LABELS[mood]} 
+          sleepSessions={todaysSleepSessions} 
+        />;
       const blob = await pdf(doc).toBlob();
       saveAs(blob, `Journal_${currentDate.toISOString().split('T')[0]}.pdf`);
     } catch (err) { alert("PDF Failed"); } finally { setIsExporting(false); }
