@@ -1,68 +1,53 @@
-// BackspaceFixPlugin.jsx
-import React, { useEffect } from 'react';
-import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { useEffect } from "react";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
+  KEY_BACKSPACE_COMMAND,
+  KEY_DELETE_COMMAND,
+  COMMAND_PRIORITY_HIGH,
   $getSelection,
   $isRangeSelection,
-  BACKSPACE_COMMAND,
-  DELETE_CHARACTER_COMMAND,
-  COMMAND_PRIORITY_HIGH,
-  COMMAND_PRIORITY_EDITOR,
-} from 'lexical';
-import { $isMentionNode, MentionNode } from './nodes/MentionNode';
+} from "lexical";
+import { $isMentionNode } from "./nodes/MentionNode";
 
 export default function BackspaceFixPlugin() {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    // Handle Backspace key
+    // BACKSPACE
     const unregisterBackspace = editor.registerCommand(
-      BACKSPACE_COMMAND,
-      (payload) => {
+      KEY_BACKSPACE_COMMAND,
+      (event) => {
         return editor.update(() => {
           const sel = $getSelection();
           if (!$isRangeSelection(sel)) return false;
 
-          // If selection is not collapsed, let default behaviour handle range deletion
-          if (!sel.isCollapsed()) {
-            return false;
-          }
+          // Only fix collapsed caret
+          if (!sel.isCollapsed()) return false;
 
           const anchor = sel.anchor;
           const node = anchor.getNode();
           const offset = anchor.offset;
 
-          // If caret is at offset 0 of the current text node, check the previous sibling
+          // caret at beginning of node?
           if (offset === 0) {
-            const prevSibling = node.getPreviousSibling();
-            if (prevSibling && $isMentionNode(prevSibling)) {
-              // Remove the mention node and stop the default double-delete
-              prevSibling.remove();
+            const prev = node.getPreviousSibling();
+            if (prev && $isMentionNode(prev)) {
+              prev.remove();
+              event.preventDefault();
               return true;
-            }
-
-            // If parent sibling is a mention (in some structures), check parent
-            const parent = node.getParent();
-            if (parent && parent.getPreviousSibling && parent.getPreviousSibling()) {
-              const pPrev = parent.getPreviousSibling();
-              if (pPrev && $isMentionNode(pPrev)) {
-                pPrev.remove();
-                return true;
-              }
             }
           }
 
-          // Otherwise allow default behaviour
-          return false;
+          return false; // allow default behavior
         });
       },
       COMMAND_PRIORITY_HIGH
     );
 
-    // Handle Delete key (delete forward). Similar logic but checks node after caret.
+    // DELETE FORWARD
     const unregisterDelete = editor.registerCommand(
-      DELETE_CHARACTER_COMMAND,
-      (payload) => {
+      KEY_DELETE_COMMAND,
+      (event) => {
         return editor.update(() => {
           const sel = $getSelection();
           if (!$isRangeSelection(sel)) return false;
@@ -72,22 +57,13 @@ export default function BackspaceFixPlugin() {
           const node = anchor.getNode();
           const offset = anchor.offset;
 
-          // If caret at end of node's text, check next sibling
+          // caret at end of node?
           if (offset === node.getTextContent().length) {
-            const nextSibling = node.getNextSibling();
-            if (nextSibling && $isMentionNode(nextSibling)) {
-              nextSibling.remove();
+            const next = node.getNextSibling();
+            if (next && $isMentionNode(next)) {
+              next.remove();
+              event.preventDefault();
               return true;
-            }
-
-            // Also check parent's next sibling
-            const parent = node.getParent();
-            if (parent && parent.getNextSibling && parent.getNextSibling()) {
-              const pNext = parent.getNextSibling();
-              if (pNext && $isMentionNode(pNext)) {
-                pNext.remove();
-                return true;
-              }
             }
           }
 
