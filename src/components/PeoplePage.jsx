@@ -249,13 +249,6 @@ const PersonProfile = ({ person, onBack, onEditEntry, onEditProfile }) => {
     <div className="bg-[#F3F4F6] dark:bg-gray-950 min-h-screen animate-slideUp absolute inset-0 z-30 flex flex-col">
         {/* Banner */}
         <div className="relative h-64 bg-gradient-to-b from-gray-200 to-[#F3F4F6] dark:from-gray-900 dark:to-gray-950">
-            {imageUrl && (
-                <>
-                    <img src={imageUrl} className="w-full h-full object-cover opacity-30 blur-xl scale-110" alt="" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#F3F4F6] dark:from-gray-950 via-transparent to-transparent" />
-                </>
-            )}
-            
             <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-10">
                <button onClick={onBack} className="p-2.5 bg-white/80 dark:bg-black/50 backdrop-blur-md rounded-full text-gray-900 dark:text-white hover:scale-105 transition-all shadow-sm">
                   <ChevronLeft size={24} />
