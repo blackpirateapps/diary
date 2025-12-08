@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun } from 'lucide-react';
+// REMOVED: import { motion, AnimatePresence } from 'framer-motion';
+import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check } from 'lucide-react'; // Added Pencil and Check
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { db, useBlobUrl } from '../../db'; 
@@ -31,7 +31,7 @@ import MentionsPlugin from './MentionsPlugin';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
-import EditorHeader from './EditorHeader';
+// REMOVED: import EditorHeader from './EditorHeader';
 import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
 import SleepWidget from './SleepWidget';
@@ -40,7 +40,8 @@ import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtil
 
 const BlobImage = ({ src, ...props }) => {
   const url = useBlobUrl(src);
-  return <motion.img src={url} {...props} />;
+  // Replaced motion.img with a standard img tag
+  return <img src={url} {...props} />;
 };
 
 const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
@@ -150,12 +151,77 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   return null;
 };
 
-// --- ANIMATION VARIANTS ---
-const containerVariants = {
-  hidden: { opacity: 0, scale: 0.95, y: 20 },
-  visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
-  exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } }
+// --- REMOVED ANIMATION VARIANTS ---
+// const containerVariants = {
+//   hidden: { opacity: 0, scale: 0.95, y: 20 },
+//   visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
+//   exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } }
+// };
+
+// --- NEW PAGE HEADER COMPONENT ---
+const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExporting, onDelete, toggleMode, mode }) => {
+    return (
+      <header className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-4 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300">
+            <ChevronLeft size={24} />
+          </button>
+          <span className="font-semibold text-gray-800 dark:text-gray-100">
+            {entry?.id ? 'Edit Entry' : 'New Entry'}
+          </span>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+            saveStatus === 'saved' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400' :
+            saveStatus === 'saving' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400' :
+            'text-gray-400 dark:text-gray-600'
+          }`}>
+            {saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : ''}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Toggle Edit/Preview Mode */}
+          <button 
+            onClick={toggleMode}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
+            title={mode === 'edit' ? 'Preview Mode' : 'Edit Mode'}
+          >
+            {mode === 'edit' ? <Check size={20} /> : <Pencil size={20} />}
+          </button>
+
+          {/* Delete Button */}
+          {entry?.id && (
+            <button 
+              onClick={onDelete} 
+              className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900 transition-colors text-red-600 dark:text-red-400"
+              title="Delete Entry"
+            >
+              <Trash2 size={20} />
+            </button>
+          )}
+
+          {/* Export Button (PDF) */}
+          <button 
+            onClick={onExport} 
+            disabled={isExporting}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 disabled:opacity-50"
+            title="Export to PDF"
+          >
+            {isExporting ? <span className="text-sm">...</span> : 'PDF'}
+          </button>
+          
+          {/* Zen Mode Button */}
+          <button 
+            onClick={onZen} 
+            className="p-2 rounded-full bg-[var(--accent-500)] text-white hover:bg-[var(--accent-600)] transition-colors"
+            title="Zen Mode"
+          >
+            <AlignLeft size={20} />
+          </button>
+        </div>
+      </header>
+    );
 };
+// --- END NEW PAGE HEADER COMPONENT ---
+
 
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [entryId] = useState(entry?.id || Date.now().toString());
@@ -416,40 +482,36 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         onBack={handleZenBack} 
       />
 
-      <AnimatePresence>
-        <motion.div 
-            className="fixed inset-0 bg-black/5 dark:bg-black/50 backdrop-blur-sm z-40 hidden lg:block"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => { saveData(false); onClose(); }}
-        />
+      {/* REMOVED: AnimatePresence and the dark background overlay */}
+      {/* REPLACED: motion.div with a standard div structure for page rendering */}
+      <div className="flex flex-col min-h-[calc(100vh-56px)] lg:min-h-full"> 
+          <EditorPageHeader 
+            onClose={onClose} 
+            saveStatus={saveStatus} 
+            onZen={() => setIsZenMode(true)} 
+            onExport={handleExportPdf} 
+            isExporting={isExporting} 
+            onDelete={() => { if(window.confirm('Are you sure you want to delete this entry?')) onDelete(entryId); }}
+            toggleMode={() => setMode(m => m === 'edit' ? 'preview' : 'edit')} 
+            mode={mode} 
+            onDone={() => { saveData(false); onClose(); }} 
+            entry={entry}
+          />
 
-        <motion.div 
-            className="fixed inset-0 lg:inset-8 lg:max-w-7xl lg:mx-auto bg-white dark:bg-gray-950 lg:rounded-2xl lg:shadow-2xl z-50 flex flex-col overflow-hidden font-sans transition-colors border border-gray-100 dark:border-gray-800 h-[100dvh] lg:h-auto" 
-            variants={containerVariants} initial="hidden" animate="visible" exit="exit"
-        >
-            <EditorHeader 
-              onClose={onClose} saveStatus={saveStatus} onZen={() => setIsZenMode(true)} 
-              onExport={handleExportPdf} isExporting={isExporting} onDelete={() => { if(window.confirm('Delete?')) onDelete(entryId); }}
-              toggleMode={() => setMode(m => m === 'edit' ? 'preview' : 'edit')} mode={mode} 
-              onDone={() => { saveData(false); onClose(); }} entryId={entry?.id}
-            />
-
-            <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
+          <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
                 <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col order-2 lg:order-1 max-w-full overflow-x-hidden">
-                    <AnimatePresence>
-                        {images.length > 0 && (
-                            <motion.div 
-                                initial={{ opacity: 0, height: 0 }} 
-                                animate={{ opacity: 1, height: "16rem" }} 
-                                exit={{ opacity: 0, height: 0 }} 
+                    {/* REMOVED motion.div, replaced with standard div */}
+                    {images.length > 0 && (
+                            <div 
+                                style={{ height: "16rem" }} // Manual style for height
                                 className="w-full relative group bg-gray-50 dark:bg-gray-900 flex-shrink-0"
                             >
                                 <BlobImage key={imgIndex} src={images[imgIndex]} className="w-full h-full object-cover opacity-90 transition-opacity hover:opacity-100" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-white/80 dark:from-gray-950/80 to-transparent pointer-events-none" />
                                 <button onClick={() => { if(window.confirm('Delete image?')) { setImages(i => i.filter((_,x) => x !== imgIndex)); setImgIndex(0); saveData(true); } }} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:bg-red-600"><Trash2 size={16}/></button>
-                            </motion.div>
+                            </div>
                         )}
-                    </AnimatePresence>
+                    {/* </AnimatePresence> */}
 
                     <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 lg:px-12 lg:py-12">
                         <div className="lg:hidden mb-6">
@@ -617,9 +679,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         <div className="lg:hidden h-2"></div>
                     </div>
                 </aside>
-            </div>
-        </motion.div>
-      </AnimatePresence>
+          </div>
+      </div>
     </>
   );
 };

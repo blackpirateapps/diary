@@ -251,7 +251,8 @@ const App = () => {
 
       {/* CONTENT AREA */}
       <div className="flex-1 w-full min-h-screen md:pl-64 transition-all">
-        <div className="max-w-xl md:max-w-full mx-auto pb-20 md:pb-8 relative min-h-screen">
+        {/* MODIFIED: Removed 'max-w-xl' so Editor can take full width when active. Removed 'relative' */}
+        <div className="md:max-w-full mx-auto pb-20 md:pb-8 min-h-screen"> 
           
           {isImporting && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
