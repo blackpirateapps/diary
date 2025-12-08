@@ -86,6 +86,60 @@ export const blobToJpeg = (blob) => {
   });
 };
 
+// --- FUZZY SEARCH UTILS ---
+export const levenshtein = (a, b) => {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
+  for (let j = 0; j <= a.length; j++) { matrix[0][j] = j; }
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+};
+
+export const findPeopleMatches = (text, people) => {
+  if (!text || !people.length) return [];
+  const words = text.split(/[\s,.]+/);
+  const matches = [];
+  const uniqueMap = new Set();
+
+  people.forEach(person => {
+    const parts = person.name.split(' ');
+    const firstName = parts[0].toLowerCase();
+    
+    // Check against words
+    words.forEach(word => {
+      if (word.length < 3) return; // Skip short words
+      const w = word.toLowerCase();
+      
+      // Exact or Fuzzy match (distance <= 2 for words >= 4 chars, else 1)
+      const dist = levenshtein(w, firstName);
+      const threshold = w.length > 4 ? 2 : 1;
+      
+      if (dist <= threshold) {
+        const key = `${person.id}-${word}`;
+        if (!uniqueMap.has(key)) {
+          uniqueMap.add(key);
+          matches.push({ person, matchWord: word });
+        }
+      }
+    });
+  });
+  return matches;
+};
+
 export const Styles = () => (
   <style>{`
     .no-scrollbar::-webkit-scrollbar { display: none; }

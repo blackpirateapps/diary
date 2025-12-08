@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-// REMOVED: import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check } from 'lucide-react'; // Added Pencil and Check
+import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check, UserPlus, Sparkles } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { db, useBlobUrl } from '../../db'; 
@@ -24,36 +23,32 @@ import { CodeNode } from '@lexical/code';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
 // --- MENTIONS IMPORTS ---
-import { $nodesOfType, $getRoot } from 'lexical';
-import { MentionNode } from './nodes/MentionNode'; 
+import { $nodesOfType, $getRoot, TextNode } from 'lexical';
+import { MentionNode, $createMentionNode } from './nodes/MentionNode'; 
 import MentionsPlugin from './MentionsPlugin';
 
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
-// REMOVED: import EditorHeader from './EditorHeader';
 import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
 import SleepWidget from './SleepWidget';
 import ToolbarPlugin from './ToolbarPlugin';
-import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtils';
+import { Styles, compressImage, blobToJpeg, getWeatherLabel, findPeopleMatches } from './editorUtils';
 
 const BlobImage = ({ src, ...props }) => {
   const url = useBlobUrl(src);
-  // Replaced motion.img with a standard img tag
   return <img src={url} {...props} />;
 };
 
 const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
 
-// --- CUSTOM PLUGINS ---
+// --- PLUGINS ---
 
-// 1. STATE SYNC & SESSION TRACKING PLUGIN
 const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate }) => {
   const [editor] = useLexicalComposerContext();
   const isFirstRender = useRef(true);
 
-  // Initialize State
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
@@ -75,7 +70,6 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate })
     }
   }, [content, editor]);
 
-  // Sync Changes & Track Sessions
   return (
     <OnChangePlugin
       onChange={(editorState) => {
@@ -84,7 +78,6 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate })
         editorState.read(() => {
             const textContent = $getRoot().getTextContent();
             onTextChange(textContent);
-            // Pass BOTH plain text (for logic) and JSON (for restoration)
             onSessionUpdate(textContent, jsonString); 
         });
       }}
@@ -92,7 +85,6 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate })
   );
 };
 
-// 2. MENTIONS TRACKER
 const MentionsTracker = ({ onChange }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -107,7 +99,6 @@ const MentionsTracker = ({ onChange }) => {
   return null;
 };
 
-// 3. MODE PLUGIN
 const EditorModePlugin = ({ mode }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -116,15 +107,11 @@ const EditorModePlugin = ({ mode }) => {
   return null;
 };
 
-// 4. TIME TRAVEL PLUGIN (NEW)
-// This listens to the selected session index and updates the editor content accordingly
 const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   const [editor] = useLexicalComposerContext();
   
   useEffect(() => {
     if (!isPreviewMode || !sessions || sessions.length === 0) return;
-    
-    // Safety check for index
     const index = Math.min(Math.max(0, activeIndex), sessions.length - 1);
     const session = sessions[index];
     const content = session?.contentSnapshot;
@@ -133,7 +120,6 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
 
     editor.update(() => {
         try {
-            // Try to parse as JSON (Rich Text Snapshot)
             const jsonState = JSON.parse(content);
             if (jsonState.root) {
                 const editorState = editor.parseEditorState(jsonState);
@@ -141,8 +127,6 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
                 return;
             }
         } catch (e) {
-            // Fallback: It's plain text/markdown (Legacy Snapshot)
-            // We treat it as Markdown to preserve basic lists/headers if possible
             $convertFromMarkdownString(String(content), TRANSFORMERS);
         }
     });
@@ -151,14 +135,98 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   return null;
 };
 
-// --- REMOVED ANIMATION VARIANTS ---
-// const containerVariants = {
-//   hidden: { opacity: 0, scale: 0.95, y: 20 },
-//   visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
-//   exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } }
-// };
+// --- NEW COMPONENT: PEOPLE SUGGESTIONS SIDEBAR ---
+const PeopleSuggestions = ({ contentText }) => {
+  const [editor] = useLexicalComposerContext();
+  const people = useLiveQuery(() => db.people.toArray()) || [];
+  const [suggestions, setSuggestions] = useState([]);
 
-// --- NEW PAGE HEADER COMPONENT ---
+  useEffect(() => {
+    const matches = findPeopleMatches(contentText, people);
+    // Filter matches to unique people for the UI list
+    const unique = [];
+    const seen = new Set();
+    matches.forEach(m => {
+        if(!seen.has(m.person.id)) {
+            seen.add(m.person.id);
+            unique.push(m);
+        }
+    });
+    setSuggestions(unique);
+  }, [contentText, people]);
+
+  const replaceWithMention = (person, matchWord) => {
+    editor.update(() => {
+        const root = $getRoot();
+        const textNodes = root.getAllTextNodes();
+        
+        for (const node of textNodes) {
+            const text = node.getTextContent();
+            // Simple regex to find the word boundary
+            const regex = new RegExp(`\\b${matchWord}\\b`, 'i');
+            const match = regex.exec(text);
+            
+            if (match) {
+                // We found the text node containing the word.
+                // We need to split it and insert the mention.
+                const startOffset = match.index;
+                const endOffset = startOffset + match[0].length;
+                
+                let targetNode = node;
+                
+                if (startOffset > 0) {
+                    targetNode = targetNode.splitText(startOffset)[1];
+                }
+                if (targetNode) {
+                    // Split again to isolate the word
+                    const remainingNode = targetNode.splitText(match[0].length)[1]; // The part after
+                    
+                    // targetNode is now just the word. Replace it.
+                    const mentionNode = $createMentionNode(person.name, person.id, null);
+                    targetNode.replace(mentionNode);
+                }
+                break; // Stop after first replacement for better UX
+            }
+        }
+    });
+  };
+
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl p-3 shadow-sm mb-6 animate-fadeIn">
+        <div className="flex items-center gap-2 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
+            <Sparkles size={14} className="text-[var(--accent-500)]" />
+            <span>Detected People</span>
+        </div>
+        <div className="space-y-2">
+            {suggestions.map(({ person, matchWord }) => (
+                <div key={person.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex-shrink-0">
+                             {/* Small avatar if available would go here */}
+                             <span className="flex items-center justify-center w-full h-full text-[10px] font-bold">{person.name[0]}</span>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">{person.name}</span>
+                            <span className="text-[10px] text-gray-400">Matches "{matchWord}"</span>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => replaceWithMention(person, matchWord)}
+                        className="p-1.5 bg-[var(--accent-50)] text-[var(--accent-600)] rounded-md hover:bg-[var(--accent-100)] transition-colors"
+                        title="Convert to Mention"
+                    >
+                        <UserPlus size={16} />
+                    </button>
+                </div>
+            ))}
+        </div>
+    </div>
+  );
+};
+
+// --- HEADER ---
 const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExporting, onDelete, toggleMode, mode }) => {
     return (
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-4 flex items-center justify-between flex-shrink-0">
@@ -178,7 +246,6 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Toggle Edit/Preview Mode */}
           <button 
             onClick={toggleMode}
             className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
@@ -187,7 +254,6 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
             {mode === 'edit' ? <Check size={20} /> : <Pencil size={20} />}
           </button>
 
-          {/* Delete Button */}
           {entry?.id && (
             <button 
               onClick={onDelete} 
@@ -198,7 +264,6 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
             </button>
           )}
 
-          {/* Export Button (PDF) */}
           <button 
             onClick={onExport} 
             disabled={isExporting}
@@ -208,7 +273,6 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
             {isExporting ? <span className="text-sm">...</span> : 'PDF'}
           </button>
           
-          {/* Zen Mode Button */}
           <button 
             onClick={onZen} 
             className="p-2 rounded-full bg-[var(--accent-500)] text-white hover:bg-[var(--accent-600)] transition-colors"
@@ -220,9 +284,8 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
       </header>
     );
 };
-// --- END NEW PAGE HEADER COMPONENT ---
 
-
+// --- MAIN EDITOR ---
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [entryId] = useState(entry?.id || Date.now().toString());
   const [currentDate, setCurrentDate] = useState(entry?.date ? new Date(entry.date) : new Date());
@@ -233,23 +296,20 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [content, setContent] = useState(entry?.content || '');
   const [previewText, setPreviewText] = useState(entry?.preview || ''); 
   
-  // --- SESSION STATE ---
   const [sessions, setSessions] = useState(() => {
     if (entry?.sessions && entry.sessions.length > 0) return entry.sessions;
     if (entry?.content) {
       return [{
         startTime: entry.date || new Date().toISOString(),
         endTime: entry.date || new Date().toISOString(),
-        contentSnapshot: entry.content // Legacy: Start with existing content
+        contentSnapshot: entry.content 
       }];
     }
     return [];
   });
 
-  // State for the Visualizer Slider
   const [previewSessionIndex, setPreviewSessionIndex] = useState(sessions.length - 1);
 
-  // Sync preview index when sessions update (auto-follow latest)
   useEffect(() => {
       if (mode === 'edit') {
           setPreviewSessionIndex(sessions.length - 1);
@@ -293,11 +353,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
   
-  const [zenSettings] = useState(() => {
-     const saved = localStorage.getItem('zen_settings');
-     return saved ? JSON.parse(saved) : {};
-  });
-
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
   const todaysSleepSessions = sleepSessions.filter(session => 
     new Date(session.startTime).toDateString() === currentDate.toDateString()
@@ -305,13 +360,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const wordCount = previewText.trim().split(/\s+/).filter(Boolean).length;
 
-  // --- SESSION LOGIC ---
   const handleSessionUpdate = useCallback((currentText, currentJSON) => {
     const now = Date.now();
     const timeSinceLastType = now - lastTypeTimeRef.current;
     const SESSION_TIMEOUT = 5 * 60 * 1000; 
 
-    // We save the JSON if available to preserve formatting, otherwise text
     const snapshotToSave = currentJSON || currentText;
 
     setSessions(prevSessions => {
@@ -390,7 +443,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   }, [content, saveData, entry?.content]);
 
-  // Handlers
   const handleZenBack = (finalContent) => {
     if (typeof finalContent === 'string') {
         contentRef.current = finalContent; 
@@ -482,8 +534,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         onBack={handleZenBack} 
       />
 
-      {/* REMOVED: AnimatePresence and the dark background overlay */}
-      {/* REPLACED: motion.div with a standard div structure for page rendering */}
       <div className="flex flex-col min-h-[calc(100vh-56px)] lg:min-h-full"> 
           <EditorPageHeader 
             onClose={onClose} 
@@ -498,12 +548,14 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             entry={entry}
           />
 
-          <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
+          {/* LexicalComposer wraps the entire layout to allow sidebar interaction */}
+          <LexicalComposer initialConfig={initialConfig}>
+            <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
                 <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col order-2 lg:order-1 max-w-full overflow-x-hidden">
-                    {/* REMOVED motion.div, replaced with standard div */}
+                    
                     {images.length > 0 && (
                             <div 
-                                style={{ height: "16rem" }} // Manual style for height
+                                style={{ height: "16rem" }}
                                 className="w-full relative group bg-gray-50 dark:bg-gray-900 flex-shrink-0"
                             >
                                 <BlobImage key={imgIndex} src={images[imgIndex]} className="w-full h-full object-cover opacity-90 transition-opacity hover:opacity-100" />
@@ -511,7 +563,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                 <button onClick={() => { if(window.confirm('Delete image?')) { setImages(i => i.filter((_,x) => x !== imgIndex)); setImgIndex(0); saveData(true); } }} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:bg-red-600"><Trash2 size={16}/></button>
                             </div>
                         )}
-                    {/* </AnimatePresence> */}
 
                     <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 lg:px-12 lg:py-12">
                         <div className="lg:hidden mb-6">
@@ -531,16 +582,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         </div>
 
                         <div className="min-h-[400px] relative">
-                             {/* ALWAYS Render Editor, just toggle editable/readonly mode */}
-                             <LexicalComposer initialConfig={initialConfig}>
-                               {/* Only show toolbar in Edit Mode */}
                                {mode === 'edit' && <ToolbarPlugin />}
                                
                                <EditorModePlugin mode={mode} />
                                <MentionsPlugin />
                                <MentionsTracker onChange={setTaggedPeople} />
                                
-                               {/* Time Travel Plugin: Updates the editor content based on the selected session in preview mode */}
                                <TimeTravelPlugin 
                                   sessions={sessions} 
                                   activeIndex={previewSessionIndex} 
@@ -562,7 +609,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                <ListPlugin />
                                <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
                                
-                               {/* Editor State Sync: Only active if NOT in preview mode (to prevent session slider from overwriting actual state) */}
                                {mode === 'edit' && (
                                  <EditorStatePlugin 
                                    content={content} 
@@ -574,9 +620,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                    onSessionUpdate={handleSessionUpdate}
                                  />
                                )}
-                             </LexicalComposer>
 
-                             {/* TIME TRAVEL SLIDER (Visible only in Preview Mode) */}
                              {mode === 'preview' && (
                                 <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-6">
                                    <div className="flex items-center gap-2 mb-4">
@@ -584,7 +628,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                       <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Time Travel</h3>
                                    </div>
                                    
-                                   {/* Reusing SessionVisualizer UI but stripping its internal text rendering */}
                                    <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
                                       <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
                                          <span>Start</span>
@@ -653,6 +696,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     </div>
 
                     <div className="flex flex-col gap-6">
+                        {/* New Tooltip Component for Fuzzy Matching */}
+                        {mode === 'edit' && <PeopleSuggestions contentText={previewText} />}
+
                         <div className="hidden lg:block">
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Context</label>
                             <MetadataBar 
@@ -680,6 +726,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     </div>
                 </aside>
           </div>
+        </LexicalComposer>
       </div>
     </>
   );
