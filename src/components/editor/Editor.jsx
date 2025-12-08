@@ -1,11 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check } from 'lucide-react'; 
+// REMOVED: import { motion, AnimatePresence } from 'framer-motion';
+import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check } from 'lucide-react'; // Added Pencil and Check
 import { useLiveQuery } from 'dexie-react-hooks';
-import BackspaceFixPlugin from './BackspaceFixPlugin';
-import ToolbarPlugin from './ToolbarPlugin'; // New unified toolbar
-import ColorPickerPlugin from './ColorPickerPlugin';
-import FloatingTextFormatToolbarPlugin from './FloatingTextFormatToolbarPlugin';
-import FloatingLinkEditorPlugin from './FloatingLinkEditorPlugin';
 
 import { db, useBlobUrl } from '../../db'; 
 import EntryPdfDocument from './EntryPdfDocument'; 
@@ -35,23 +31,16 @@ import MentionsPlugin from './MentionsPlugin';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
+// REMOVED: import EditorHeader from './EditorHeader';
 import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
 import SleepWidget from './SleepWidget';
+import ToolbarPlugin from './ToolbarPlugin';
 import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtils';
-
-// --- DEBOUNCE UTILITY ---
-const debounce = (func, delay) => {
-  let timeout;
-  return function(...args) {
-    const context = this;
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(context, args), delay);
-  };
-};
 
 const BlobImage = ({ src, ...props }) => {
   const url = useBlobUrl(src);
+  // Replaced motion.img with a standard img tag
   return <img src={url} {...props} />;
 };
 
@@ -59,10 +48,12 @@ const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: '
 
 // --- CUSTOM PLUGINS ---
 
+// 1. STATE SYNC & SESSION TRACKING PLUGIN
 const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate }) => {
   const [editor] = useLexicalComposerContext();
   const isFirstRender = useRef(true);
 
+  // Initialize State
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
@@ -84,14 +75,16 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate })
     }
   }, [content, editor]);
 
+  // Sync Changes & Track Sessions
   return (
     <OnChangePlugin
       onChange={(editorState) => {
         const jsonString = JSON.stringify(editorState.toJSON());
-        onChange(jsonString); 
+        onChange(jsonString);
         editorState.read(() => {
             const textContent = $getRoot().getTextContent();
-            onTextChange(textContent); 
+            onTextChange(textContent);
+            // Pass BOTH plain text (for logic) and JSON (for restoration)
             onSessionUpdate(textContent, jsonString); 
         });
       }}
@@ -99,6 +92,7 @@ const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate })
   );
 };
 
+// 2. MENTIONS TRACKER
 const MentionsTracker = ({ onChange }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -113,6 +107,7 @@ const MentionsTracker = ({ onChange }) => {
   return null;
 };
 
+// 3. MODE PLUGIN
 const EditorModePlugin = ({ mode }) => {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -121,12 +116,15 @@ const EditorModePlugin = ({ mode }) => {
   return null;
 };
 
+// 4. TIME TRAVEL PLUGIN (NEW)
+// This listens to the selected session index and updates the editor content accordingly
 const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   const [editor] = useLexicalComposerContext();
   
   useEffect(() => {
     if (!isPreviewMode || !sessions || sessions.length === 0) return;
     
+    // Safety check for index
     const index = Math.min(Math.max(0, activeIndex), sessions.length - 1);
     const session = sessions[index];
     const content = session?.contentSnapshot;
@@ -135,6 +133,7 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
 
     editor.update(() => {
         try {
+            // Try to parse as JSON (Rich Text Snapshot)
             const jsonState = JSON.parse(content);
             if (jsonState.root) {
                 const editorState = editor.parseEditorState(jsonState);
@@ -142,6 +141,8 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
                 return;
             }
         } catch (e) {
+            // Fallback: It's plain text/markdown (Legacy Snapshot)
+            // We treat it as Markdown to preserve basic lists/headers if possible
             $convertFromMarkdownString(String(content), TRANSFORMERS);
         }
     });
@@ -150,6 +151,14 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   return null;
 };
 
+// --- REMOVED ANIMATION VARIANTS ---
+// const containerVariants = {
+//   hidden: { opacity: 0, scale: 0.95, y: 20 },
+//   visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
+//   exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } }
+// };
+
+// --- NEW PAGE HEADER COMPONENT ---
 const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExporting, onDelete, toggleMode, mode }) => {
     return (
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-4 flex items-center justify-between flex-shrink-0">
@@ -169,6 +178,7 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Toggle Edit/Preview Mode */}
           <button 
             onClick={toggleMode}
             className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
@@ -177,9 +187,10 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
             {mode === 'edit' ? <Check size={20} /> : <Pencil size={20} />}
           </button>
 
+          {/* Delete Button */}
           {entry?.id && (
             <button 
-              onClick={() => { if(window.confirm('Delete?')) onDelete(entry.id); }} 
+              onClick={onDelete} 
               className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900 transition-colors text-red-600 dark:text-red-400"
               title="Delete Entry"
             >
@@ -187,6 +198,7 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
             </button>
           )}
 
+          {/* Export Button (PDF) */}
           <button 
             onClick={onExport} 
             disabled={isExporting}
@@ -196,6 +208,7 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
             {isExporting ? <span className="text-sm">...</span> : 'PDF'}
           </button>
           
+          {/* Zen Mode Button */}
           <button 
             onClick={onZen} 
             className="p-2 rounded-full bg-[var(--accent-500)] text-white hover:bg-[var(--accent-600)] transition-colors"
@@ -207,6 +220,8 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
       </header>
     );
 };
+// --- END NEW PAGE HEADER COMPONENT ---
+
 
 const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [entryId] = useState(entry?.id || Date.now().toString());
@@ -218,20 +233,23 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [content, setContent] = useState(entry?.content || '');
   const [previewText, setPreviewText] = useState(entry?.preview || ''); 
   
+  // --- SESSION STATE ---
   const [sessions, setSessions] = useState(() => {
     if (entry?.sessions && entry.sessions.length > 0) return entry.sessions;
     if (entry?.content) {
       return [{
         startTime: entry.date || new Date().toISOString(),
         endTime: entry.date || new Date().toISOString(),
-        contentSnapshot: entry.content
+        contentSnapshot: entry.content // Legacy: Start with existing content
       }];
     }
     return [];
   });
 
+  // State for the Visualizer Slider
   const [previewSessionIndex, setPreviewSessionIndex] = useState(sessions.length - 1);
 
+  // Sync preview index when sessions update (auto-follow latest)
   useEffect(() => {
       if (mode === 'edit') {
           setPreviewSessionIndex(sessions.length - 1);
@@ -267,9 +285,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
 
-  // Ref for the hidden file input used by ToolbarPlugin
-  const fileInputRef = useRef(null);
-
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -278,6 +293,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
   
+  const [zenSettings] = useState(() => {
+     const saved = localStorage.getItem('zen_settings');
+     return saved ? JSON.parse(saved) : {};
+  });
+
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
   const todaysSleepSessions = sleepSessions.filter(session => 
     new Date(session.startTime).toDateString() === currentDate.toDateString()
@@ -285,42 +305,45 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const wordCount = previewText.trim().split(/\s+/).filter(Boolean).length;
 
-  const debouncedSessionUpdate = useMemo(
-      () => debounce((currentText, currentJSON) => {
-          const now = Date.now();
-          const timeSinceLastType = now - lastTypeTimeRef.current;
-          const SESSION_TIMEOUT = 5 * 60 * 1000; 
-          const snapshotToSave = currentJSON || currentText;
+  // --- SESSION LOGIC ---
+  const handleSessionUpdate = useCallback((currentText, currentJSON) => {
+    const now = Date.now();
+    const timeSinceLastType = now - lastTypeTimeRef.current;
+    const SESSION_TIMEOUT = 5 * 60 * 1000; 
 
-          setSessions(prevSessions => {
-              let newSessions = [...prevSessions];
-              
-              if (newSessions.length === 0 || timeSinceLastType > SESSION_TIMEOUT) {
-                  newSessions.push({
-                      startTime: new Date().toISOString(),
-                      endTime: new Date().toISOString(),
-                      contentSnapshot: snapshotToSave
-                  });
-              } else {
-                  const lastIndex = newSessions.length - 1;
-                  newSessions[lastIndex] = {
-                      ...newSessions[lastIndex],
-                      endTime: new Date().toISOString(),
-                      contentSnapshot: snapshotToSave
-                  };
-              }
-              return newSessions;
-          });
+    // We save the JSON if available to preserve formatting, otherwise text
+    const snapshotToSave = currentJSON || currentText;
 
-          lastTypeTimeRef.current = now; 
-      }, 500), 
-      []
-  );
+    setSessions(prevSessions => {
+      let newSessions = [...prevSessions];
+      
+      if (newSessions.length === 0) {
+        newSessions.push({
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          contentSnapshot: snapshotToSave
+        });
+      } 
+      else if (timeSinceLastType > SESSION_TIMEOUT) {
+        newSessions.push({
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          contentSnapshot: snapshotToSave
+        });
+      } 
+      else {
+        const lastIndex = newSessions.length - 1;
+        newSessions[lastIndex] = {
+          ...newSessions[lastIndex],
+          endTime: new Date().toISOString(),
+          contentSnapshot: snapshotToSave
+        };
+      }
+      return newSessions;
+    });
 
-  const handleSessionUpdateWrapper = useCallback((currentText, currentJSON) => {
-      setPreviewText(currentText);
-      debouncedSessionUpdate(currentText, currentJSON);
-  }, [debouncedSessionUpdate]);
+    lastTypeTimeRef.current = now;
+  }, []);
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -367,6 +390,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   }, [content, saveData, entry?.content]);
 
+  // Handlers
   const handleZenBack = (finalContent) => {
     if (typeof finalContent === 'string') {
         contentRef.current = finalContent; 
@@ -398,11 +422,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       } catch (err) { alert(err.message); } 
       finally { setUploading(false); e.target.value = ''; }
     }
-  };
-
-  // Defined here to fix the ReferenceError
-  const handleInsertImage = () => {
-    fileInputRef.current?.click();
   };
 
   const handleLocation = async () => {
@@ -443,10 +462,17 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const initialConfig = useMemo(() => ({
     namespace: 'MainEditor',
+    theme: {
+      paragraph: 'mb-4',
+      heading: { h1: 'text-3xl font-bold mb-4 mt-6', h2: 'text-2xl font-bold mb-3 mt-5', h3: 'text-xl font-bold mb-2 mt-4' },
+      list: { ul: 'list-disc ml-5 mb-4', ol: 'list-decimal ml-5 mb-4' },
+      quote: 'border-l-4 border-gray-300 pl-4 italic my-4 text-gray-500',
+      text: { bold: 'font-bold', italic: 'italic', underline: 'underline', code: 'bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 font-mono text-sm text-pink-500' }
+    },
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
-  }), [mode]); 
+  }), []); 
 
   return (
     <>
@@ -456,14 +482,16 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         onBack={handleZenBack} 
       />
 
-      <div className="flex flex-col min-h-[calc(100vh-56px)] lg:min-h-full">
+      {/* REMOVED: AnimatePresence and the dark background overlay */}
+      {/* REPLACED: motion.div with a standard div structure for page rendering */}
+      <div className="flex flex-col min-h-[calc(100vh-56px)] lg:min-h-full"> 
           <EditorPageHeader 
             onClose={onClose} 
             saveStatus={saveStatus} 
             onZen={() => setIsZenMode(true)} 
             onExport={handleExportPdf} 
             isExporting={isExporting} 
-            onDelete={() => { if(window.confirm('Delete?')) onDelete(entryId); }}
+            onDelete={() => { if(window.confirm('Are you sure you want to delete this entry?')) onDelete(entryId); }}
             toggleMode={() => setMode(m => m === 'edit' ? 'preview' : 'edit')} 
             mode={mode} 
             onDone={() => { saveData(false); onClose(); }} 
@@ -472,9 +500,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
           <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
                 <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col order-2 lg:order-1 max-w-full overflow-x-hidden">
+                    {/* REMOVED motion.div, replaced with standard div */}
                     {images.length > 0 && (
                             <div 
-                                style={{ height: "16rem" }} 
+                                style={{ height: "16rem" }} // Manual style for height
                                 className="w-full relative group bg-gray-50 dark:bg-gray-900 flex-shrink-0"
                             >
                                 <BlobImage key={imgIndex} src={images[imgIndex]} className="w-full h-full object-cover opacity-90 transition-opacity hover:opacity-100" />
@@ -482,14 +511,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                 <button onClick={() => { if(window.confirm('Delete image?')) { setImages(i => i.filter((_,x) => x !== imgIndex)); setImgIndex(0); saveData(true); } }} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:bg-red-600"><Trash2 size={16}/></button>
                             </div>
                         )}
-
-                    <input 
-                      type="file" 
-                      ref={fileInputRef} 
-                      className="hidden" 
-                      accept="image/*" 
-                      onChange={handleImageUpload} 
-                    />
+                    {/* </AnimatePresence> */}
 
                     <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 lg:px-12 lg:py-12">
                         <div className="lg:hidden mb-6">
@@ -509,17 +531,16 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         </div>
 
                         <div className="min-h-[400px] relative">
+                             {/* ALWAYS Render Editor, just toggle editable/readonly mode */}
                              <LexicalComposer initialConfig={initialConfig}>
-                               {/* New Unified Toolbar */}
-                               <ToolbarPlugin onInsertImage={handleInsertImage} />
+                               {/* Only show toolbar in Edit Mode */}
+                               {mode === 'edit' && <ToolbarPlugin />}
                                
-                               {/* Other Functional Plugins */}
                                <EditorModePlugin mode={mode} />
                                <MentionsPlugin />
                                <MentionsTracker onChange={setTaggedPeople} />
-                               <BackspaceFixPlugin />
-                               <ColorPickerPlugin /> 
                                
+                               {/* Time Travel Plugin: Updates the editor content based on the selected session in preview mode */}
                                <TimeTravelPlugin 
                                   sessions={sessions} 
                                   activeIndex={previewSessionIndex} 
@@ -528,10 +549,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
                                <RichTextPlugin
                                  contentEditable={
-                                   <ContentEditable className="outline-none min-h-[400px] text-gray-800 dark:text-gray-200 p-2" />
+                                   <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
                                  }
                                  placeholder={
-                                   <div className="absolute top-14 left-2 text-gray-300 dark:text-gray-700 pointer-events-none select-none">
+                                   <div className="absolute top-16 lg:top-14 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
                                      Start writing here...
                                    </div>
                                  }
@@ -541,18 +562,21 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                <ListPlugin />
                                <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
                                
+                               {/* Editor State Sync: Only active if NOT in preview mode (to prevent session slider from overwriting actual state) */}
                                {mode === 'edit' && (
                                  <EditorStatePlugin 
                                    content={content} 
                                    onChange={setContent} 
                                    onTextChange={(text) => {
+                                      setPreviewText(text);
                                       previewRef.current = text;
                                    }}
-                                   onSessionUpdate={handleSessionUpdateWrapper}
+                                   onSessionUpdate={handleSessionUpdate}
                                  />
                                )}
                              </LexicalComposer>
 
+                             {/* TIME TRAVEL SLIDER (Visible only in Preview Mode) */}
                              {mode === 'preview' && (
                                 <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-6">
                                    <div className="flex items-center gap-2 mb-4">
@@ -560,6 +584,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                       <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Time Travel</h3>
                                    </div>
                                    
+                                   {/* Reusing SessionVisualizer UI but stripping its internal text rendering */}
                                    <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
                                       <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
                                          <span>Start</span>
@@ -586,6 +611,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                              )}
                         </div>
 
+                        {/* MOBILE ONLY: Tags and Sleep at the bottom */}
                         <div className="lg:hidden mt-12 pt-8 border-t border-gray-100 dark:border-gray-800">
                            <div className="mb-8">
                               <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
