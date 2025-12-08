@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-// REMOVED: import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check } from 'lucide-react'; // Added Pencil and Check
+// REMOVED: motion, AnimatePresence as per previous request
+import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check } from 'lucide-react'; 
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { db, useBlobUrl } from '../../db'; 
@@ -31,7 +31,6 @@ import MentionsPlugin from './MentionsPlugin';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
-// REMOVED: import EditorHeader from './EditorHeader';
 import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
 import SleepWidget from './SleepWidget';
@@ -40,7 +39,6 @@ import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtil
 
 const BlobImage = ({ src, ...props }) => {
   const url = useBlobUrl(src);
-  // Replaced motion.img with a standard img tag
   return <img src={url} {...props} />;
 };
 
@@ -151,13 +149,6 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   return null;
 };
 
-// --- REMOVED ANIMATION VARIANTS ---
-// const containerVariants = {
-//   hidden: { opacity: 0, scale: 0.95, y: 20 },
-//   visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
-//   exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } }
-// };
-
 // --- NEW PAGE HEADER COMPONENT ---
 const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExporting, onDelete, toggleMode, mode }) => {
     return (
@@ -190,7 +181,7 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
           {/* Delete Button */}
           {entry?.id && (
             <button 
-              onClick={onDelete} 
+              onClick={() => { if(window.confirm('Delete?')) onDelete(entry.id); }} 
               className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900 transition-colors text-red-600 dark:text-red-400"
               title="Delete Entry"
             >
@@ -463,16 +454,30 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const initialConfig = useMemo(() => ({
     namespace: 'MainEditor',
     theme: {
+      // MODIFIED: Simplified styles to be block-level, removing custom fonts/sizes from the theme
       paragraph: 'mb-4',
-      heading: { h1: 'text-3xl font-bold mb-4 mt-6', h2: 'text-2xl font-bold mb-3 mt-5', h3: 'text-xl font-bold mb-2 mt-4' },
-      list: { ul: 'list-disc ml-5 mb-4', ol: 'list-decimal ml-5 mb-4' },
+      heading: { 
+        h1: 'text-3xl font-bold mb-4 mt-6', 
+        h2: 'text-2xl font-bold mb-3 mt-5', 
+        h3: 'text-xl font-bold mb-2 mt-4' 
+      },
+      list: { 
+        ul: 'list-disc ml-5 mb-4', 
+        ol: 'list-decimal ml-5 mb-4' 
+      },
       quote: 'border-l-4 border-gray-300 pl-4 italic my-4 text-gray-500',
-      text: { bold: 'font-bold', italic: 'italic', underline: 'underline', code: 'bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 font-mono text-sm text-pink-500' }
+      text: { 
+        bold: 'font-bold', 
+        italic: 'italic', 
+        underline: 'underline', 
+        // Using minimal, standard classes for inline elements
+        code: 'bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 font-mono text-sm text-pink-500' 
+      }
     },
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
-  }), []); 
+  }), [mode]); // Dependency on mode is crucial
 
   return (
     <>
@@ -482,16 +487,14 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         onBack={handleZenBack} 
       />
 
-      {/* REMOVED: AnimatePresence and the dark background overlay */}
-      {/* REPLACED: motion.div with a standard div structure for page rendering */}
-      <div className="flex flex-col min-h-[calc(100vh-56px)] lg:min-h-full"> 
+      <div className="flex flex-col min-h-[calc(100vh-56px)] lg:min-h-full">
           <EditorPageHeader 
             onClose={onClose} 
             saveStatus={saveStatus} 
             onZen={() => setIsZenMode(true)} 
             onExport={handleExportPdf} 
             isExporting={isExporting} 
-            onDelete={() => { if(window.confirm('Are you sure you want to delete this entry?')) onDelete(entryId); }}
+            onDelete={() => { if(window.confirm('Delete?')) onDelete(entryId); }}
             toggleMode={() => setMode(m => m === 'edit' ? 'preview' : 'edit')} 
             mode={mode} 
             onDone={() => { saveData(false); onClose(); }} 
@@ -500,10 +503,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
           <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-white dark:bg-gray-950">
                 <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col order-2 lg:order-1 max-w-full overflow-x-hidden">
-                    {/* REMOVED motion.div, replaced with standard div */}
                     {images.length > 0 && (
                             <div 
-                                style={{ height: "16rem" }} // Manual style for height
+                                style={{ height: "16rem" }} 
                                 className="w-full relative group bg-gray-50 dark:bg-gray-900 flex-shrink-0"
                             >
                                 <BlobImage key={imgIndex} src={images[imgIndex]} className="w-full h-full object-cover opacity-90 transition-opacity hover:opacity-100" />
@@ -511,7 +513,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                 <button onClick={() => { if(window.confirm('Delete image?')) { setImages(i => i.filter((_,x) => x !== imgIndex)); setImgIndex(0); saveData(true); } }} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:bg-red-600"><Trash2 size={16}/></button>
                             </div>
                         )}
-                    {/* </AnimatePresence> */}
 
                     <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 lg:px-12 lg:py-12">
                         <div className="lg:hidden mb-6">
@@ -531,16 +532,13 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         </div>
 
                         <div className="min-h-[400px] relative">
-                             {/* ALWAYS Render Editor, just toggle editable/readonly mode */}
                              <LexicalComposer initialConfig={initialConfig}>
-                               {/* Only show toolbar in Edit Mode */}
                                {mode === 'edit' && <ToolbarPlugin />}
                                
                                <EditorModePlugin mode={mode} />
                                <MentionsPlugin />
                                <MentionsTracker onChange={setTaggedPeople} />
                                
-                               {/* Time Travel Plugin: Updates the editor content based on the selected session in preview mode */}
                                <TimeTravelPlugin 
                                   sessions={sessions} 
                                   activeIndex={previewSessionIndex} 
@@ -549,10 +547,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
                                <RichTextPlugin
                                  contentEditable={
-                                   <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
+                                   // MODIFIED: Simplified ContentEditable classes to only control basic appearance/spacing
+                                   <ContentEditable className="outline-none text-base lg:text-lg text-gray-800 dark:text-gray-200 leading-normal min-h-[400px] p-0" />
                                  }
                                  placeholder={
-                                   <div className="absolute top-16 lg:top-14 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
+                                   // MODIFIED: Simplified Placeholder classes
+                                   <div className="absolute top-0 lg:top-0 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-base lg:text-lg select-none">
                                      Start writing here...
                                    </div>
                                  }
@@ -562,7 +562,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                <ListPlugin />
                                <MarkdownShortcutPlugin transformers={TRANSFORMERS} /> 
                                
-                               {/* Editor State Sync: Only active if NOT in preview mode (to prevent session slider from overwriting actual state) */}
                                {mode === 'edit' && (
                                  <EditorStatePlugin 
                                    content={content} 
@@ -584,7 +583,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                       <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Time Travel</h3>
                                    </div>
                                    
-                                   {/* Reusing SessionVisualizer UI but stripping its internal text rendering */}
                                    <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
                                       <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
                                          <span>Start</span>
