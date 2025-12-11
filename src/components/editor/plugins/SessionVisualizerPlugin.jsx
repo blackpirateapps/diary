@@ -6,7 +6,7 @@ import { $createSessionDividerNode, $isSessionDividerNode } from '../nodes/Sessi
 
 const formatDuration = (start, end) => {
   const diff = new Date(end).getTime() - new Date(start).getTime();
-  if (diff < 60000) return null; // Less than 1 minute
+  if (diff < 60000) return null;
   
   const mins = Math.floor(diff / 60000);
   return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
@@ -24,7 +24,6 @@ export default function SessionVisualizerPlugin({ sessions }) {
     console.log('🔍 Visualizer loaded with sessions:', sessions);
 
     return editor.registerUpdateListener(({ tags }) => {
-      // Prevent infinite loop - ignore updates we triggered ourselves
       if (tags.has('session-visualizer')) return;
 
       editor.update(
@@ -43,25 +42,31 @@ export default function SessionVisualizerPlugin({ sessions }) {
           const childrenAfterRemoval = root.getChildren();
           let previousSessionId = null;
           let isFirstParagraph = true;
+          let migratedCount = 0;
 
           console.groupCollapsed('🔍 Visualizer Update Cycle');
           
           childrenAfterRemoval.forEach((node, index) => {
             if ($isSessionParagraphNode(node)) {
-              const currentSessionId = node.getSessionId();
+              let currentSessionId = node.getSessionId();
+
+              // 🔧 MIGRATION: Auto-assign old paragraphs to session 0
+              if (currentSessionId === undefined && sessions[0]) {
+                currentSessionId = 0;
+                node.setSessionId(0);
+                migratedCount++;
+                console.log(`📦 Migrated legacy paragraph ${index} -> Session [0]`);
+              }
+
               console.log(`Paragraph ${index}: SessionID [${currentSessionId}] | Prev [${previousSessionId}] | First: ${isFirstParagraph}`);
 
               if (currentSessionId !== undefined && sessions[currentSessionId]) {
                 const sessionData = sessions[currentSessionId];
                 const isNewSession = currentSessionId !== previousSessionId;
 
-                // Show divider if:
-                // 1. It's the first paragraph (ALWAYS, regardless of duration), OR
-                // 2. Session changed AND duration >= 1 minute
                 if (isFirstParagraph || isNewSession) {
                   const durationStr = formatDuration(sessionData.startTime, sessionData.endTime);
                   
-                  // For first paragraph, show divider even if duration is short
                   if (isFirstParagraph || durationStr) {
                     const displayDuration = durationStr || '<1m';
                     console.log(`  -> ${isFirstParagraph ? 'First Paragraph (always show)' : 'New Session'} Detected. Duration: ${displayDuration}`);
@@ -89,9 +94,13 @@ export default function SessionVisualizerPlugin({ sessions }) {
             }
           });
 
+          if (migratedCount > 0) {
+            console.log(`✅ Migration complete: ${migratedCount} legacy paragraphs assigned to Session 0`);
+          }
+
           console.groupEnd();
         },
-        { tag: 'session-visualizer' } // ✅ Prevent infinite loop
+        { tag: 'session-visualizer' }
       );
     });
   }, [editor, sessions]);
