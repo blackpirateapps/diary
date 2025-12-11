@@ -7,30 +7,40 @@ export default function SessionAttributionPlugin({ currentSessionIndex }) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    // Listener: When text is modified
-    return editor.registerUpdateListener(({ tags }) => {
-      // Avoid infinite loops if the update was triggered by this plugin
+    // DEBUG: Confirm Plugin is active
+    // console.log(`🔌 Attribution Plugin Active. Current Session: ${currentSessionIndex}`);
+
+    return editor.registerUpdateListener(({ tags, dirtyElements }) => {
+      // 1. Avoid infinite loops
       if (tags.has('session-attribution')) return;
+
+      // 2. Optimization: Only run if there are actual changes
+      if (dirtyElements.size === 0) return;
 
       editor.update(() => {
         const selection = $getSelection();
         if ($isRangeSelection(selection)) {
-          // Get the nodes involved in this update
           const nodes = selection.getNodes();
 
           nodes.forEach((node) => {
-            // Find the parent paragraph (since selection might be on TextNodes)
-            const paragraph = node.getParent ? node.getParent() : node;
+            // FIXED LOGIC: distinct check for Element vs Text node
+            // If the node IS the paragraph, use it. If it's a child (text), get parent.
+            const paragraph = $isSessionParagraphNode(node) 
+              ? node 
+              : (node.getParent && node.getParent());
             
-            // Only stamp if it's our custom node and hasn't been stamped yet
-            if ($isSessionParagraphNode(paragraph)) {
+            if (paragraph && $isSessionParagraphNode(paragraph)) {
               const existingId = paragraph.getSessionId();
               
-              // RULE: If it's a new paragraph (no ID), stamp it.
-              // If it has an ID, DO NOT overwrite it (preserves history).
+              // RULE: Only stamp if it has NO ID (undefined or null)
               if (existingId === undefined || existingId === null) {
-                paragraph.setSessionId(currentSessionIndex);
-              }
+                
+                // SAFETY CHECK: Ensure we have a valid session index
+                const idToAssign = currentSessionIndex >= 0 ? currentSessionIndex : 0;
+                
+                console.log(`🏷️ Stamping Paragraph with Session [${idToAssign}]`);
+                paragraph.setSessionId(idToAssign);
+              } 
             }
           });
         }
