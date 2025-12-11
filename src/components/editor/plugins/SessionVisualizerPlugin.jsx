@@ -6,9 +6,8 @@ import { $createSessionDividerNode, $isSessionDividerNode } from '../nodes/Sessi
 
 const formatDuration = (start, end) => {
   const diff = new Date(end).getTime() - new Date(start).getTime();
-  // DEBUG: Log duration calculation
-  // console.log(`Duration Calc: ${diff}ms`);
-  if (diff < 60000) return null; 
+  if (diff < 60000) return null; // Less than 1 minute
+  
   const mins = Math.floor(diff / 60000);
   return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
 };
@@ -17,63 +16,68 @@ export default function SessionVisualizerPlugin({ sessions }) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    // DEBUG: Check if sessions prop is received
-    if (!sessions) {
-        console.log('⚠️ Visualizer: No sessions prop received');
-        return;
+    if (!sessions || sessions.length === 0) {
+      console.log('⚠️ Visualizer: No sessions prop received');
+      return;
     }
+
     console.log('🔍 Visualizer loaded with sessions:', sessions);
 
-    return editor.registerUpdateListener(({ dirtyElements }) => {
-      if (dirtyElements.size === 0) return;
-
+    return editor.registerUpdateListener(() => {
       editor.update(() => {
         const root = $getRoot();
         const children = root.getChildren();
+        
+        // First pass: remove all existing dividers
+        children.forEach((node) => {
+          if ($isSessionDividerNode(node)) {
+            node.remove();
+          }
+        });
+
+        // Second pass: insert dividers where needed
+        const childrenAfterRemoval = root.getChildren();
         let previousSessionId = null;
 
         console.groupCollapsed('🔍 Visualizer Update Cycle');
-
-        children.forEach((node, index) => {
-          if ($isSessionDividerNode(node)) {
-            // node.remove(); // Uncomment this when you are done debugging to actually remove them
-            return;
-          }
-
+        
+        childrenAfterRemoval.forEach((node, index) => {
           if ($isSessionParagraphNode(node)) {
             const currentSessionId = node.getSessionId();
-            
             console.log(`Paragraph ${index}: SessionID [${currentSessionId}] | Prev [${previousSessionId}]`);
 
             if (currentSessionId !== undefined && sessions[currentSessionId]) {
               const sessionData = sessions[currentSessionId];
-              
-              // DEBUG: Check the condition
               const isNewSession = currentSessionId !== previousSessionId;
-              // NOTE: If you haven't applied the fix yet, 'previousSessionId !== null' will be false for the first item.
-              const checksOut = previousSessionId !== null && isNewSession; 
 
-              if (checksOut) {
+              // Show divider if session changed from previous paragraph
+              if (isNewSession) {
                 const durationStr = formatDuration(sessionData.startTime, sessionData.endTime);
-                console.log(`  -> New Session Detected. Duration: ${durationStr}`);
                 
                 if (durationStr) {
-                  // ... insert logic ...
+                  console.log(`  -> New Session Detected. Duration: ${durationStr}`);
+                  
+                  const divider = $createSessionDividerNode(
+                    sessionData.startTime,
+                    durationStr
+                  );
+                  node.insertBefore(divider);
                   console.log('  ✅ Inserting Divider');
                 } else {
                   console.log('  ❌ Skipping: Duration too short (< 1m)');
                 }
               } else {
-                 console.log(`  ⏭️ No Divider: isNewSession=${isNewSession}, prev!==null=${previousSessionId !== null}`);
+                console.log(`  ⏭️ No Divider: Same session continues`);
               }
 
               previousSessionId = currentSessionId;
             } else {
               console.warn('  ⚠️ Node has invalid Session ID or Session missing from array');
-              previousSessionId = 0; 
+              previousSessionId = currentSessionId !== undefined ? currentSessionId : 0;
             }
           }
         });
+
         console.groupEnd();
       });
     });

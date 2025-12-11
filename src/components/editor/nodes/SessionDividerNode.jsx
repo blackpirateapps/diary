@@ -5,37 +5,53 @@ import { Clock } from 'lucide-react';
 // The React Component for the Divider
 const SessionDividerComponent = ({ startTime, duration }) => {
   return (
-    <div className="flex items-center gap-3 py-6 select-none" contentEditable={false}>
-      <div className="h-px bg-gray-200 dark:bg-gray-800 flex-1" />
-      <div className="flex items-center gap-2 text-[10px] font-medium text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-900 px-3 py-1 rounded-full border border-gray-100 dark:border-gray-800">
-        <Clock size={12} className="text-[var(--accent-500)]" />
-        <span>{startTime}</span>
-        <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700" />
-        <span>{duration}</span>
-      </div>
-      <div className="h-px bg-gray-200 dark:bg-gray-800 flex-1" />
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '12px 0',
+        margin: '16px 0',
+        borderTop: '2px solid #e5e7eb',
+        color: '#6b7280',
+        fontSize: '0.875rem',
+        fontWeight: '500',
+      }}
+    >
+      <Clock size={14} />
+      <span>
+        {new Date(startTime).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        })}
+      </span>
+      <span>• {duration}</span>
     </div>
   );
 };
 
 export class SessionDividerNode extends DecoratorNode {
+  __startTime;
+  __duration;
+
   static getType() {
     return 'session-divider';
   }
 
   static clone(node) {
-    return new SessionDividerNode(node.__startTime, node.__duration, node.__sessionId, node.__key);
+    return new SessionDividerNode(node.__startTime, node.__duration, node.__key);
   }
 
-  constructor(startTime, duration, sessionId, key) {
+  constructor(startTime, duration, key) {
     super(key);
     this.__startTime = startTime;
     this.__duration = duration;
-    this.__sessionId = sessionId;
   }
 
   createDOM() {
-    return document.createElement('div');
+    const div = document.createElement('div');
+    div.style.userSelect = 'none';
+    return div;
   }
 
   updateDOM() {
@@ -51,27 +67,33 @@ export class SessionDividerNode extends DecoratorNode {
     );
   }
 
+  static importJSON(serializedNode) {
+    return $createSessionDividerNode(
+      serializedNode.startTime,
+      serializedNode.duration
+    );
+  }
+
   exportJSON() {
     return {
-      type: 'session-divider',
       startTime: this.__startTime,
       duration: this.__duration,
-      sessionId: this.__sessionId,
+      type: 'session-divider',
       version: 1,
     };
   }
 
-  static importJSON(serializedNode) {
-    return $createSessionDividerNode(
-      serializedNode.startTime,
-      serializedNode.duration,
-      serializedNode.sessionId
-    );
+  isInline() {
+    return false;
+  }
+
+  isIsolated() {
+    return true;
   }
 }
 
-export function $createSessionDividerNode(startTime, duration, sessionId) {
-  return new SessionDividerNode(startTime, duration, sessionId);
+export function $createSessionDividerNode(startTime, duration) {
+  return new SessionDividerNode(startTime, duration);
 }
 
 export function $isSessionDividerNode(node) {
