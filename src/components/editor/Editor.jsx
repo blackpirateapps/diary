@@ -30,7 +30,6 @@ import MentionsPlugin from './MentionsPlugin';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
-import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
 import SleepWidget from './SleepWidget';
 import ToolbarPlugin from './ToolbarPlugin';
@@ -235,7 +234,7 @@ const PeopleSuggestions = ({ contentText }) => {
 };
 
 // --- HEADER ---
-const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExporting, onDelete, toggleMode, mode }) => {
+const EditorPageHeader = ({ entry, onClose, saveStatus, onExport, isExporting, onDelete, toggleMode, mode }) => {
     return (
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-4 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -279,14 +278,6 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
             title="Export to PDF"
           >
             {isExporting ? <span className="text-sm">...</span> : 'PDF'}
-          </button>
-          
-          <button 
-            onClick={onZen} 
-            className="p-2 rounded-full bg-[var(--accent-500)] text-white hover:bg-[var(--accent-600)] transition-colors"
-            title="Zen Mode"
-          >
-            <AlignLeft size={20} />
           </button>
         </div>
       </header>
@@ -344,14 +335,37 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [images, setImages] = useState(entry?.images || []);
   const [taggedPeople, setTaggedPeople] = useState(entry?.people || []);
   
-  const contentRef = useRef(content);
-  contentRef.current = content;
-  
-  const previewRef = useRef(previewText);
-  previewRef.current = previewText;
+  // Stable refs pattern for autosave - always use latest values
+  const stableStateRef = useRef({
+    content,
+    previewText,
+    sessions,
+    mood,
+    location,
+    locationLat,
+    locationLng,
+    weather,
+    tags,
+    images,
+    taggedPeople
+  });
 
-  const sessionsRef = useRef(sessions);
-  sessionsRef.current = sessions;
+  // Update refs on every render
+  useEffect(() => {
+    stableStateRef.current = {
+      content,
+      previewText,
+      sessions,
+      mood,
+      location,
+      locationLat,
+      locationLng,
+      weather,
+      tags,
+      images,
+      taggedPeople
+    };
+  });
 
   const [isMoodOpen, setIsMoodOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
@@ -359,7 +373,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [saveStatus, setSaveStatus] = useState('idle');
   const [isExporting, setIsExporting] = useState(false);
-  const [isZenMode, setIsZenMode] = useState(false);
   
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
   const todaysSleepSessions = sleepSessions.filter(session => 
@@ -406,59 +419,60 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     lastTypeTimeRef.current = now;
   }, []);
 
-  useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      const isDirty = content !== (entry?.content || '');
-      if (saveStatus === 'saving' || (isDirty && saveStatus !== 'saved')) {
-        e.preventDefault();
-        e.returnValue = ''; 
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [saveStatus, content, entry]);
-
-  const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
-    if (isAutoSave && !contentRef.current && images.length === 0) return;
+  // Improved save with stable callback pattern
+  const saveDataRef = useRef();
+  saveDataRef.current = (isAutoSave = false, overrideDate = null) => {
+    const state = stableStateRef.current;
+    
+    if (isAutoSave && !state.content && state.images.length === 0) return;
     
     setSaveStatus('saving');
     const dateToSave = overrideDate || currentDate;
     
     onSave({ 
       id: entryId, 
-      content: contentRef.current, 
-      preview: previewRef.current, 
-      mood, 
-      location, 
-      locationLat, 
-      locationLng, 
-      weather, 
-      tags, 
-      images, 
-      people: taggedPeople,
-      sessions: sessionsRef.current,
+      content: state.content, 
+      preview: state.previewText, 
+      mood: state.mood, 
+      location: state.location, 
+      locationLat: state.locationLat, 
+      locationLng: state.locationLng, 
+      weather: state.weather, 
+      tags: state.tags, 
+      images: state.images, 
+      people: state.taggedPeople,
+      sessions: state.sessions,
       date: dateToSave.toISOString() 
     });
 
     setTimeout(() => setSaveStatus('saved'), 500);
     setTimeout(() => setSaveStatus('idle'), 2500);
-  }, [entryId, currentDate, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, onSave]);
-
-  useEffect(() => {
-    if (content !== (entry?.content || '')) {
-      const timer = setTimeout(() => saveData(true), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [content, saveData, entry?.content]);
-
-  const handleZenBack = (finalContent) => {
-    if (typeof finalContent === 'string') {
-        contentRef.current = finalContent; 
-        setContent(finalContent); 
-    }
-    saveData(true);
-    setIsZenMode(false);
   };
+
+  // Stable callback wrapper
+  const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
+    saveDataRef.current?.(isAutoSave, overrideDate);
+  }, []);
+
+  // Debounced autosave
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveData(true);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [content, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, sessions, saveData]);
+
+  // Prevent data loss on unload
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (saveStatus === 'saving') {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [saveStatus]);
 
   const handleTimeChange = (e) => {
     if (!e.target.value) return;
@@ -478,20 +492,28 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         const compressedBlob = await compressImage(file);
         setImages(prev => [...prev, compressedBlob]);
         setImgIndex(images.length); 
-        setTimeout(() => saveData(true), 100);
-      } catch (err) { alert(err.message); } 
-      finally { setUploading(false); e.target.value = ''; }
+      } catch (err) { 
+        alert(err.message); 
+      } finally { 
+        setUploading(false); 
+        e.target.value = ''; 
+      }
     }
   };
 
   const handleLocation = async () => {
     if (loadingLocation) return;
     setLoadingLocation(true);
-    if (!navigator.geolocation) { alert("Geolocation not supported"); setLoadingLocation(false); return; }
+    if (!navigator.geolocation) { 
+      alert("Geolocation not supported"); 
+      setLoadingLocation(false); 
+      return; 
+    }
 
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
-      setLocationLat(latitude); setLocationLng(longitude);
+      setLocationLat(latitude); 
+      setLocationLng(longitude);
       
       try {
         const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
@@ -505,9 +527,16 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             const parts = [d.address.road || d.address.building, d.address.city || d.address.town || d.address.suburb].filter(Boolean);
             setLocation(parts.length ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
         }
-        setTimeout(() => saveData(true), 200);
-      } catch (e) { console.error(e); } finally { setLoadingLocation(false); }
-    }, (e) => { console.error(e); alert("Location error"); setLoadingLocation(false); });
+      } catch (e) { 
+        console.error(e); 
+      } finally { 
+        setLoadingLocation(false); 
+      }
+    }, (e) => { 
+      console.error(e); 
+      alert("Location error"); 
+      setLoadingLocation(false); 
+    });
   };
 
   const handleExportPdf = async () => {
@@ -517,7 +546,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       const doc = <EntryPdfDocument 
           entry={{ 
             id: entryId, 
-            content: content, // <--- This holds the formatting JSON
+            content: content,
             mood, 
             location, 
             weather, 
@@ -530,7 +559,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         />;
       const blob = await pdf(doc).toBlob();
       saveAs(blob, `Journal_${currentDate.toISOString().split('T')[0]}.pdf`);
-    } catch (err) { alert("PDF Failed"); } finally { setIsExporting(false); }
+    } catch (err) { 
+      alert("PDF Failed"); 
+    } finally { 
+      setIsExporting(false); 
+    }
   };
 
   const initialConfig = useMemo(() => ({
@@ -550,43 +583,37 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   return (
     <>
       <Styles />
-      <ZenOverlay 
-        isActive={isZenMode} content={content} setContent={setContent} 
-        onBack={handleZenBack} 
-      />
 
-      {/* FIX: Use fixed inset-0 to ensure full viewport height on mobile without double scroll */}
-      <div className="fixed inset-0 flex flex-col w-full bg-white dark:bg-gray-950 z-40">
+      {/* Mobile-optimized fixed layout with proper height handling */}
+      <div className="fixed inset-0 flex flex-col w-full bg-white dark:bg-gray-950 z-40 overflow-hidden">
           <EditorPageHeader 
             onClose={onClose} 
             saveStatus={saveStatus} 
-            onZen={() => setIsZenMode(true)} 
             onExport={handleExportPdf} 
             isExporting={isExporting} 
             onDelete={() => { if(window.confirm('Are you sure you want to delete this entry?')) onDelete(entryId); }}
             toggleMode={() => setMode(m => m === 'edit' ? 'preview' : 'edit')} 
             mode={mode} 
-            onDone={() => { saveData(false); onClose(); }} 
             entry={entry}
           />
 
           <LexicalComposer initialConfig={initialConfig}>
-            <div className="flex-1 flex overflow-hidden lg:flex-row bg-white dark:bg-gray-950">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-white dark:bg-gray-950 min-h-0">
                 
                 {/* LEFT: MAIN CONTENT */}
-                <div className="flex-1 flex flex-col relative min-w-0">
+                <div className="flex-1 flex flex-col relative min-w-0 min-h-0">
                     
                     {/* Fixed Toolbar Area */}
                     {mode === 'edit' && (
-                        <div className="z-10 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm">
+                        <div className="flex-shrink-0 z-10 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm">
                             <ToolbarPlugin onInsertImage={() => document.getElementById('img-upload-trigger')?.click()} />
                             {/* Hidden input for image trigger */}
                             <input id="img-upload-trigger" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                         </div>
                     )}
 
-                    {/* Scrollable Content Area */}
-                    <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
+                    {/* Scrollable Content Area - key fix for mobile */}
+                    <main className="flex-1 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch flex flex-col min-h-0">
                         
                         {images.length > 0 && (
                             <div 
@@ -595,7 +622,17 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             >
                                 <BlobImage key={imgIndex} src={images[imgIndex]} className="w-full h-full object-cover opacity-90 transition-opacity hover:opacity-100" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-white/80 dark:from-gray-950/80 to-transparent pointer-events-none" />
-                                <button onClick={() => { if(window.confirm('Delete image?')) { setImages(i => i.filter((_,x) => x !== imgIndex)); setImgIndex(0); saveData(true); } }} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:bg-red-600"><Trash2 size={16}/></button>
+                                <button 
+                                  onClick={() => { 
+                                    if(window.confirm('Delete image?')) { 
+                                      setImages(i => i.filter((_,x) => x !== imgIndex)); 
+                                      setImgIndex(0); 
+                                    } 
+                                  }} 
+                                  className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:bg-red-600"
+                                >
+                                  <Trash2 size={16}/>
+                                </button>
                             </div>
                         )}
 
@@ -604,17 +641,29 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             {/* Mobile Date Header */}
                             <div className="lg:hidden mb-6">
                                 <div className="flex items-baseline gap-3 mb-1">
-                                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{currentDate.toLocaleDateString(undefined, { weekday: 'long' })}</h2>
-                                    <span className="text-xl text-gray-400 dark:text-gray-500 font-medium">{currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</span>
+                                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+                                      {currentDate.toLocaleDateString(undefined, { weekday: 'long' })}
+                                    </h2>
+                                    <span className="text-xl text-gray-400 dark:text-gray-500 font-medium">
+                                      {currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
+                                    </span>
                                 </div>
                             </div>
 
                             {/* Mobile Metadata */}
                             <div className="lg:hidden mb-8">
                                 <MetadataBar 
-                                    mood={mood} setMood={setMood} isMoodOpen={isMoodOpen} setIsMoodOpen={setIsMoodOpen} onSave={saveData}
-                                    location={location} onLocationClick={handleLocation} loadingLocation={loadingLocation}
-                                    weather={weather} uploading={uploading} onImageUpload={handleImageUpload}
+                                    mood={mood} 
+                                    setMood={setMood} 
+                                    isMoodOpen={isMoodOpen} 
+                                    setIsMoodOpen={setIsMoodOpen} 
+                                    onSave={saveData}
+                                    location={location} 
+                                    onLocationClick={handleLocation} 
+                                    loadingLocation={loadingLocation}
+                                    weather={weather} 
+                                    uploading={uploading} 
+                                    onImageUpload={handleImageUpload}
                                     isSidebar={false}
                                 />
                             </div>
@@ -632,12 +681,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
                                 <RichTextPlugin
                                     contentEditable={
-                                    <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
+                                      <ContentEditable className="outline-none text-lg lg:text-xl text-gray-800 dark:text-gray-200 leading-relaxed min-h-[400px]" />
                                     }
                                     placeholder={
-                                    <div className="absolute top-0 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
+                                      <div className="absolute top-0 left-0 text-gray-300 dark:text-gray-700 pointer-events-none text-lg lg:text-xl select-none">
                                         Start writing here...
-                                    </div>
+                                      </div>
                                     }
                                     ErrorBoundary={LexicalErrorBoundary}
                                 />
@@ -647,45 +696,42 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                 
                                 {mode === 'edit' && (
                                     <EditorStatePlugin 
-                                    content={content} 
-                                    onChange={setContent} 
-                                    onTextChange={(text) => {
+                                      content={content} 
+                                      onChange={setContent} 
+                                      onTextChange={(text) => {
                                         setPreviewText(text);
-                                        previewRef.current = text;
-                                    }}
-                                    onSessionUpdate={handleSessionUpdate}
+                                      }}
+                                      onSessionUpdate={handleSessionUpdate}
                                     />
                                 )}
 
                                 {mode === 'preview' && (
                                     <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-6">
-                                    <div className="flex items-center gap-2 mb-4">
+                                      <div className="flex items-center gap-2 mb-4">
                                         <Clock size={18} className="text-[var(--accent-500)]" />
                                         <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Time Travel</h3>
-                                    </div>
-                                    
-                                    <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
+                                      </div>
+                                      
+                                      <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
                                         <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
-                                            <span>Start</span>
-                                            <span>
-                                            Session {previewSessionIndex + 1} / {sessions.length}
-                                            </span>
-                                            <span>Now</span>
+                                          <span>Start</span>
+                                          <span>Session {previewSessionIndex + 1} / {sessions.length}</span>
+                                          <span>Now</span>
                                         </div>
                                         <input 
-                                            type="range" 
-                                            min={0} 
-                                            max={sessions.length - 1} 
-                                            value={previewSessionIndex}
-                                            onChange={(e) => setPreviewSessionIndex(Number(e.target.value))}
-                                            className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
+                                          type="range" 
+                                          min={0} 
+                                          max={sessions.length - 1} 
+                                          value={previewSessionIndex}
+                                          onChange={(e) => setPreviewSessionIndex(Number(e.target.value))}
+                                          className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
                                         />
                                         <div className="text-center mt-2 text-xs text-gray-400">
-                                            {sessions[previewSessionIndex]?.endTime 
-                                                ? new Date(sessions[previewSessionIndex].endTime).toLocaleTimeString() 
-                                                : 'Unknown Time'}
+                                          {sessions[previewSessionIndex]?.endTime 
+                                            ? new Date(sessions[previewSessionIndex].endTime).toLocaleTimeString() 
+                                            : 'Unknown Time'}
                                         </div>
-                                    </div>
+                                      </div>
                                     </div>
                                 )}
                             </div>
@@ -694,7 +740,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             <div className="lg:hidden mt-12 pt-8 border-t border-gray-100 dark:border-gray-800">
                                 <div className="mb-8">
                                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
-                                    <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
+                                    <TagInput tags={tags} onChange={setTags} />
                                 </div>
 
                                 {todaysSleepSessions.length > 0 && (
@@ -709,23 +755,34 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     </main>
                 </div>
 
-                {/* RIGHT: SIDEBAR */}
-                <aside className="w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto no-scrollbar hidden lg:block">
+                {/* RIGHT: SIDEBAR - Desktop only */}
+                <aside className="hidden lg:flex lg:flex-col w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto min-h-0">
                     
                     {/* Desktop Date/Time Header */}
-                    <div className="mb-8">
+                    <div className="mb-8 flex-shrink-0">
                         <div className="flex items-center gap-2 text-[var(--accent-500)] mb-2 font-medium">
                             <Calendar size={18} />
                             <span>{currentDate.getFullYear()}</span>
                         </div>
-                        <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-1 tracking-tight">{currentDate.toLocaleDateString(undefined, { weekday: 'long' })}</h2>
-                        <h3 className="text-2xl text-gray-400 font-medium mb-4">{currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</h3>
+                        <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-1 tracking-tight">
+                          {currentDate.toLocaleDateString(undefined, { weekday: 'long' })}
+                        </h2>
+                        <h3 className="text-2xl text-gray-400 font-medium mb-4">
+                          {currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
+                        </h3>
                         
                         <div className="flex items-center gap-4 text-sm text-gray-500 border-b border-gray-200 dark:border-gray-800 pb-4">
                             <div className="relative group cursor-pointer hover:text-[var(--accent-500)] transition-colors flex items-center gap-2">
                                 <Clock size={16} strokeWidth={2.5} />
-                                <span className="font-semibold">{currentDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-                                <input type="time" value={currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} onChange={handleTimeChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                <span className="font-semibold">
+                                  {currentDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                </span>
+                                <input 
+                                  type="time" 
+                                  value={currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} 
+                                  onChange={handleTimeChange} 
+                                  className="absolute inset-0 opacity-0 cursor-pointer" 
+                                />
                             </div>
                             <div className="flex items-center gap-1.5 ml-auto">
                                 <AlignLeft size={14} />
@@ -734,16 +791,24 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-6">
+                    <div className="flex flex-col gap-6 flex-1 overflow-y-auto">
                         {/* New Tooltip Component for Fuzzy Matching */}
                         {mode === 'edit' && <PeopleSuggestions contentText={previewText} />}
 
                         <div>
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Context</label>
                             <MetadataBar 
-                                mood={mood} setMood={setMood} isMoodOpen={isMoodOpen} setIsMoodOpen={setIsMoodOpen} onSave={saveData}
-                                location={location} onLocationClick={handleLocation} loadingLocation={loadingLocation}
-                                weather={weather} uploading={uploading} onImageUpload={handleImageUpload}
+                                mood={mood} 
+                                setMood={setMood} 
+                                isMoodOpen={isMoodOpen} 
+                                setIsMoodOpen={setIsMoodOpen} 
+                                onSave={saveData}
+                                location={location} 
+                                onLocationClick={handleLocation} 
+                                loadingLocation={loadingLocation}
+                                weather={weather} 
+                                uploading={uploading} 
+                                onImageUpload={handleImageUpload}
                                 isSidebar={true}
                             />
                         </div>
@@ -751,7 +816,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         <div>
                             <div className="mb-6">
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
-                                <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
+                                <TagInput tags={tags} onChange={setTags} />
                             </div>
 
                             {todaysSleepSessions.length > 0 && (
