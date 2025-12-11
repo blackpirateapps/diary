@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check, UserPlus, Sparkles, AlertCircle } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-
+import SessionTimeline from './SessionTimeline';
 import { db, useBlobUrl } from '../../db'; 
 import EntryPdfDocument from './EntryPdfDocument'; 
 import TagInput from './TagInput'; 
@@ -19,19 +19,11 @@ import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
 import { CodeNode } from '@lexical/code';
-import { ParagraphNode } from 'lexical'; // Import ParagraphNode for replacement
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
 import { $nodesOfType, $getRoot } from 'lexical';
 import { MentionNode, $createMentionNode, $isMentionNode } from './nodes/MentionNode'; 
 import MentionsPlugin from './MentionsPlugin';
-
-// --- NEW IMPORTS FOR TIMELINE FEATURE ---
-import { SessionParagraphNode } from './nodes/SessionParagraphNode';
-import { SessionDividerNode } from './nodes/SessionDividerNode';
-import SessionAttributionPlugin from './plugins/SessionAttributionPlugin';
-import SessionVisualizerPlugin from './plugins/SessionVisualizerPlugin';
-// ----------------------------------------
 
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
@@ -459,6 +451,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const RECOVERY_KEY = `journal-recovery-${entryId}`;
 
   const saveToLocalStorage = useCallback((data) => {
+    // Create lightweight backup (no images, they're too big)
     const backupData = {
       content: data.content,
       previewText: data.previewText,
@@ -490,10 +483,12 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   }, [RECOVERY_KEY]);
 
+  // Immediate localStorage backup on every change
   useEffect(() => {
     saveToLocalStorage(stableStateRef.current);
   }, [content, previewText, sessions, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, saveToLocalStorage]);
 
+  // Restore from localStorage on mount (crash recovery)
   useEffect(() => {
     const recoverData = () => {
       const recovered = safeLocalStorageGet(RECOVERY_KEY);
@@ -503,7 +498,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         const data = JSON.parse(recovered);
         const timeSince = Date.now() - data.lastSaved;
         
+        // Only recover if crash was recent (< 5 minutes)
         if (timeSince < 5 * 60 * 1000) {
+          // For new entries or if content differs significantly
           const hasChanges = data.content && data.content !== (entry?.content || '');
           
           if (hasChanges && window.confirm('🔄 Recovered unsaved changes from browser crash. Restore?')) {
@@ -570,6 +567,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     lastTypeTimeRef.current = now;
   }, []);
 
+  // Improved save with stable callback pattern
   const saveDataRef = useRef();
   saveDataRef.current = (isAutoSave = false, overrideDate = null) => {
     const state = stableStateRef.current;
@@ -597,6 +595,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
     setTimeout(() => {
       setSaveStatus('saved');
+      // Clear localStorage recovery data after successful IndexedDB save
       safeLocalStorageRemove(RECOVERY_KEY);
       setStorageWarning('');
     }, 500);
@@ -607,6 +606,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     saveDataRef.current?.(isAutoSave, overrideDate);
   }, []);
 
+  // Debounced autosave to IndexedDB
   useEffect(() => {
     const timer = setTimeout(() => {
       saveData(true);
@@ -614,6 +614,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     return () => clearTimeout(timer);
   }, [content, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, sessions, saveData]);
 
+  // Prevent data loss on unload
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (saveStatus === 'saving') {
@@ -625,6 +626,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [saveStatus]);
 
+  // Cleanup localStorage on unmount if saved
   useEffect(() => {
     return () => {
       if (saveStatus === 'saved') {
@@ -725,7 +727,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   };
 
-  // --- UPDATED CONFIG WITH NODE REPLACEMENT ---
   const initialConfig = useMemo(() => ({
     namespace: 'MainEditor',
     theme: {
@@ -735,16 +736,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       quote: 'border-l-4 border-gray-300 pl-4 italic my-4 text-gray-500',
       text: { bold: 'font-bold', italic: 'italic', underline: 'underline', code: 'bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 font-mono text-sm text-pink-500' }
     },
-    nodes: [
-      HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode,
-      // Add custom nodes
-      SessionParagraphNode, SessionDividerNode,
-      // REPLACE STANDARD PARAGRAPH WITH CUSTOM ONE
-      {
-        replace: ParagraphNode,
-        with: (node) => new SessionParagraphNode()
-      }
-    ],
+    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
   }), []); 
@@ -767,10 +759,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           />
 
           <LexicalComposer initialConfig={initialConfig}>
-            {/* INJECT NEW PLUGINS */}
-            <SessionAttributionPlugin currentSessionIndex={sessions.length - 1} />
-            <SessionVisualizerPlugin sessions={sessions} />
-
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-white dark:bg-gray-950 min-h-0">
                 
                 {/* LEFT: MAIN CONTENT */}
@@ -877,35 +865,42 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                     />
                                 )}
 
-                                {mode === 'preview' && (
-                                    <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-6">
-                                      <div className="flex items-center gap-2 mb-4">
-                                        <Clock size={18} className="text-[var(--accent-500)]" />
-                                        <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Time Travel</h3>
-                                      </div>
-                                      
-                                      <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
-                                        <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
-                                          <span>Start</span>
-                                          <span>Session {previewSessionIndex + 1} / {sessions.length}</span>
-                                          <span>Now</span>
-                                        </div>
-                                        <input 
-                                          type="range" 
-                                          min={0} 
-                                          max={sessions.length - 1} 
-                                          value={previewSessionIndex}
-                                          onChange={(e) => setPreviewSessionIndex(Number(e.target.value))}
-                                          className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
-                                        />
-                                        <div className="text-center mt-2 text-xs text-gray-400">
-                                          {sessions[previewSessionIndex]?.endTime 
-                                            ? new Date(sessions[previewSessionIndex].endTime).toLocaleTimeString() 
-                                            : 'Unknown Time'}
-                                        </div>
-                                      </div>
-                                    </div>
-                                )}
+                              {mode === 'preview' && (
+  <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-8 animate-fadeIn">
+    
+    <div className="flex flex-col lg:flex-row gap-8">
+      {/* 1. The Timeline Sidebar */}
+      <div className="w-full lg:w-1/3 flex-shrink-0">
+        <SessionTimeline 
+          sessions={sessions} 
+          activeIndex={previewSessionIndex} 
+          onSelect={setPreviewSessionIndex} 
+        />
+      </div>
+
+      {/* 2. Context/Help Text for the User */}
+      <div className="flex-1 flex flex-col justify-center text-gray-500 text-sm italic bg-gray-50/50 dark:bg-gray-900/30 p-6 rounded-xl border border-dashed border-gray-200 dark:border-gray-800">
+         <div className="flex items-center gap-2 mb-2 text-[var(--accent-500)] font-semibold not-italic">
+            <Clock size={18} />
+            <span>Viewing Historical Snapshot</span>
+         </div>
+         <p className="mb-4">
+           You are viewing a previous version of this entry from <span className="font-bold text-gray-700 dark:text-gray-300">{sessions[previewSessionIndex]?.endTime ? new Date(sessions[previewSessionIndex].endTime).toLocaleTimeString() : '...'}</span>.
+         </p>
+         <button 
+            onClick={() => {
+              setPreviewSessionIndex(sessions.length - 1); // Jump to latest
+              setMode('edit'); // Switch back to edit
+            }}
+            className="self-start px-4 py-2 bg-[var(--accent-500)] hover:bg-[var(--accent-600)] text-white rounded-lg font-medium transition-colors text-xs uppercase tracking-wide"
+         >
+            Restore Latest & Edit
+         </button>
+      </div>
+    </div>
+
+  </div>
+)}
                             </div>
 
                             {/* Mobile Tags/Sleep */}
