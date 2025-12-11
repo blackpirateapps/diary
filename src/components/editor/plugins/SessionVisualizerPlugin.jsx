@@ -29,12 +29,8 @@ export default function SessionVisualizerPlugin({ sessions }) {
         let previousSessionId = null;
 
         children.forEach((node) => {
-          // 1. Cleanup: Remove old dividers (we will re-calculate them)
-          // This is a naive but safe approach to ensure dividers are always correct
+          // 1. Cleanup: Remove old dividers
           if ($isSessionDividerNode(node)) {
-            // We'll skip removal logic for now and rely on insertion logic
-            // But in a production app, you might want to reconcile them smarter.
-            // For now, let's treat dividers as "managed" nodes.
             node.remove(); 
             return;
           }
@@ -45,8 +41,8 @@ export default function SessionVisualizerPlugin({ sessions }) {
             // Safe check: ensure session exists
             if (currentSessionId !== undefined && sessions[currentSessionId]) {
               
-              // RULE: Is this a NEW session block?
-              if (previousSessionId !== null && currentSessionId !== previousSessionId) {
+              // FIXED: Removed "previousSessionId !== null" to allow the first paragraph to get a divider
+              if (currentSessionId !== previousSessionId) {
                 
                 const sessionData = sessions[currentSessionId];
                 const durationStr = formatDuration(sessionData.startTime, sessionData.endTime);
@@ -55,7 +51,6 @@ export default function SessionVisualizerPlugin({ sessions }) {
                 if (durationStr) {
                   const startTimeStr = new Date(sessionData.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                   
-                  // Insert Divider BEFORE this paragraph
                   const divider = $createSessionDividerNode(
                     startTimeStr,
                     durationStr,
@@ -66,7 +61,6 @@ export default function SessionVisualizerPlugin({ sessions }) {
               }
               previousSessionId = currentSessionId;
             } else {
-              // If it's an old legacy paragraph (no ID), treat it as "Session 0" or skip
               previousSessionId = 0; 
             }
           }
