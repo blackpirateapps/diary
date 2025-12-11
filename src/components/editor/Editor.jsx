@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check, UserPlus, Sparkles, AlertCircle } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-
+import SessionTimeline from './SessionTimeline';
 import { db, useBlobUrl } from '../../db'; 
 import EntryPdfDocument from './EntryPdfDocument'; 
 import TagInput from './TagInput'; 
@@ -865,35 +865,42 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                     />
                                 )}
 
-                                {mode === 'preview' && (
-                                    <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-6">
-                                      <div className="flex items-center gap-2 mb-4">
-                                        <Clock size={18} className="text-[var(--accent-500)]" />
-                                        <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Time Travel</h3>
-                                      </div>
-                                      
-                                      <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
-                                        <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
-                                          <span>Start</span>
-                                          <span>Session {previewSessionIndex + 1} / {sessions.length}</span>
-                                          <span>Now</span>
-                                        </div>
-                                        <input 
-                                          type="range" 
-                                          min={0} 
-                                          max={sessions.length - 1} 
-                                          value={previewSessionIndex}
-                                          onChange={(e) => setPreviewSessionIndex(Number(e.target.value))}
-                                          className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
-                                        />
-                                        <div className="text-center mt-2 text-xs text-gray-400">
-                                          {sessions[previewSessionIndex]?.endTime 
-                                            ? new Date(sessions[previewSessionIndex].endTime).toLocaleTimeString() 
-                                            : 'Unknown Time'}
-                                        </div>
-                                      </div>
-                                    </div>
-                                )}
+                              {mode === 'preview' && (
+  <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-8 animate-fadeIn">
+    
+    <div className="flex flex-col lg:flex-row gap-8">
+      {/* 1. The Timeline Sidebar */}
+      <div className="w-full lg:w-1/3 flex-shrink-0">
+        <SessionTimeline 
+          sessions={sessions} 
+          activeIndex={previewSessionIndex} 
+          onSelect={setPreviewSessionIndex} 
+        />
+      </div>
+
+      {/* 2. Context/Help Text for the User */}
+      <div className="flex-1 flex flex-col justify-center text-gray-500 text-sm italic bg-gray-50/50 dark:bg-gray-900/30 p-6 rounded-xl border border-dashed border-gray-200 dark:border-gray-800">
+         <div className="flex items-center gap-2 mb-2 text-[var(--accent-500)] font-semibold not-italic">
+            <Clock size={18} />
+            <span>Viewing Historical Snapshot</span>
+         </div>
+         <p className="mb-4">
+           You are viewing a previous version of this entry from <span className="font-bold text-gray-700 dark:text-gray-300">{sessions[previewSessionIndex]?.endTime ? new Date(sessions[previewSessionIndex].endTime).toLocaleTimeString() : '...'}</span>.
+         </p>
+         <button 
+            onClick={() => {
+              setPreviewSessionIndex(sessions.length - 1); // Jump to latest
+              setMode('edit'); // Switch back to edit
+            }}
+            className="self-start px-4 py-2 bg-[var(--accent-500)] hover:bg-[var(--accent-600)] text-white rounded-lg font-medium transition-colors text-xs uppercase tracking-wide"
+         >
+            Restore Latest & Edit
+         </button>
+      </div>
+    </div>
+
+  </div>
+)}
                             </div>
 
                             {/* Mobile Tags/Sleep */}
