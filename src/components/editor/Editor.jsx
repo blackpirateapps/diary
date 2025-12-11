@@ -30,7 +30,6 @@ import MentionsPlugin from './MentionsPlugin';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 
-import ZenOverlay from './ZenOverlay';
 import MetadataBar from './MetadataBar';
 import SleepWidget from './SleepWidget';
 import ToolbarPlugin from './ToolbarPlugin';
@@ -235,9 +234,9 @@ const PeopleSuggestions = ({ contentText }) => {
 };
 
 // --- HEADER ---
-const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExporting, onDelete, toggleMode, mode }) => {
+const EditorPageHeader = ({ entry, onClose, saveStatus, onExport, isExporting, onDelete, toggleMode, mode }) => {
     return (
-      <header className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-4 flex items-center justify-between flex-shrink-0">
+      <header className="flex-shrink-0 z-20 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300">
             <ChevronLeft size={24} />
@@ -278,15 +277,7 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onZen, onExport, isExpor
             className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 disabled:opacity-50"
             title="Export to PDF"
           >
-            {isExporting ? <span className="text-sm">...</span> : 'PDF'}
-          </button>
-          
-          <button 
-            onClick={onZen} 
-            className="p-2 rounded-full bg-[var(--accent-500)] text-white hover:bg-[var(--accent-600)] transition-colors"
-            title="Zen Mode"
-          >
-            <AlignLeft size={20} />
+            {isExporting ? <span className="text-sm">...</span> : <Download size={20} />}
           </button>
         </div>
       </header>
@@ -359,7 +350,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [saveStatus, setSaveStatus] = useState('idle');
   const [isExporting, setIsExporting] = useState(false);
-  const [isZenMode, setIsZenMode] = useState(false);
   
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
   const todaysSleepSessions = sleepSessions.filter(session => 
@@ -419,6 +409,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   }, [saveStatus, content, entry]);
 
   const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
+    // Prevent saving if content is empty (unless it's an explicit action, but usually we auto-save)
     if (isAutoSave && !contentRef.current && images.length === 0) return;
     
     setSaveStatus('saving');
@@ -450,15 +441,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       return () => clearTimeout(timer);
     }
   }, [content, saveData, entry?.content]);
-
-  const handleZenBack = (finalContent) => {
-    if (typeof finalContent === 'string') {
-        contentRef.current = finalContent; 
-        setContent(finalContent); 
-    }
-    saveData(true);
-    setIsZenMode(false);
-  };
 
   const handleTimeChange = (e) => {
     if (!e.target.value) return;
@@ -517,7 +499,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       const doc = <EntryPdfDocument 
           entry={{ 
             id: entryId, 
-            content: content, // <--- This holds the formatting JSON
+            content: content, 
             mood, 
             location, 
             weather, 
@@ -550,17 +532,13 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   return (
     <>
       <Styles />
-      <ZenOverlay 
-        isActive={isZenMode} content={content} setContent={setContent} 
-        onBack={handleZenBack} 
-      />
-
-      {/* FIX: Use fixed inset-0 to ensure full viewport height on mobile without double scroll */}
-      <div className="fixed inset-0 flex flex-col w-full bg-white dark:bg-gray-950 z-40">
+      
+      {/* Mobile-Friendly Fixed Container using dvh */}
+      <div className="fixed inset-0 z-50 flex flex-col w-full h-[100dvh] bg-white dark:bg-gray-950">
+          
           <EditorPageHeader 
             onClose={onClose} 
             saveStatus={saveStatus} 
-            onZen={() => setIsZenMode(true)} 
             onExport={handleExportPdf} 
             isExporting={isExporting} 
             onDelete={() => { if(window.confirm('Are you sure you want to delete this entry?')) onDelete(entryId); }}
@@ -571,20 +549,20 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           />
 
           <LexicalComposer initialConfig={initialConfig}>
+            
+            {/* Fixed Toolbar Area */}
+            {mode === 'edit' && (
+                <div className="flex-shrink-0 z-10 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm">
+                    <ToolbarPlugin onInsertImage={() => document.getElementById('img-upload-trigger')?.click()} />
+                    <input id="img-upload-trigger" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                </div>
+            )}
+
             <div className="flex-1 flex overflow-hidden lg:flex-row bg-white dark:bg-gray-950">
                 
                 {/* LEFT: MAIN CONTENT */}
-                <div className="flex-1 flex flex-col relative min-w-0">
+                <div className="flex-1 flex flex-col relative min-w-0 h-full">
                     
-                    {/* Fixed Toolbar Area */}
-                    {mode === 'edit' && (
-                        <div className="z-10 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm">
-                            <ToolbarPlugin onInsertImage={() => document.getElementById('img-upload-trigger')?.click()} />
-                            {/* Hidden input for image trigger */}
-                            <input id="img-upload-trigger" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                        </div>
-                    )}
-
                     {/* Scrollable Content Area */}
                     <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
                         

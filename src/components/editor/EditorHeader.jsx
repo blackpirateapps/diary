@@ -1,9 +1,9 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, CheckCircle2, Download, Trash2, Eye, PenLine, Maximize2, X } from 'lucide-react';
+import { ChevronLeft, CheckCircle2, Download, Trash2, Eye, PenLine, X } from 'lucide-react';
 
 const EditorHeader = ({ 
-  onClose, saveStatus, onZen, onExport, isExporting, 
+  onClose, saveStatus, onExport, isExporting, 
   onDelete, toggleMode, mode, onDone, entryId 
 }) => {
   return (
@@ -61,15 +61,6 @@ const EditorHeader = ({
           title={mode === 'edit' ? "Switch to Reading Mode" : "Switch to Edit Mode"}
         >
           {mode === 'edit' ? <Eye size={18} strokeWidth={2} /> : <PenLine size={18} strokeWidth={2} />}
-        </motion.button>
-
-        <motion.button 
-          whileTap={{ scale: 0.95 }}
-          onClick={onZen}
-          className="p-2 text-gray-400 hover:text-[var(--accent-500)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 rounded-lg transition-colors"
-          title="Enter Zen Mode"
-        >
-          <Maximize2 size={18} strokeWidth={2} />
         </motion.button>
 
         {entryId && (
