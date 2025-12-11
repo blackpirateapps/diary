@@ -252,6 +252,16 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
     setSaveStatus('saving');
     const dateToSave = overrideDate || currentDate;
     
+     // --- DEBUG START ---
+    console.group('💾 Saving Entry');
+    console.log('ID:', entryId);
+    console.log('Content Length:', state.content?.length);
+    console.table(state.sessions); // Shows the array of sessions being saved
+    console.groupEnd();
+    // --- DEBUG END ---
+    
+    
+    
     onSave({ 
       id: entryId, 
       content: state.content, 

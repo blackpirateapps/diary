@@ -4,10 +4,11 @@ import { $getRoot } from 'lexical';
 import { $isSessionParagraphNode } from '../nodes/SessionParagraphNode';
 import { $createSessionDividerNode, $isSessionDividerNode } from '../nodes/SessionDividerNode';
 
-// Helper to calculate duration string
 const formatDuration = (start, end) => {
   const diff = new Date(end).getTime() - new Date(start).getTime();
-  if (diff < 60000) return null; // Logic: Return null if < 1 min
+  // DEBUG: Log duration calculation
+  // console.log(`Duration Calc: ${diff}ms`);
+  if (diff < 60000) return null; 
   const mins = Math.floor(diff / 60000);
   return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
 };
@@ -16,55 +17,64 @@ export default function SessionVisualizerPlugin({ sessions }) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    if (!sessions || sessions.length === 0) return;
+    // DEBUG: Check if sessions prop is received
+    if (!sessions) {
+        console.log('⚠️ Visualizer: No sessions prop received');
+        return;
+    }
+    console.log('🔍 Visualizer loaded with sessions:', sessions);
 
     return editor.registerUpdateListener(({ dirtyElements }) => {
-      // Only run if content changed
       if (dirtyElements.size === 0) return;
 
       editor.update(() => {
         const root = $getRoot();
         const children = root.getChildren();
-
         let previousSessionId = null;
 
-        children.forEach((node) => {
-          // 1. Cleanup: Remove old dividers
+        console.groupCollapsed('🔍 Visualizer Update Cycle');
+
+        children.forEach((node, index) => {
           if ($isSessionDividerNode(node)) {
-            node.remove(); 
+            // node.remove(); // Uncomment this when you are done debugging to actually remove them
             return;
           }
 
           if ($isSessionParagraphNode(node)) {
             const currentSessionId = node.getSessionId();
             
-            // Safe check: ensure session exists
-            if (currentSessionId !== undefined && sessions[currentSessionId]) {
-              
-              // FIXED: Removed "previousSessionId !== null" to allow the first paragraph to get a divider
-              if (currentSessionId !== previousSessionId) {
-                
-                const sessionData = sessions[currentSessionId];
-                const durationStr = formatDuration(sessionData.startTime, sessionData.endTime);
+            console.log(`Paragraph ${index}: SessionID [${currentSessionId}] | Prev [${previousSessionId}]`);
 
-                // RULE: Only show divider if duration > 1 min
+            if (currentSessionId !== undefined && sessions[currentSessionId]) {
+              const sessionData = sessions[currentSessionId];
+              
+              // DEBUG: Check the condition
+              const isNewSession = currentSessionId !== previousSessionId;
+              // NOTE: If you haven't applied the fix yet, 'previousSessionId !== null' will be false for the first item.
+              const checksOut = previousSessionId !== null && isNewSession; 
+
+              if (checksOut) {
+                const durationStr = formatDuration(sessionData.startTime, sessionData.endTime);
+                console.log(`  -> New Session Detected. Duration: ${durationStr}`);
+                
                 if (durationStr) {
-                  const startTimeStr = new Date(sessionData.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                  
-                  const divider = $createSessionDividerNode(
-                    startTimeStr,
-                    durationStr,
-                    currentSessionId
-                  );
-                  node.insertBefore(divider);
+                  // ... insert logic ...
+                  console.log('  ✅ Inserting Divider');
+                } else {
+                  console.log('  ❌ Skipping: Duration too short (< 1m)');
                 }
+              } else {
+                 console.log(`  ⏭️ No Divider: isNewSession=${isNewSession}, prev!==null=${previousSessionId !== null}`);
               }
+
               previousSessionId = currentSessionId;
             } else {
+              console.warn('  ⚠️ Node has invalid Session ID or Session missing from array');
               previousSessionId = 0; 
             }
           }
         });
+        console.groupEnd();
       });
     });
   }, [editor, sessions]);
