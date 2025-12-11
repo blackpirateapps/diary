@@ -19,19 +19,17 @@ import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
 import { CodeNode } from '@lexical/code';
-import { ParagraphNode } from 'lexical'; // Import ParagraphNode for replacement
+import { ParagraphNode } from 'lexical'; 
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
 import { $nodesOfType, $getRoot } from 'lexical';
 import { MentionNode, $createMentionNode, $isMentionNode } from './nodes/MentionNode'; 
 import MentionsPlugin from './MentionsPlugin';
 
-// --- NEW IMPORTS FOR TIMELINE FEATURE ---
 import { SessionParagraphNode } from './nodes/SessionParagraphNode';
 import { SessionDividerNode } from './nodes/SessionDividerNode';
 import SessionAttributionPlugin from './plugins/SessionAttributionPlugin';
 import SessionVisualizerPlugin from './plugins/SessionVisualizerPlugin';
-// ----------------------------------------
 
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
@@ -48,7 +46,7 @@ const BlobImage = ({ src, ...props }) => {
 
 const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
 
-// --- UTILITY: localStorage Helper Functions ---
+// ... (Utility functions like getByteSize, safeLocalStorageSet - keep as is) ...
 const getByteSize = (str) => new Blob([str]).size;
 
 const formatBytes = (bytes) => {
@@ -111,8 +109,7 @@ const safeLocalStorageRemove = (key) => {
   }
 };
 
-// --- PLUGINS ---
-
+// ... (Plugins: EditorStatePlugin, MentionsTracker, EditorModePlugin, TimeTravelPlugin, PeopleSuggestions - keep as is) ...
 const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate }) => {
   const [editor] = useLexicalComposerContext();
   const isFirstRender = useRef(true);
@@ -203,7 +200,6 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   return null;
 };
 
-// --- PEOPLE SUGGESTIONS ---
 const PeopleSuggestions = ({ contentText }) => {
   const [editor] = useLexicalComposerContext();
   const people = useLiveQuery(() => db.people.toArray()) || [];
@@ -299,7 +295,7 @@ const PeopleSuggestions = ({ contentText }) => {
   );
 };
 
-// --- HEADER ---
+// ... (Header - keep as is) ...
 const EditorPageHeader = ({ entry, onClose, saveStatus, onExport, isExporting, onDelete, toggleMode, mode, storageWarning }) => {
     return (
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-4 flex items-center justify-between flex-shrink-0">
@@ -360,7 +356,7 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onExport, isExporting, o
 };
 
 // --- MAIN EDITOR ---
-const Editor = ({ entry, onClose, onSave, onDelete }) => {
+const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => { // Pass isSidebarOpen
   const [entryId] = useState(entry?.id || Date.now().toString());
   const [currentDate, setCurrentDate] = useState(entry?.date ? new Date(entry.date) : new Date());
   
@@ -455,7 +451,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
 
   const wordCount = previewText.trim().split(/\s+/).filter(Boolean).length;
 
-  // --- localStorage CRASH RECOVERY ---
   const RECOVERY_KEY = `journal-recovery-${entryId}`;
 
   const saveToLocalStorage = useCallback((data) => {
@@ -725,7 +720,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     }
   };
 
-  // --- UPDATED CONFIG WITH NODE REPLACEMENT ---
   const initialConfig = useMemo(() => ({
     namespace: 'MainEditor',
     theme: {
@@ -737,9 +731,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     },
     nodes: [
       HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode,
-      // Add custom nodes
       SessionParagraphNode, SessionDividerNode,
-      // REPLACE STANDARD PARAGRAPH WITH CUSTOM ONE
       {
         replace: ParagraphNode,
         with: (node) => new SessionParagraphNode()
@@ -753,7 +745,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     <>
       <Styles />
 
-      <div className="fixed inset-0 flex flex-col w-full bg-white dark:bg-gray-950 z-40 overflow-hidden">
+      {/* --- MODIFIED ROOT DIV --- */}
+      <div className={`fixed inset-y-0 right-0 left-0 bg-white dark:bg-gray-950 z-40 overflow-hidden transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:left-64' : 'md:left-0'}`}>
           <EditorPageHeader 
             onClose={onClose} 
             saveStatus={saveStatus} 
@@ -767,7 +760,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
           />
 
           <LexicalComposer initialConfig={initialConfig}>
-            {/* INJECT NEW PLUGINS */}
             <SessionAttributionPlugin currentSessionIndex={sessions.length - 1} />
             <SessionVisualizerPlugin sessions={sessions} />
 

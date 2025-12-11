@@ -5,7 +5,7 @@ import {
   BarChart2, Grid, Home, Map as MapIcon, Menu,
   Settings, Book, Moon, MessageCircle, Coffee, Calendar,
   History, Users, Loader2, PanelLeft
-} from 'lucide-react'; // ADDED: PanelLeft icon
+} from 'lucide-react'; 
 
 // --- LAZY LOAD IMPORTS ---
 const MeditationPage = lazy(() => import('./components/MeditationPage'));
@@ -49,7 +49,7 @@ const App = () => {
   const [appName, setAppName] = useState(() => localStorage.getItem('app_name') || 'Journal');
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('app_theme') === 'dark');
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('app_accent') || 'blue');
-  // NEW STATE: Sidebar visibility
+  // Sidebar visibility
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); 
 
   // --- ROUTING LOGIC ---
@@ -67,7 +67,6 @@ const App = () => {
   };
 
   // --- STATE ---
-  // Editor state - using routing approach
   const [currentEntryId, setCurrentEntryId] = useState(null);
   const [showFlashback, setShowFlashback] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
@@ -144,7 +143,6 @@ const App = () => {
       setCurrentEntryId(existing.id);
       navigate('editor');
     } else {
-      // Create new entry
       setCurrentEntryId(null);
       navigate('editor');
     }
@@ -231,7 +229,6 @@ const App = () => {
               <Book className="text-[var(--accent-500)]" size={24} />
               {appName}
            </h1>
-           {/* Sidebar collapse button on desktop */}
            <button 
                 onClick={() => setIsSidebarOpen(false)}
                 className="p-1 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -267,9 +264,9 @@ const App = () => {
       {/* CONTENT AREA */}
       <div 
         className={`flex-1 w-full min-h-screen transition-all duration-300 ease-in-out
-                    ${isSidebarOpen ? 'md:pl-64' : 'md:pl-0'}`} // Conditional padding
+                    ${isSidebarOpen ? 'md:pl-64' : 'md:pl-0'}`} 
       >
-         {/* Sidebar Toggle Button (Visible when sidebar is collapsed) */}
+         {/* Sidebar Toggle Button */}
         {!isSidebarOpen && (
             <button 
                 onClick={() => setIsSidebarOpen(true)}
@@ -298,6 +295,7 @@ const App = () => {
                 onClose={() => navigate('journal')}
                 onSave={handleSaveEntry}
                 onDelete={handleDeleteEntry}
+                isSidebarOpen={isSidebarOpen} // <--- Added Prop
               />
             ) : showFlashback || currentRoute === 'flashback' ? (
               <FlashbackPage 
@@ -325,7 +323,6 @@ const App = () => {
                 {currentRoute === 'stats' && <StatsPage entries={entries || []} isDarkMode={isDarkMode} navigate={navigate} />}
                 {currentRoute === 'media' && <MediaGallery entries={entries || []} onEdit={openEditEditor} />}
                 
-                {/* Pages */}
                 {currentRoute === 'more' && <MoreMenu navigate={navigate} />}
                 {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
                 {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
@@ -345,13 +342,12 @@ const App = () => {
             )}
           </Suspense>
 
-          {/* Hidden Inputs */}
           <input type="date" ref={dateInputRef} onChange={handleDateSelect} className="hidden" />
           <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".zip" />
         </div>
       </div>
 
-      {/* MOBILE NAV (Unchanged, mobile always uses the bottom bar) */}
+      {/* MOBILE NAV (Unchanged) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-40 pb-safe transition-colors">
         <div className="max-w-xl mx-auto flex justify-around py-3">
           <button onClick={() => { navigate('journal'); setShowFlashback(false); }} className={`flex flex-col items-center gap-0.5 ${currentRoute === 'journal' && !showFlashback ? 'text-[var(--accent-600)]' : 'text-gray-400 dark:text-gray-500'}`}>
