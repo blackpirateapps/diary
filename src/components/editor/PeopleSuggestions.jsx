@@ -2,11 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { $getRoot, $isMentionNode, $createMentionNode } from 'lexical';
+import { $getRoot } from 'lexical'; // Only keep $getRoot here
 import { Sparkles, UserPlus } from 'lucide-react';
 import { db } from '../../db'; 
 import { findPeopleMatches } from './editorUtils';
-import { MentionNode } from './nodes/MentionNode';
+
+// Import the helpers from your local file, NOT from 'lexical'
+import { MentionNode, $createMentionNode, $isMentionNode } from './nodes/MentionNode';
 
 const PeopleSuggestions = ({ contentText }) => {
   const [editor] = useLexicalComposerContext();
@@ -21,9 +23,8 @@ const PeopleSuggestions = ({ contentText }) => {
       const uniqueIds = new Set();
 
       textNodes.forEach(node => {
-        // Note: You might need to import $isMentionNode from './nodes/MentionNode' if it's not exported from lexical
-        // or check node type string. Assuming helper works:
-        if (node.getType() === 'mention') return; 
+        // Use the helper properly imported from your node definition
+        if ($isMentionNode(node)) return; 
         
         const text = node.getTextContent();
         const nodeMatches = findPeopleMatches(text, people);
@@ -46,7 +47,7 @@ const PeopleSuggestions = ({ contentText }) => {
         const textNodes = root.getAllTextNodes();
         
         for (const node of textNodes) {
-            if (node.getType() === 'mention') continue;
+            if ($isMentionNode(node)) continue;
 
             const text = node.getTextContent();
             const regex = new RegExp(`\\b${matchWord}\\b`, 'i');
@@ -63,6 +64,7 @@ const PeopleSuggestions = ({ contentText }) => {
                     if (targetNode.getTextContent().length > match[0].length) {
                          targetNode.splitText(match[0].length);
                     }
+                    // Use the helper properly imported from your node definition
                     const mentionNode = $createMentionNode(person.name, person.id, null);
                     targetNode.replace(mentionNode);
                 }
