@@ -555,7 +555,8 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
         onBack={handleZenBack} 
       />
 
-      <div className="flex flex-col h-[calc(100dvh-60px)] md:h-screen w-full bg-white dark:bg-gray-950">
+      {/* FIX: Use fixed inset-0 to ensure full viewport height on mobile without double scroll */}
+      <div className="fixed inset-0 flex flex-col w-full bg-white dark:bg-gray-950 z-40">
           <EditorPageHeader 
             onClose={onClose} 
             saveStatus={saveStatus} 
@@ -578,7 +579,9 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     {/* Fixed Toolbar Area */}
                     {mode === 'edit' && (
                         <div className="z-10 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm">
-                            <ToolbarPlugin />
+                            <ToolbarPlugin onInsertImage={() => document.getElementById('img-upload-trigger')?.click()} />
+                            {/* Hidden input for image trigger */}
+                            <input id="img-upload-trigger" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                         </div>
                     )}
 
@@ -707,10 +710,10 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                 </div>
 
                 {/* RIGHT: SIDEBAR */}
-                <aside className="w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto no-scrollbar">
+                <aside className="w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto no-scrollbar hidden lg:block">
                     
                     {/* Desktop Date/Time Header */}
-                    <div className="mb-8 hidden lg:block">
+                    <div className="mb-8">
                         <div className="flex items-center gap-2 text-[var(--accent-500)] mb-2 font-medium">
                             <Calendar size={18} />
                             <span>{currentDate.getFullYear()}</span>
@@ -735,7 +738,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                         {/* New Tooltip Component for Fuzzy Matching */}
                         {mode === 'edit' && <PeopleSuggestions contentText={previewText} />}
 
-                        <div className="hidden lg:block">
+                        <div>
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Context</label>
                             <MetadataBar 
                                 mood={mood} setMood={setMood} isMoodOpen={isMoodOpen} setIsMoodOpen={setIsMoodOpen} onSave={saveData}
@@ -745,7 +748,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                             />
                         </div>
 
-                        <div className="hidden lg:block">
+                        <div>
                             <div className="mb-6">
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
                                 <TagInput tags={tags} onChange={(newTags) => { setTags(newTags); saveData(true); }} />
@@ -758,7 +761,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                                 </div>
                             )}
                         </div>
-                        <div className="lg:hidden h-2"></div>
                     </div>
                 </aside>
           </div>

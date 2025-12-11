@@ -54,7 +54,8 @@ const BLOCK_TYPES = {
   code: { label: 'Code Block', icon: Code },
 };
 
-const Divider = () => <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1 self-center" />;
+// Added flex-shrink-0 to prevent divider from vanishing
+const Divider = () => <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1 self-center flex-shrink-0" />;
 
 export default function ToolbarPlugin({ onInsertImage }) {
   const [editor] = useLexicalComposerContext();
@@ -114,10 +115,6 @@ export default function ToolbarPlugin({ onInsertImage }) {
           }
         }
       }
-      
-      // Handle Styles (Font/Size) - Simplified detection
-      // Note: Real Lexical Playground uses extensive style parsing here.
-      // We assume defaults or last set values for simplicity in this integration.
     }
   }, [editor]);
 
@@ -133,7 +130,7 @@ export default function ToolbarPlugin({ onInsertImage }) {
         return false;
       }, 1),
       editor.registerCommand(UNDO_COMMAND, (payload) => {
-        setCanUndo(true); // Simplified logic
+        setCanUndo(true); 
         return false;
       }, 1),
       editor.registerCommand(REDO_COMMAND, (payload) => {
@@ -154,57 +151,14 @@ export default function ToolbarPlugin({ onInsertImage }) {
     }
   }, [editor, isLink]);
 
-  const applyStyleText = (styles) => {
-    editor.update(() => {
-      const selection = $getSelection();
-      if ($isRangeSelection(selection)) {
-        $wrapNodes(selection, () => $createParagraphNode()); // Ensure we are in a block that accepts styles
-        // Note: For full style support (font, size) Lexical needs $patchStyleText
-        // Since we are using standard commands, we rely on browser/plugin implementation
-        // For this specific setup, we will use style injection command:
-        Object.entries(styles).forEach(([style, value]) => {
-             editor.dispatchCommand(FORMAT_TEXT_COMMAND, { style: style, value: value }); // This requires custom handling usually, 
-             // or typically:
-             // selection.setStyle(`font-family: ${value}`); 
-        });
-      }
-    });
-  };
-  
-  // Helper for applying styles using standard Lexical commands where possible
-  // or direct style application.
   const setFontFamily = (family) => {
     setSelectedFont(family);
-    // Note: requires custom Style or TextFormat command handling in newer Lexical versions
-    // We will use a direct CSS variable approach or patch if available.
-    // For simplicity in this codebase, we use the command exposed by RichTextPlugin if extended,
-    // or just assume the user wants the standard approach:
-    editor.update(() => {
-        const selection = $getSelection();
-        if ($isRangeSelection(selection)) {
-            // Modern Lexical way:
-            if(selection.style !== undefined) {
-               // selection.setStyle(`font-family: ${family}`);
-            }
-        }
-    });
-    // Fallback using document exec for reliability in simple setups without style plugins
     document.execCommand('fontName', false, family); 
   };
 
   const setFontSize = (size) => {
     setSelectedFontSize(size);
-    // Fallback for simple setups
-    // document.execCommand('fontSize', false, '7'); // This is tricky as execCommand uses 1-7
-    // Proper Lexical way requires @lexical/selection $patchStyleText
-    editor.update(() => {
-       const selection = $getSelection();
-       if ($isRangeSelection(selection)) {
-           // This is a placeholder. Without @lexical/selection import, we skip complex style patching.
-           // You would typically import { $patchStyleText } from '@lexical/selection';
-           // $patchStyleText(selection, { 'font-size': size });
-       }
-    });
+    // Placeholder for font size logic
   };
 
   const formatBlock = (type) => {
@@ -250,20 +204,24 @@ export default function ToolbarPlugin({ onInsertImage }) {
   };
 
   return (
-    <div className="flex items-center gap-1 p-2 border-b border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm sticky top-0 z-20 flex-wrap">
+    // FIX: Changed flex-wrap to flex-nowrap and added overflow-x-auto, no-scrollbar
+    // This ensures buttons are all accessible by scrolling left/right on mobile without taking up vertical space
+    <div className="flex items-center gap-1 p-2 border-b border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm sticky top-0 z-20 flex-nowrap overflow-x-auto no-scrollbar w-full">
       
-      {/* HISTORY */}
-      <button disabled={!canUndo} onClick={() => editor.dispatchCommand(UNDO_COMMAND)} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30">
-        <Undo size={18} />
-      </button>
-      <button disabled={!canRedo} onClick={() => editor.dispatchCommand(REDO_COMMAND)} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30">
-        <Redo size={18} />
-      </button>
+      {/* HISTORY - Added flex-shrink-0 */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button disabled={!canUndo} onClick={() => editor.dispatchCommand(UNDO_COMMAND)} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30">
+            <Undo size={18} />
+        </button>
+        <button disabled={!canRedo} onClick={() => editor.dispatchCommand(REDO_COMMAND)} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30">
+            <Redo size={18} />
+        </button>
+      </div>
 
       <Divider />
 
-      {/* BLOCK FORMATTING */}
-      <div className="relative group">
+      {/* BLOCK FORMATTING - Added flex-shrink-0 */}
+      <div className="relative group flex-shrink-0">
         <button className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-sm font-medium w-32 justify-between">
           <span className="truncate">{BLOCK_TYPES[activeBlock]?.label || 'Normal'}</span>
           <ChevronDown size={14} className="opacity-50" />
@@ -284,8 +242,8 @@ export default function ToolbarPlugin({ onInsertImage }) {
 
       <Divider />
 
-      {/* TEXT FORMATTING */}
-      <div className="flex items-center gap-0.5">
+      {/* TEXT FORMATTING - Added flex-shrink-0 */}
+      <div className="flex items-center gap-0.5 flex-shrink-0">
         <button onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')} className={`p-1.5 rounded ${isBold ? 'bg-[var(--accent-100)] text-[var(--accent-700)]' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
           <Bold size={18} />
         </button>
@@ -308,8 +266,8 @@ export default function ToolbarPlugin({ onInsertImage }) {
 
       <Divider />
 
-      {/* ALIGNMENT */}
-      <div className="flex items-center gap-0.5">
+      {/* ALIGNMENT - Added flex-shrink-0 */}
+      <div className="flex items-center gap-0.5 flex-shrink-0">
         <button onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'left')} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
           <AlignLeft size={18} />
         </button>
@@ -323,8 +281,8 @@ export default function ToolbarPlugin({ onInsertImage }) {
 
       <Divider />
 
-      {/* INSERT ACTIONS */}
-      <div className="flex items-center gap-0.5">
+      {/* INSERT ACTIONS - Added flex-shrink-0 */}
+      <div className="flex items-center gap-0.5 flex-shrink-0">
         <button onClick={onInsertImage} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Insert Image">
           <ImageIcon size={18} />
         </button>
@@ -334,7 +292,7 @@ export default function ToolbarPlugin({ onInsertImage }) {
                const selection = $getSelection();
                if($isRangeSelection(selection)) {
                  const p = $createParagraphNode();
-                 p.append($createParagraphNode().append(document.createTextNode('---'))); // Simple text fallback for HR
+                 p.append($createParagraphNode().append(document.createTextNode('---'))); 
                  selection.insertNodes([p]);
                }
              })
