@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check, UserPlus, Sparkles } from 'lucide-react';
+import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check, UserPlus, Sparkles, AlertCircle } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { db, useBlobUrl } from '../../db'; 
 import EntryPdfDocument from './EntryPdfDocument'; 
 import TagInput from './TagInput'; 
-import SessionVisualizer from './SessionVisualizer';
 
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
@@ -22,7 +21,6 @@ import { LinkNode } from '@lexical/link';
 import { CodeNode } from '@lexical/code';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
-// --- MENTIONS IMPORTS ---
 import { $nodesOfType, $getRoot } from 'lexical';
 import { MentionNode, $createMentionNode, $isMentionNode } from './nodes/MentionNode'; 
 import MentionsPlugin from './MentionsPlugin';
@@ -41,6 +39,69 @@ const BlobImage = ({ src, ...props }) => {
 };
 
 const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
+
+// --- UTILITY: localStorage Helper Functions ---
+const getByteSize = (str) => new Blob([str]).size;
+
+const formatBytes = (bytes) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+};
+
+const checkLocalStorageQuota = () => {
+  try {
+    const test = 'x'.repeat(1024); // 1KB test
+    localStorage.setItem('__quota_test__', test);
+    localStorage.removeItem('__quota_test__');
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+const safeLocalStorageSet = (key, value) => {
+  try {
+    const size = getByteSize(value);
+    const MAX_SIZE = 4.5 * 1024 * 1024; // 4.5MB safety limit (leave buffer)
+    
+    if (size > MAX_SIZE) {
+      console.warn(`Data too large for localStorage: ${formatBytes(size)}`);
+      return { success: false, reason: 'size', size };
+    }
+    
+    localStorage.setItem(key, value);
+    return { success: true, size };
+  } catch (e) {
+    if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+      console.error('localStorage quota exceeded');
+      return { success: false, reason: 'quota', error: e };
+    }
+    console.error('localStorage error:', e);
+    return { success: false, reason: 'error', error: e };
+  }
+};
+
+const safeLocalStorageGet = (key) => {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.error('localStorage read error:', e);
+    return null;
+  }
+};
+
+const safeLocalStorageRemove = (key) => {
+  try {
+    localStorage.removeItem(key);
+    return true;
+  } catch (e) {
+    console.error('localStorage remove error:', e);
+    return false;
+  }
+};
 
 // --- PLUGINS ---
 
@@ -134,7 +195,7 @@ const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
   return null;
 };
 
-// --- PEOPLE SUGGESTIONS SIDEBAR ---
+// --- PEOPLE SUGGESTIONS ---
 const PeopleSuggestions = ({ contentText }) => {
   const [editor] = useLexicalComposerContext();
   const people = useLiveQuery(() => db.people.toArray()) || [];
@@ -148,9 +209,7 @@ const PeopleSuggestions = ({ contentText }) => {
       const uniqueIds = new Set();
 
       textNodes.forEach(node => {
-        // Ignore matches if they are already MentionNodes
         if ($isMentionNode(node)) return;
-
         const text = node.getTextContent();
         const nodeMatches = findPeopleMatches(text, people);
         
@@ -180,7 +239,6 @@ const PeopleSuggestions = ({ contentText }) => {
             
             if (match) {
                 const startOffset = match.index;
-                const endOffset = startOffset + match[0].length;
                 let targetNode = node;
                 
                 if (startOffset > 0) {
@@ -234,7 +292,7 @@ const PeopleSuggestions = ({ contentText }) => {
 };
 
 // --- HEADER ---
-const EditorPageHeader = ({ entry, onClose, saveStatus, onExport, isExporting, onDelete, toggleMode, mode }) => {
+const EditorPageHeader = ({ entry, onClose, saveStatus, onExport, isExporting, onDelete, toggleMode, mode, storageWarning }) => {
     return (
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-4 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -247,10 +305,19 @@ const EditorPageHeader = ({ entry, onClose, saveStatus, onExport, isExporting, o
           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
             saveStatus === 'saved' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400' :
             saveStatus === 'saving' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400' :
+            saveStatus === 'storage-warning' ? 'bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-400' :
             'text-gray-400 dark:text-gray-600'
           }`}>
-            {saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : ''}
+            {saveStatus === 'saved' ? 'Saved' : 
+             saveStatus === 'saving' ? 'Saving...' : 
+             saveStatus === 'storage-warning' ? 'Large Entry' : ''}
           </span>
+          {storageWarning && (
+            <div className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400" title={storageWarning}>
+              <AlertCircle size={14} />
+              <span className="hidden sm:inline">{storageWarning}</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -335,7 +402,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [images, setImages] = useState(entry?.images || []);
   const [taggedPeople, setTaggedPeople] = useState(entry?.people || []);
   
-  // Stable refs pattern for autosave - always use latest values
   const stableStateRef = useRef({
     content,
     previewText,
@@ -350,7 +416,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     taggedPeople
   });
 
-  // Update refs on every render
   useEffect(() => {
     stableStateRef.current = {
       content,
@@ -373,6 +438,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [saveStatus, setSaveStatus] = useState('idle');
   const [isExporting, setIsExporting] = useState(false);
+  const [storageWarning, setStorageWarning] = useState('');
   
   const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
   const todaysSleepSessions = sleepSessions.filter(session => 
@@ -380,6 +446,88 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
   );
 
   const wordCount = previewText.trim().split(/\s+/).filter(Boolean).length;
+
+  // --- localStorage CRASH RECOVERY ---
+  const RECOVERY_KEY = `journal-recovery-${entryId}`;
+
+  const saveToLocalStorage = useCallback((data) => {
+    // Create lightweight backup (no images, they're too big)
+    const backupData = {
+      content: data.content,
+      previewText: data.previewText,
+      sessions: data.sessions,
+      mood: data.mood,
+      location: data.location,
+      locationLat: data.locationLat,
+      locationLng: data.locationLng,
+      weather: data.weather,
+      tags: data.tags,
+      taggedPeople: data.taggedPeople,
+      imageCount: data.images.length,
+      lastSaved: Date.now()
+    };
+
+    const jsonString = JSON.stringify(backupData);
+    const result = safeLocalStorageSet(RECOVERY_KEY, jsonString);
+    
+    if (!result.success) {
+      if (result.reason === 'size') {
+        setStorageWarning(`Entry too large (${formatBytes(result.size)}). Crash recovery disabled.`);
+        setSaveStatus('storage-warning');
+      } else if (result.reason === 'quota') {
+        setStorageWarning('Browser storage full. Crash recovery disabled.');
+        setSaveStatus('storage-warning');
+      }
+    } else {
+      setStorageWarning('');
+    }
+  }, [RECOVERY_KEY]);
+
+  // Immediate localStorage backup on every change
+  useEffect(() => {
+    saveToLocalStorage(stableStateRef.current);
+  }, [content, previewText, sessions, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, saveToLocalStorage]);
+
+  // Restore from localStorage on mount (crash recovery)
+  useEffect(() => {
+    const recoverData = () => {
+      const recovered = safeLocalStorageGet(RECOVERY_KEY);
+      if (!recovered) return;
+      
+      try {
+        const data = JSON.parse(recovered);
+        const timeSince = Date.now() - data.lastSaved;
+        
+        // Only recover if crash was recent (< 5 minutes)
+        if (timeSince < 5 * 60 * 1000) {
+          // For new entries or if content differs significantly
+          const hasChanges = data.content && data.content !== (entry?.content || '');
+          
+          if (hasChanges && window.confirm('🔄 Recovered unsaved changes from browser crash. Restore?')) {
+            setContent(data.content || '');
+            setPreviewText(data.previewText || '');
+            setMood(data.mood || 5);
+            setLocation(data.location || '');
+            setLocationLat(data.locationLat || null);
+            setLocationLng(data.locationLng || null);
+            setWeather(data.weather || '');
+            setTags(data.tags || []);
+            setSessions(data.sessions || []);
+            setTaggedPeople(data.taggedPeople || []);
+            
+            if (data.imageCount && data.imageCount !== images.length) {
+              console.warn(`Note: ${data.imageCount} images were in the crashed session but couldn't be recovered`);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Recovery failed:', e);
+      }
+    };
+    
+    recoverData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [RECOVERY_KEY, entry?.id]);
 
   const handleSessionUpdate = useCallback((currentText, currentJSON) => {
     const now = Date.now();
@@ -445,16 +593,20 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
       date: dateToSave.toISOString() 
     });
 
-    setTimeout(() => setSaveStatus('saved'), 500);
+    setTimeout(() => {
+      setSaveStatus('saved');
+      // Clear localStorage recovery data after successful IndexedDB save
+      safeLocalStorageRemove(RECOVERY_KEY);
+      setStorageWarning('');
+    }, 500);
     setTimeout(() => setSaveStatus('idle'), 2500);
   };
 
-  // Stable callback wrapper
   const saveData = useCallback((isAutoSave = false, overrideDate = null) => {
     saveDataRef.current?.(isAutoSave, overrideDate);
   }, []);
 
-  // Debounced autosave
+  // Debounced autosave to IndexedDB
   useEffect(() => {
     const timer = setTimeout(() => {
       saveData(true);
@@ -473,6 +625,15 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [saveStatus]);
+
+  // Cleanup localStorage on unmount if saved
+  useEffect(() => {
+    return () => {
+      if (saveStatus === 'saved') {
+        safeLocalStorageRemove(RECOVERY_KEY);
+      }
+    };
+  }, [RECOVERY_KEY, saveStatus]);
 
   const handleTimeChange = (e) => {
     if (!e.target.value) return;
@@ -584,7 +745,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
     <>
       <Styles />
 
-      {/* Mobile-optimized fixed layout with proper height handling */}
       <div className="fixed inset-0 flex flex-col w-full bg-white dark:bg-gray-950 z-40 overflow-hidden">
           <EditorPageHeader 
             onClose={onClose} 
@@ -595,6 +755,7 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
             toggleMode={() => setMode(m => m === 'edit' ? 'preview' : 'edit')} 
             mode={mode} 
             entry={entry}
+            storageWarning={storageWarning}
           />
 
           <LexicalComposer initialConfig={initialConfig}>
@@ -607,12 +768,11 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     {mode === 'edit' && (
                         <div className="flex-shrink-0 z-10 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm">
                             <ToolbarPlugin onInsertImage={() => document.getElementById('img-upload-trigger')?.click()} />
-                            {/* Hidden input for image trigger */}
                             <input id="img-upload-trigger" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                         </div>
                     )}
 
-                    {/* Scrollable Content Area - key fix for mobile */}
+                    {/* Scrollable Content Area */}
                     <main className="flex-1 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch flex flex-col min-h-0">
                         
                         {images.length > 0 && (
@@ -792,7 +952,6 @@ const Editor = ({ entry, onClose, onSave, onDelete }) => {
                     </div>
 
                     <div className="flex flex-col gap-6 flex-1 overflow-y-auto">
-                        {/* New Tooltip Component for Fuzzy Matching */}
                         {mode === 'edit' && <PeopleSuggestions contentText={previewText} />}
 
                         <div>
