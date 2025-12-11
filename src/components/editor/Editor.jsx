@@ -1,20 +1,28 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Clock, AlignLeft, ChevronLeft, Trash2, Calendar, MapPin, Sun, Pencil, Check, UserPlus, Sparkles, AlertCircle } from 'lucide-react';
+import { Clock, Trash2 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { db, useBlobUrl } from '../../db'; 
 import EntryPdfDocument from './EntryPdfDocument'; 
 import TagInput from './TagInput'; 
+import MetadataBar from './MetadataBar';
+import SleepWidget from './SleepWidget';
+import ToolbarPlugin from './ToolbarPlugin';
 
+// Refactored Imports
+import { safeLocalStorageSet, safeLocalStorageGet, safeLocalStorageRemove, formatBytes } from './storageUtils';
+import EditorHeader from './EditorHeader';
+import EditorSidebar from './EditorSidebar';
+import { EditorStatePlugin, MentionsTracker, EditorModePlugin, TimeTravelPlugin } from './EditorPlugins';
+
+// Lexical Imports
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
-import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
-import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { TRANSFORMERS, $convertFromMarkdownString } from '@lexical/markdown';
+import { TRANSFORMERS } from '@lexical/markdown';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
@@ -22,8 +30,7 @@ import { CodeNode } from '@lexical/code';
 import { ParagraphNode } from 'lexical'; 
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 
-import { $nodesOfType, $getRoot } from 'lexical';
-import { MentionNode, $createMentionNode, $isMentionNode } from './nodes/MentionNode'; 
+import { MentionNode } from './nodes/MentionNode'; 
 import MentionsPlugin from './MentionsPlugin';
 
 // --- TIMELINE FEATURES ---
@@ -35,11 +42,7 @@ import SessionVisualizerPlugin from './plugins/SessionVisualizerPlugin';
 
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
-
-import MetadataBar from './MetadataBar';
-import SleepWidget from './SleepWidget';
-import ToolbarPlugin from './ToolbarPlugin';
-import { Styles, compressImage, blobToJpeg, getWeatherLabel, findPeopleMatches } from './editorUtils';
+import { Styles, compressImage, blobToJpeg, getWeatherLabel } from './editorUtils';
 
 const BlobImage = ({ src, ...props }) => {
   const url = useBlobUrl(src);
@@ -47,306 +50,6 @@ const BlobImage = ({ src, ...props }) => {
 };
 
 const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
-
-// --- UTILITY: localStorage Helper Functions ---
-const getByteSize = (str) => new Blob([str]).size;
-
-const formatBytes = (bytes) => {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
-};
-
-const safeLocalStorageSet = (key, value) => {
-  try {
-    const size = getByteSize(value);
-    const MAX_SIZE = 4.5 * 1024 * 1024; // 4.5MB safety limit
-    
-    if (size > MAX_SIZE) {
-      console.warn(`Data too large for localStorage: ${formatBytes(size)}`);
-      return { success: false, reason: 'size', size };
-    }
-    
-    localStorage.setItem(key, value);
-    return { success: true, size };
-  } catch (e) {
-    if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-      console.error('localStorage quota exceeded');
-      return { success: false, reason: 'quota', error: e };
-    }
-    console.error('localStorage error:', e);
-    return { success: false, reason: 'error', error: e };
-  }
-};
-
-const safeLocalStorageGet = (key) => {
-  try {
-    return localStorage.getItem(key);
-  } catch (e) {
-    console.error('localStorage read error:', e);
-    return null;
-  }
-};
-
-const safeLocalStorageRemove = (key) => {
-  try {
-    localStorage.removeItem(key);
-    return true;
-  } catch (e) {
-    console.error('localStorage remove error:', e);
-    return false;
-  }
-};
-
-// --- PLUGINS ---
-
-const EditorStatePlugin = ({ content, onChange, onTextChange, onSessionUpdate }) => {
-  const [editor] = useLexicalComposerContext();
-  const isFirstRender = useRef(true);
-
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      if (content) {
-        try {
-          const jsonState = JSON.parse(content);
-          if (jsonState.root) {
-             const editorState = editor.parseEditorState(jsonState);
-             editor.setEditorState(editorState);
-          } else {
-             throw new Error("Not lexical state");
-          }
-        } catch (e) {
-          editor.update(() => {
-             $convertFromMarkdownString(content, TRANSFORMERS);
-          });
-        }
-      }
-    }
-  }, [content, editor]);
-
-  return (
-    <OnChangePlugin
-      onChange={(editorState) => {
-        const jsonString = JSON.stringify(editorState.toJSON());
-        onChange(jsonString);
-        editorState.read(() => {
-            const textContent = $getRoot().getTextContent();
-            onTextChange(textContent);
-            onSessionUpdate(textContent, jsonString); 
-        });
-      }}
-    />
-  );
-};
-
-const MentionsTracker = ({ onChange }) => {
-  const [editor] = useLexicalComposerContext();
-  useEffect(() => {
-    return editor.registerUpdateListener(({ editorState }) => {
-      editorState.read(() => {
-        const mentionNodes = $nodesOfType(MentionNode);
-        const uniqueIds = [...new Set(mentionNodes.map((node) => node.__id))];
-        onChange(uniqueIds);
-      });
-    });
-  }, [editor, onChange]);
-  return null;
-};
-
-const EditorModePlugin = ({ mode }) => {
-  const [editor] = useLexicalComposerContext();
-  useEffect(() => {
-    editor.setEditable(mode === 'edit');
-  }, [editor, mode]);
-  return null;
-};
-
-const TimeTravelPlugin = ({ sessions, activeIndex, isPreviewMode }) => {
-  const [editor] = useLexicalComposerContext();
-  
-  useEffect(() => {
-    if (!isPreviewMode || !sessions || sessions.length === 0) return;
-    const index = Math.min(Math.max(0, activeIndex), sessions.length - 1);
-    const session = sessions[index];
-    const content = session?.contentSnapshot;
-
-    if (!content) return;
-
-    editor.update(() => {
-        try {
-            const jsonState = JSON.parse(content);
-            if (jsonState.root) {
-                const editorState = editor.parseEditorState(jsonState);
-                editor.setEditorState(editorState);
-                return;
-            }
-        } catch (e) {
-            $convertFromMarkdownString(String(content), TRANSFORMERS);
-        }
-    });
-  }, [editor, sessions, activeIndex, isPreviewMode]);
-
-  return null;
-};
-
-// --- PEOPLE SUGGESTIONS ---
-const PeopleSuggestions = ({ contentText }) => {
-  const [editor] = useLexicalComposerContext();
-  const people = useLiveQuery(() => db.people.toArray()) || [];
-  const [suggestions, setSuggestions] = useState([]);
-
-  useEffect(() => {
-    editor.getEditorState().read(() => {
-      const root = $getRoot();
-      const textNodes = root.getAllTextNodes();
-      const matches = [];
-      const uniqueIds = new Set();
-
-      textNodes.forEach(node => {
-        if ($isMentionNode(node)) return;
-        const text = node.getTextContent();
-        const nodeMatches = findPeopleMatches(text, people);
-        
-        nodeMatches.forEach(m => {
-             if (!uniqueIds.has(m.person.id)) {
-                 uniqueIds.add(m.person.id);
-                 matches.push(m);
-             }
-        });
-      });
-      
-      setSuggestions(matches);
-    });
-  }, [contentText, people, editor]);
-
-  const replaceWithMention = (person, matchWord) => {
-    editor.update(() => {
-        const root = $getRoot();
-        const textNodes = root.getAllTextNodes();
-        
-        for (const node of textNodes) {
-            if ($isMentionNode(node)) continue;
-
-            const text = node.getTextContent();
-            const regex = new RegExp(`\\b${matchWord}\\b`, 'i');
-            const match = regex.exec(text);
-            
-            if (match) {
-                const startOffset = match.index;
-                let targetNode = node;
-                
-                if (startOffset > 0) {
-                    targetNode = targetNode.splitText(startOffset)[1];
-                }
-                if (targetNode) {
-                    if (targetNode.getTextContent().length > match[0].length) {
-                         targetNode.splitText(match[0].length);
-                    }
-                    const mentionNode = $createMentionNode(person.name, person.id, null);
-                    targetNode.replace(mentionNode);
-                }
-                break;
-            }
-        }
-    });
-  };
-
-  if (suggestions.length === 0) return null;
-
-  return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl p-3 shadow-sm mb-6 animate-fadeIn">
-        <div className="flex items-center gap-2 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
-            <Sparkles size={14} className="text-[var(--accent-500)]" />
-            <span>Detected People</span>
-        </div>
-        <div className="space-y-2">
-            {suggestions.map(({ person, matchWord }) => (
-                <div key={person.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex-shrink-0">
-                             <span className="flex items-center justify-center w-full h-full text-[10px] font-bold">{person.name[0]}</span>
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                            <span className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">{person.name}</span>
-                            <span className="text-[10px] text-gray-400">Matches "{matchWord}"</span>
-                        </div>
-                    </div>
-                    <button 
-                        onClick={() => replaceWithMention(person, matchWord)}
-                        className="p-1.5 bg-[var(--accent-50)] text-[var(--accent-600)] rounded-md hover:bg-[var(--accent-100)] transition-colors"
-                        title="Convert to Mention"
-                    >
-                        <UserPlus size={16} />
-                    </button>
-                </div>
-            ))}
-        </div>
-    </div>
-  );
-};
-
-// --- HEADER ---
-const EditorPageHeader = ({ entry, onClose, saveStatus, onExport, isExporting, onDelete, toggleMode, mode, storageWarning }) => {
-    return (
-      <header className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-4 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300">
-            <ChevronLeft size={24} />
-          </button>
-          <span className="font-semibold text-gray-800 dark:text-gray-100">
-            {entry?.id ? 'Edit Entry' : 'New Entry'}
-          </span>
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-            saveStatus === 'saved' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400' :
-            saveStatus === 'saving' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400' :
-            saveStatus === 'storage-warning' ? 'bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-400' :
-            'text-gray-400 dark:text-gray-600'
-          }`}>
-            {saveStatus === 'saved' ? 'Saved' : 
-             saveStatus === 'saving' ? 'Saving...' : 
-             saveStatus === 'storage-warning' ? 'Large Entry' : ''}
-          </span>
-          {storageWarning && (
-            <div className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400" title={storageWarning}>
-              <AlertCircle size={14} />
-              <span className="hidden sm:inline">{storageWarning}</span>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={toggleMode}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
-            title={mode === 'edit' ? 'Preview Mode' : 'Edit Mode'}
-          >
-            {mode === 'edit' ? <Check size={20} /> : <Pencil size={20} />}
-          </button>
-
-          {entry?.id && (
-            <button 
-              onClick={onDelete} 
-              className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900 transition-colors text-red-600 dark:text-red-400"
-              title="Delete Entry"
-            >
-              <Trash2 size={20} />
-            </button>
-          )}
-
-          <button 
-            onClick={onExport} 
-            disabled={isExporting}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 disabled:opacity-50"
-            title="Export to PDF"
-          >
-            {isExporting ? <span className="text-sm">...</span> : 'PDF'}
-          </button>
-        </div>
-      </header>
-    );
-};
 
 // --- MAIN EDITOR ---
 const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => { 
@@ -399,33 +102,14 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
   const [images, setImages] = useState(entry?.images || []);
   const [taggedPeople, setTaggedPeople] = useState(entry?.people || []);
   
+  // Ref for stable state access in timeouts
   const stableStateRef = useRef({
-    content,
-    previewText,
-    sessions,
-    mood,
-    location,
-    locationLat,
-    locationLng,
-    weather,
-    tags,
-    images,
-    taggedPeople
+    content, previewText, sessions, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople
   });
 
   useEffect(() => {
     stableStateRef.current = {
-      content,
-      previewText,
-      sessions,
-      mood,
-      location,
-      locationLat,
-      locationLng,
-      weather,
-      tags,
-      images,
-      taggedPeople
+      content, previewText, sessions, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople
     };
   });
 
@@ -512,7 +196,7 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
             }
           }
         }
-      } catch (e) {
+      } catch (e) { 
         console.error('Recovery failed:', e);
       }
     };
@@ -714,7 +398,6 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
     }
   };
 
-  // --- UPDATED CONFIG WITH NODE REPLACEMENT ---
   const initialConfig = useMemo(() => ({
     namespace: 'MainEditor',
     theme: {
@@ -726,9 +409,7 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
     },
     nodes: [
       HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, MentionNode,
-      // Add custom nodes
       SessionParagraphNode, SessionDividerNode,
-      // REPLACE STANDARD PARAGRAPH WITH CUSTOM ONE
       {
         replace: ParagraphNode,
         with: (node) => new SessionParagraphNode()
@@ -736,14 +417,14 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
     ],
     onError: (error) => console.error(error),
     editable: mode === 'edit'
-  }), []); 
+  }), [mode]); 
 
   return (
     <>
       <Styles />
 
       <div className={`fixed inset-y-0 right-0 left-0 bg-white dark:bg-gray-950 z-40 overflow-hidden flex flex-col transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:left-64' : 'md:left-0'}`}>
-          <EditorPageHeader 
+          <EditorHeader 
             onClose={onClose} 
             saveStatus={saveStatus} 
             onExport={handleExportPdf} 
@@ -916,78 +597,28 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
                     </main>
                 </div>
 
-                {/* RIGHT: SIDEBAR - Desktop only */}
-                <aside className="hidden lg:flex lg:flex-col w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto min-h-0">
-                    
-                    {/* Desktop Date/Time Header */}
-                    <div className="mb-8 flex-shrink-0">
-                        <div className="flex items-center gap-2 text-[var(--accent-500)] mb-2 font-medium">
-                            <Calendar size={18} />
-                            <span>{currentDate.getFullYear()}</span>
-                        </div>
-                        <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-1 tracking-tight">
-                          {currentDate.toLocaleDateString(undefined, { weekday: 'long' })}
-                        </h2>
-                        <h3 className="text-2xl text-gray-400 font-medium mb-4">
-                          {currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
-                        </h3>
-                        
-                        <div className="flex items-center gap-4 text-sm text-gray-500 border-b border-gray-200 dark:border-gray-800 pb-4">
-                            <div className="relative group cursor-pointer hover:text-[var(--accent-500)] transition-colors flex items-center gap-2">
-                                <Clock size={16} strokeWidth={2.5} />
-                                <span className="font-semibold">
-                                  {currentDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                                </span>
-                                <input 
-                                  type="time" 
-                                  value={currentDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} 
-                                  onChange={handleTimeChange} 
-                                  className="absolute inset-0 opacity-0 cursor-pointer" 
-                                />
-                            </div>
-                            <div className="flex items-center gap-1.5 ml-auto">
-                                <AlignLeft size={14} />
-                                <span>{wordCount} words</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-6 flex-1 overflow-y-auto">
-                        {mode === 'edit' && <PeopleSuggestions contentText={previewText} />}
-
-                        <div>
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Context</label>
-                            <MetadataBar 
-                                mood={mood} 
-                                setMood={setMood} 
-                                isMoodOpen={isMoodOpen} 
-                                setIsMoodOpen={setIsMoodOpen} 
-                                onSave={saveData}
-                                location={location} 
-                                onLocationClick={handleLocation} 
-                                loadingLocation={loadingLocation}
-                                weather={weather} 
-                                uploading={uploading} 
-                                onImageUpload={handleImageUpload}
-                                isSidebar={true}
-                            />
-                        </div>
-
-                        <div>
-                            <div className="mb-6">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
-                                <TagInput tags={tags} onChange={setTags} />
-                            </div>
-
-                            {todaysSleepSessions.length > 0 && (
-                                <div>
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Sleep Data</label>
-                                    {todaysSleepSessions.map(session => <SleepWidget key={session.id} session={session} />)}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </aside>
+                {/* RIGHT: SIDEBAR */}
+                <EditorSidebar 
+                    currentDate={currentDate}
+                    handleTimeChange={handleTimeChange}
+                    wordCount={wordCount}
+                    mode={mode}
+                    previewText={previewText}
+                    mood={mood}
+                    setMood={setMood}
+                    isMoodOpen={isMoodOpen}
+                    setIsMoodOpen={setIsMoodOpen}
+                    saveData={saveData}
+                    location={location}
+                    handleLocation={handleLocation}
+                    loadingLocation={loadingLocation}
+                    weather={weather}
+                    uploading={uploading}
+                    handleImageUpload={handleImageUpload}
+                    tags={tags}
+                    setTags={setTags}
+                    todaysSleepSessions={todaysSleepSessions}
+                />
           </div>
         </LexicalComposer>
       </div>
