@@ -38,24 +38,27 @@ export default function SessionVisualizerPlugin({ sessions }) {
         // Second pass: insert dividers where needed
         const childrenAfterRemoval = root.getChildren();
         let previousSessionId = null;
+        let isFirstParagraph = true; // Track if this is the first paragraph
 
         console.groupCollapsed('🔍 Visualizer Update Cycle');
         
         childrenAfterRemoval.forEach((node, index) => {
           if ($isSessionParagraphNode(node)) {
             const currentSessionId = node.getSessionId();
-            console.log(`Paragraph ${index}: SessionID [${currentSessionId}] | Prev [${previousSessionId}]`);
+            console.log(`Paragraph ${index}: SessionID [${currentSessionId}] | Prev [${previousSessionId}] | First: ${isFirstParagraph}`);
 
             if (currentSessionId !== undefined && sessions[currentSessionId]) {
               const sessionData = sessions[currentSessionId];
               const isNewSession = currentSessionId !== previousSessionId;
 
-              // Show divider if session changed from previous paragraph
-              if (isNewSession) {
+              // Show divider if:
+              // 1. It's the first paragraph with content (isFirstParagraph = true), OR
+              // 2. Session changed from previous paragraph
+              if (isFirstParagraph || isNewSession) {
                 const durationStr = formatDuration(sessionData.startTime, sessionData.endTime);
                 
                 if (durationStr) {
-                  console.log(`  -> New Session Detected. Duration: ${durationStr}`);
+                  console.log(`  -> ${isFirstParagraph ? 'First Paragraph' : 'New Session'} Detected. Duration: ${durationStr}`);
                   
                   const divider = $createSessionDividerNode(
                     sessionData.startTime,
@@ -71,9 +74,11 @@ export default function SessionVisualizerPlugin({ sessions }) {
               }
 
               previousSessionId = currentSessionId;
+              isFirstParagraph = false; // No longer the first paragraph
             } else {
               console.warn('  ⚠️ Node has invalid Session ID or Session missing from array');
               previousSessionId = currentSessionId !== undefined ? currentSessionId : 0;
+              isFirstParagraph = false;
             }
           }
         });
