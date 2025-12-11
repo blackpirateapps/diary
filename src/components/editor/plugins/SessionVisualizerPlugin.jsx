@@ -23,68 +23,76 @@ export default function SessionVisualizerPlugin({ sessions }) {
 
     console.log('🔍 Visualizer loaded with sessions:', sessions);
 
-    return editor.registerUpdateListener(() => {
-      editor.update(() => {
-        const root = $getRoot();
-        const children = root.getChildren();
-        
-        // First pass: remove all existing dividers
-        children.forEach((node) => {
-          if ($isSessionDividerNode(node)) {
-            node.remove();
-          }
-        });
+    return editor.registerUpdateListener(({ tags }) => {
+      // Prevent infinite loop - ignore updates we triggered ourselves
+      if (tags.has('session-visualizer')) return;
 
-        // Second pass: insert dividers where needed
-        const childrenAfterRemoval = root.getChildren();
-        let previousSessionId = null;
-        let isFirstParagraph = true; // Track if this is the first paragraph
-
-        console.groupCollapsed('🔍 Visualizer Update Cycle');
-        
-        childrenAfterRemoval.forEach((node, index) => {
-          if ($isSessionParagraphNode(node)) {
-            const currentSessionId = node.getSessionId();
-            console.log(`Paragraph ${index}: SessionID [${currentSessionId}] | Prev [${previousSessionId}] | First: ${isFirstParagraph}`);
-
-            if (currentSessionId !== undefined && sessions[currentSessionId]) {
-              const sessionData = sessions[currentSessionId];
-              const isNewSession = currentSessionId !== previousSessionId;
-
-              // Show divider if:
-              // 1. It's the first paragraph with content (isFirstParagraph = true), OR
-              // 2. Session changed from previous paragraph
-              if (isFirstParagraph || isNewSession) {
-                const durationStr = formatDuration(sessionData.startTime, sessionData.endTime);
-                
-                if (durationStr) {
-                  console.log(`  -> ${isFirstParagraph ? 'First Paragraph' : 'New Session'} Detected. Duration: ${durationStr}`);
-                  
-                  const divider = $createSessionDividerNode(
-                    sessionData.startTime,
-                    durationStr
-                  );
-                  node.insertBefore(divider);
-                  console.log('  ✅ Inserting Divider');
-                } else {
-                  console.log('  ❌ Skipping: Duration too short (< 1m)');
-                }
-              } else {
-                console.log(`  ⏭️ No Divider: Same session continues`);
-              }
-
-              previousSessionId = currentSessionId;
-              isFirstParagraph = false; // No longer the first paragraph
-            } else {
-              console.warn('  ⚠️ Node has invalid Session ID or Session missing from array');
-              previousSessionId = currentSessionId !== undefined ? currentSessionId : 0;
-              isFirstParagraph = false;
+      editor.update(
+        () => {
+          const root = $getRoot();
+          const children = root.getChildren();
+          
+          // First pass: remove all existing dividers
+          children.forEach((node) => {
+            if ($isSessionDividerNode(node)) {
+              node.remove();
             }
-          }
-        });
+          });
 
-        console.groupEnd();
-      });
+          // Second pass: insert dividers where needed
+          const childrenAfterRemoval = root.getChildren();
+          let previousSessionId = null;
+          let isFirstParagraph = true;
+
+          console.groupCollapsed('🔍 Visualizer Update Cycle');
+          
+          childrenAfterRemoval.forEach((node, index) => {
+            if ($isSessionParagraphNode(node)) {
+              const currentSessionId = node.getSessionId();
+              console.log(`Paragraph ${index}: SessionID [${currentSessionId}] | Prev [${previousSessionId}] | First: ${isFirstParagraph}`);
+
+              if (currentSessionId !== undefined && sessions[currentSessionId]) {
+                const sessionData = sessions[currentSessionId];
+                const isNewSession = currentSessionId !== previousSessionId;
+
+                // Show divider if:
+                // 1. It's the first paragraph (ALWAYS, regardless of duration), OR
+                // 2. Session changed AND duration >= 1 minute
+                if (isFirstParagraph || isNewSession) {
+                  const durationStr = formatDuration(sessionData.startTime, sessionData.endTime);
+                  
+                  // For first paragraph, show divider even if duration is short
+                  if (isFirstParagraph || durationStr) {
+                    const displayDuration = durationStr || '<1m';
+                    console.log(`  -> ${isFirstParagraph ? 'First Paragraph (always show)' : 'New Session'} Detected. Duration: ${displayDuration}`);
+                    
+                    const divider = $createSessionDividerNode(
+                      sessionData.startTime,
+                      displayDuration
+                    );
+                    node.insertBefore(divider);
+                    console.log('  ✅ Inserting Divider');
+                  } else {
+                    console.log('  ❌ Skipping: Duration too short (< 1m) and not first paragraph');
+                  }
+                } else {
+                  console.log(`  ⏭️ No Divider: Same session continues`);
+                }
+
+                previousSessionId = currentSessionId;
+                isFirstParagraph = false;
+              } else {
+                console.warn('  ⚠️ Node has invalid Session ID or Session missing from array');
+                previousSessionId = currentSessionId !== undefined ? currentSessionId : 0;
+                isFirstParagraph = false;
+              }
+            }
+          });
+
+          console.groupEnd();
+        },
+        { tag: 'session-visualizer' } // ✅ Prevent infinite loop
+      );
     });
   }, [editor, sessions]);
 
