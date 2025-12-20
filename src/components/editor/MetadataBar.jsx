@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Sun, Image as ImageIcon, CloudRain, Frown, Meh, Smile, Heart, ChevronDown } from 'lucide-react';
+import { MapPin, Sun, Image as ImageIcon, CloudRain, Frown, Meh, Smile, Heart, ChevronDown, History } from 'lucide-react';
 import MoodPopup from '../MoodPopup';
 
 // Keep icons consistent
@@ -20,7 +20,9 @@ const MOODS = [
 const MetadataBar = ({ 
   mood, setMood, isMoodOpen, setIsMoodOpen, onSave,
   location, onLocationClick, loadingLocation,
-  weather, uploading, onImageUpload, isSidebar = false
+  weather, uploading, onImageUpload, 
+  locationHistory = [], // NEW PROP
+  isSidebar = false
 }) => {
   const fileInputRef = useRef(null);
   const CurrentMoodIcon = MOODS.find(m => m.value === mood)?.icon || Meh;
@@ -60,25 +62,55 @@ const MetadataBar = ({
         </AnimatePresence>
       </div>
 
-      {/* Location */}
-      <motion.button 
-        whileTap={{ scale: 0.98 }}
-        onClick={onLocationClick}
-        disabled={loadingLocation}
-        className={`${baseBtnClass} ${isSidebar ? sidebarClass : mobileClass} ${location && !isSidebar ? 'bg-white border-gray-100 text-[var(--accent-600)]' : 'text-gray-500 hover:text-[var(--accent-500)]'}`}
-      >
-        <div className={`flex items-center justify-center ${isSidebar ? 'w-8 h-8 rounded-md bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 text-gray-400' : ''}`}>
-           {loadingLocation ? (
-             <div className="w-4 h-4 border-2 border-[var(--accent-500)] border-t-transparent rounded-full animate-spin" />
-           ) : (
-             <MapPin size={18} strokeWidth={2} />
-           )}
-        </div>
-        <span className="truncate flex-1 text-left text-gray-700 dark:text-gray-300">{location || 'Add Location'}</span>
-      </motion.button>
+      {/* Location Tracking */}
+      <div className="flex flex-col gap-1">
+        <motion.button 
+          whileTap={{ scale: 0.98 }}
+          onClick={onLocationClick}
+          disabled={loadingLocation}
+          className={`${baseBtnClass} ${isSidebar ? sidebarClass : mobileClass} ${location && !isSidebar ? 'bg-white border-gray-100 text-[var(--accent-600)]' : 'text-gray-500 hover:text-[var(--accent-500)]'}`}
+        >
+          <div className={`flex items-center justify-center ${isSidebar ? 'w-8 h-8 rounded-md bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 text-gray-400' : ''}`}>
+             {loadingLocation ? (
+               <div className="w-4 h-4 border-2 border-[var(--accent-500)] border-t-transparent rounded-full animate-spin" />
+             ) : (
+               <MapPin size={18} strokeWidth={2} />
+             )}
+          </div>
+          <span className="truncate flex-1 text-left text-gray-700 dark:text-gray-300">
+            {locationHistory.length > 0 ? `Check in (${locationHistory.length})` : (location || 'Add Location')}
+          </span>
+        </motion.button>
 
-      {/* Weather */}
-      {(weather || isSidebar) && (
+        {/* Visual Travel Timeline (Sidebar Only) */}
+        {isSidebar && locationHistory.length > 0 && (
+          <div className="mt-2 ml-4 pl-4 border-l-2 border-gray-100 dark:border-gray-800 space-y-4 py-2">
+            {locationHistory.map((entry, idx) => (
+              <div key={idx} className="relative">
+                {/* Timeline Dot */}
+                <div className="absolute -left-[21px] top-1 w-2 h-2 rounded-full bg-[var(--accent-500)] border-2 border-white dark:border-gray-950" />
+                
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 leading-tight">
+                    {entry.address}
+                  </span>
+                  {entry.weather && (
+                    <span className="text-[10px] text-orange-500 mt-0.5 flex items-center gap-1">
+                      <Sun size={10} /> {entry.weather}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Weather (Legacy/Single display) */}
+      {(weather || isSidebar) && !isSidebar && (
         <div className={`${baseBtnClass} ${isSidebar ? sidebarClass : mobileClass} ${!isSidebar ? 'bg-white border-gray-100' : ''}`}>
            <div className={`flex items-center justify-center ${isSidebar ? 'w-8 h-8 rounded-md bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 text-orange-400' : 'text-orange-400'}`}>
               <Sun size={18} strokeWidth={2} />

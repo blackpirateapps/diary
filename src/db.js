@@ -1,4 +1,3 @@
-
 import Dexie from 'dexie';
 import { useLiveQuery } from 'dexie-react-hooks';
 import JSZip from 'jszip';
@@ -34,8 +33,18 @@ db.version(4).stores({
   meditation_sessions: '++id, startTime, duration' 
 });
 
-// Version 5: Added People/Contacts [NEW]
+// Version 5: Added People/Contacts
 db.version(5).stores({
+  entries: '++id, date, mood, *tags, *people',
+  sleep_sessions: 'id, startTime',
+  chat_analytics: 'id, name',
+  meditation_sessions: '++id, startTime, duration',
+  people: '++id, name, relationship'
+});
+
+// Version 6: Added support for Location History [NEW]
+// We keep the same indexes, but the objects will now store a 'locationHistory' array.
+db.version(6).stores({
   entries: '++id, date, mood, *tags, *people',
   sleep_sessions: 'id, startTime',
   chat_analytics: 'id, name',
@@ -66,13 +75,13 @@ db.on('populate', () => {
     tags: ['welcome', 'guide'],
     location: 'My Mind Palace',
     weather: 'Clear',
+    locationHistory: [], // Initialized for Version 6
     content: "# Welcome to your new Journal! 📔\n\nThis is a safe, offline-first space for your thoughts. Here are a few things you can do:\n\n* **Rich Text:** Use bold, italics, lists, and more.\n* **Mentions:** Go to the People page to add contacts, then type '@' in the editor to link them.\n* **Privacy:** Your data stays on your device.\n\nTry exploring the menu to see stats, maps, and more. Happy journaling!",
     preview: "Welcome to your new Journal! 📔 This is a safe, offline-first space for your thoughts...",
     people: ['1']
   });
 
   // 3. Add Default Sleep Data (Showcase Charts)
-  // We generate 3 simple sessions for the past 3 nights
   const oneDay = 24 * 60 * 60 * 1000;
   
   const sleepSamples = [
@@ -86,9 +95,9 @@ db.on('populate', () => {
       snore: 0,
       noiseLevel: 30,
       metadata: {},
-      movementData: [], // Empty for lightweight default
+      movementData: [], 
       sensorData: [],
-      hypnogram: [] // Empty means it will use basic calculation in UI
+      hypnogram: [] 
     },
     {
       id: (now.getTime() - oneDay * 2).toString(),

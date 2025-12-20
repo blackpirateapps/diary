@@ -98,18 +98,22 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
   const [locationLat, setLocationLat] = useState(entry?.locationLat || null);
   const [locationLng, setLocationLng] = useState(entry?.locationLng || null);
   const [weather, setWeather] = useState(entry?.weather || '');
+  
+  // New State: Location History Tracking
+  const [locationHistory, setLocationHistory] = useState(entry?.locationHistory || []);
+
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
   const [taggedPeople, setTaggedPeople] = useState(entry?.people || []);
   
   // Ref for stable state access in timeouts
   const stableStateRef = useRef({
-    content, previewText, sessions, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople
+    content, previewText, sessions, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, locationHistory
   });
 
   useEffect(() => {
     stableStateRef.current = {
-      content, previewText, sessions, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople
+      content, previewText, sessions, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, locationHistory
     };
   });
 
@@ -140,6 +144,7 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
       location: data.location,
       locationLat: data.locationLat,
       locationLng: data.locationLng,
+      locationHistory: data.locationHistory,
       weather: data.weather,
       tags: data.tags,
       taggedPeople: data.taggedPeople,
@@ -165,7 +170,7 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
 
   useEffect(() => {
     saveToLocalStorage(stableStateRef.current);
-  }, [content, previewText, sessions, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, saveToLocalStorage]);
+  }, [content, previewText, sessions, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, locationHistory, saveToLocalStorage]);
 
   useEffect(() => {
     const recoverData = () => {
@@ -179,13 +184,14 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
         if (timeSince < 5 * 60 * 1000) {
           const hasChanges = data.content && data.content !== (entry?.content || '');
           
-          if (hasChanges && window.confirm('🔄 Recovered unsaved changes from browser crash. Restore?')) {
+          if (hasChanges && window.confirm('🕒 Recovered unsaved changes from browser crash. Restore?')) {
             setContent(data.content || '');
             setPreviewText(data.previewText || '');
             setMood(data.mood || 5);
             setLocation(data.location || '');
             setLocationLat(data.locationLat || null);
             setLocationLng(data.locationLng || null);
+            setLocationHistory(data.locationHistory || []);
             setWeather(data.weather || '');
             setTags(data.tags || []);
             setSessions(data.sessions || []);
@@ -202,8 +208,7 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
     };
     
     recoverData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [RECOVERY_KEY, entry?.id]);
+  }, [RECOVERY_KEY, entry?.id, entry?.content, images.length]);
 
   const handleSessionUpdate = useCallback((currentText, currentJSON) => {
     const now = Date.now();
@@ -252,16 +257,6 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
     setSaveStatus('saving');
     const dateToSave = overrideDate || currentDate;
     
-     // --- DEBUG START ---
-    console.group('💾 Saving Entry');
-    console.log('ID:', entryId);
-    console.log('Content Length:', state.content?.length);
-    console.table(state.sessions); // Shows the array of sessions being saved
-    console.groupEnd();
-    // --- DEBUG END ---
-    
-    
-    
     onSave({ 
       id: entryId, 
       content: state.content, 
@@ -270,6 +265,7 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
       location: state.location, 
       locationLat: state.locationLat, 
       locationLng: state.locationLng, 
+      locationHistory: state.locationHistory, // Persist history
       weather: state.weather, 
       tags: state.tags, 
       images: state.images, 
@@ -295,7 +291,7 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
       saveData(true);
     }, 1000);
     return () => clearTimeout(timer);
-  }, [content, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, sessions, saveData]);
+  }, [content, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, sessions, locationHistory, saveData]);
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -343,6 +339,7 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
     }
   };
 
+  // Modified handleLocation to track history
   const handleLocation = async () => {
     if (loadingLocation) return;
     setLoadingLocation(true);
@@ -354,21 +351,36 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
 
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
-      setLocationLat(latitude); 
-      setLocationLng(longitude);
+      let newWeather = weather;
+      let newAddress = location;
       
       try {
         const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
         if (wRes.ok) {
            const d = await wRes.json();
-           setWeather(`${getWeatherLabel(d.current_weather.weathercode)}, ${Math.round(d.current_weather.temperature)}°C`);
+           newWeather = `${getWeatherLabel(d.current_weather.weathercode)}, ${Math.round(d.current_weather.temperature)}°C`;
+           setWeather(newWeather);
         }
         const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
         if (locRes.ok) {
             const d = await locRes.json();
             const parts = [d.address.road || d.address.building, d.address.city || d.address.town || d.address.suburb].filter(Boolean);
-            setLocation(parts.length ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+            newAddress = parts.length ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+            setLocation(newAddress);
         }
+
+        // Add to history array
+        const newSnapshot = {
+          timestamp: new Date().toISOString(),
+          lat: latitude,
+          lng: longitude,
+          address: newAddress,
+          weather: newWeather
+        };
+        setLocationHistory(prev => [...prev, newSnapshot]);
+        setLocationLat(latitude); 
+        setLocationLng(longitude);
+
       } catch (e) { 
         console.error(e); 
       } finally { 
@@ -447,16 +459,13 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
           />
 
           <LexicalComposer initialConfig={initialConfig}>
-            {/* INJECT NEW PLUGINS */}
             <SessionAttributionPlugin currentSessionIndex={sessions.length - 1} />
             <SessionVisualizerPlugin sessions={sessions} />
 
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-white dark:bg-gray-950 min-h-0">
                 
-                {/* LEFT: MAIN CONTENT */}
                 <div className="flex-1 flex flex-col relative min-w-0 min-h-0">
                     
-                    {/* Fixed Toolbar Area */}
                     {mode === 'edit' && (
                         <div className="flex-shrink-0 z-10 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm">
                             <ToolbarPlugin onInsertImage={() => document.getElementById('img-upload-trigger')?.click()} />
@@ -464,7 +473,6 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
                         </div>
                     )}
 
-                    {/* Scrollable Content Area */}
                     <main className="flex-1 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch flex flex-col min-h-0">
                         
                         {images.length > 0 && (
@@ -490,7 +498,6 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
 
                         <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 lg:px-12 lg:py-12">
                             
-                            {/* Mobile Date Header */}
                             <div className="lg:hidden mb-6">
                                 <div className="flex items-baseline gap-3 mb-1">
                                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
@@ -502,7 +509,6 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
                                 </div>
                             </div>
 
-                            {/* Mobile Metadata */}
                             <div className="lg:hidden mb-8">
                                 <MetadataBar 
                                     mood={mood} 
@@ -516,6 +522,7 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
                                     weather={weather} 
                                     uploading={uploading} 
                                     onImageUpload={handleImageUpload}
+                                    locationHistory={locationHistory}
                                     isSidebar={false}
                                 />
                             </div>
@@ -588,7 +595,6 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
                                 )}
                             </div>
 
-                            {/* Mobile Tags/Sleep */}
                             <div className="lg:hidden mt-12 pt-8 border-t border-gray-100 dark:border-gray-800">
                                 <div className="mb-8">
                                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">Tags</label>
@@ -607,7 +613,6 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
                     </main>
                 </div>
 
-                {/* RIGHT: SIDEBAR */}
                 <EditorSidebar 
                     currentDate={currentDate}
                     handleTimeChange={handleTimeChange}
@@ -623,6 +628,7 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
                     handleLocation={handleLocation}
                     loadingLocation={loadingLocation}
                     weather={weather}
+                    locationHistory={locationHistory}
                     uploading={uploading}
                     handleImageUpload={handleImageUpload}
                     tags={tags}
