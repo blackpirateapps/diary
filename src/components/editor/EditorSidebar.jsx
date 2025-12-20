@@ -1,4 +1,3 @@
-// EditorSidebar.jsx
 import React from 'react';
 import { Clock, Calendar, AlignLeft } from 'lucide-react';
 import TagInput from './TagInput';
@@ -25,7 +24,8 @@ const EditorSidebar = ({
   handleImageUpload, 
   tags, 
   setTags, 
-  todaysSleepSessions 
+  todaysSleepSessions,
+  locationHistory = [] // Ensure default value
 }) => {
   return (
     <aside className="hidden lg:flex lg:flex-col w-full lg:w-[340px] border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-6 overflow-y-auto min-h-0">
@@ -80,6 +80,7 @@ const EditorSidebar = ({
                     weather={weather} 
                     uploading={uploading} 
                     onImageUpload={handleImageUpload}
+                    locationHistory={locationHistory} // [FIX] Added this prop
                     isSidebar={true}
                 />
             </div>

@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Sun, Image as ImageIcon, CloudRain, Frown, Meh, Smile, Heart, ChevronDown, History } from 'lucide-react';
+import { MapPin, Sun, Image as ImageIcon, CloudRain, Frown, Meh, Smile, Heart, ChevronDown } from 'lucide-react';
 import MoodPopup from '../MoodPopup';
 
 // Keep icons consistent
@@ -21,7 +21,7 @@ const MetadataBar = ({
   mood, setMood, isMoodOpen, setIsMoodOpen, onSave,
   location, onLocationClick, loadingLocation,
   weather, uploading, onImageUpload, 
-  locationHistory = [], // NEW PROP
+  locationHistory = [], 
   isSidebar = false
 }) => {
   const fileInputRef = useRef(null);
@@ -78,21 +78,23 @@ const MetadataBar = ({
              )}
           </div>
           <span className="truncate flex-1 text-left text-gray-700 dark:text-gray-300">
-            {locationHistory.length > 0 ? `Check in (${locationHistory.length})` : (location || 'Add Location')}
+            {locationHistory.length > 1 
+              ? `Check in (${locationHistory.length})` 
+              : (location || 'Add Location')}
           </span>
         </motion.button>
 
         {/* Visual Travel Timeline (Sidebar Only) */}
-        {isSidebar && locationHistory.length > 0 && (
+        {isSidebar && locationHistory && locationHistory.length > 0 && (
           <div className="mt-2 ml-4 pl-4 border-l-2 border-gray-100 dark:border-gray-800 space-y-4 py-2">
             {locationHistory.map((entry, idx) => (
-              <div key={idx} className="relative">
+              <div key={idx} className="relative group">
                 {/* Timeline Dot */}
                 <div className="absolute -left-[21px] top-1 w-2 h-2 rounded-full bg-[var(--accent-500)] border-2 border-white dark:border-gray-950" />
                 
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                    {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
                   </span>
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300 leading-tight">
                     {entry.address}

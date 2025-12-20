@@ -339,12 +339,13 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
     }
   };
 
-  // Modified handleLocation to track history
-  const handleLocation = async () => {
+  // --- FIXED LOCATION HANDLER ---
+  const handleLocation = useCallback(async () => {
     if (loadingLocation) return;
     setLoadingLocation(true);
+    
     if (!navigator.geolocation) { 
-      alert("Geolocation not supported"); 
+      alert("Geolocation not supported by your browser"); 
       setLoadingLocation(false); 
       return; 
     }
@@ -352,24 +353,27 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
       let newWeather = weather;
-      let newAddress = location;
+      let newAddress = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`; // Default fallback
       
       try {
+        // 1. Fetch Weather
         const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
         if (wRes.ok) {
            const d = await wRes.json();
            newWeather = `${getWeatherLabel(d.current_weather.weathercode)}, ${Math.round(d.current_weather.temperature)}°C`;
            setWeather(newWeather);
         }
+
+        // 2. Fetch Address
         const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
         if (locRes.ok) {
             const d = await locRes.json();
             const parts = [d.address.road || d.address.building, d.address.city || d.address.town || d.address.suburb].filter(Boolean);
-            newAddress = parts.length ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+            if (parts.length > 0) newAddress = parts.join(', ');
             setLocation(newAddress);
         }
 
-        // Add to history array
+        // 3. Update History & State with Duplicate Prevention
         const newSnapshot = {
           timestamp: new Date().toISOString(),
           lat: latitude,
@@ -377,21 +381,43 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
           address: newAddress,
           weather: newWeather
         };
-        setLocationHistory(prev => [...prev, newSnapshot]);
+        
+        setLocationHistory(prev => {
+            // Prevent exact duplicates within 1 minute
+            const last = prev[prev.length - 1];
+            if (last) {
+                const timeDiff = new Date(newSnapshot.timestamp) - new Date(last.timestamp);
+                // If same address and less than 1 minute has passed, do not add
+                if (timeDiff < 60000 && last.address === newAddress) {
+                    return prev; 
+                }
+            }
+            return [...prev, newSnapshot];
+        });
+        
         setLocationLat(latitude); 
         setLocationLng(longitude);
 
       } catch (e) { 
-        console.error(e); 
+        console.error("Location fetch error:", e); 
+        // Still add the raw coordinates if API fails
+        setLocationHistory(prev => [...prev, {
+            timestamp: new Date().toISOString(),
+            lat: latitude,
+            lng: longitude,
+            address: newAddress,
+            weather: newWeather
+        }]);
       } finally { 
         setLoadingLocation(false); 
       }
     }, (e) => { 
       console.error(e); 
-      alert("Location error"); 
+      alert("Location access denied or failed."); 
       setLoadingLocation(false); 
     });
-  };
+  }, [loadingLocation, weather]);
+  // --------------------------------
 
   const handleExportPdf = async () => {
     setIsExporting(true);
@@ -624,7 +650,7 @@ const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => {
                     isMoodOpen={isMoodOpen}
                     setIsMoodOpen={setIsMoodOpen}
                     saveData={saveData}
-                    location={location}
+                    location={location} 
                     handleLocation={handleLocation}
                     loadingLocation={loadingLocation}
                     weather={weather}
