@@ -1,13 +1,45 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 
-// --- STYLES ---
-const styles = StyleSheet.create({
+// --- MORSE CODE DICTIONARY ---
+const MORSE_MAP = {
+  'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.',
+  'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..',
+  'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.',
+  'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
+  'Y': '-.--', 'Z': '--..',
+  '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....',
+  '6': '-....', '7': '--...', '8': '---..', '9': '----.', '0': '-----',
+  ' ': '   ', // 3 spaces for word separation
+  '.': '.-.-.-', ',': '--..--', '?': '..--..', "'": '.----.', '!': '-.-.--',
+  '/': '-..-.', '(': '-.--.', ')': '-.--.-', '&': '.-...', ':': '---...',
+  ';': '-.-.-.', '=': '-...-', '+': '.-.-.', '-': '-....-', '_': '..--.-',
+  '"': '.-..-.', '$': '...-..-', '@': '.--.-.'
+};
+
+// --- HELPER: TEXT TRANSFORMER ---
+const transformText = (text, mode) => {
+  if (!text) return '';
+  
+  if (mode === 'MORSE') {
+    // Convert to Uppercase, map to Morse, join with single space for char separation
+    return text
+      .toUpperCase()
+      .split('')
+      .map(char => MORSE_MAP[char] !== undefined ? MORSE_MAP[char] : char)
+      .join(' '); 
+  }
+  
+  return text;
+};
+
+// --- DYNAMIC STYLES GENERATOR ---
+const createStyles = (mode) => StyleSheet.create({
   page: {
     padding: 40,
     backgroundColor: '#ffffff',
-    fontFamily: 'Helvetica',
-    fontSize: 11,
+    fontFamily: mode === 'MORSE' ? 'Courier' : 'Helvetica',
+    fontSize: mode === 'MORSE' ? 10 : 11,
     lineHeight: 1.5,
     color: '#1f2937'
   },
@@ -44,7 +76,6 @@ const styles = StyleSheet.create({
   },
   metaContainer: {
     flexDirection: 'row',
-    // gap: 15, // REMOVED: 'gap' causes crashes in older React-PDF versions
     marginBottom: 10,
     fontSize: 10,
     color: '#4b5563',
@@ -53,23 +84,45 @@ const styles = StyleSheet.create({
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 15, // ADDED replacement for gap
+    marginRight: 15, 
   },
   body: {
     marginBottom: 15,
-    textAlign: 'left'
+    textAlign: 'left',
+    ...(mode === 'MIRROR' ? {
+      transform: 'scale(-1, 1)', 
+      opacity: 0.6,              
+    } : {})
   },
   
   // --- TYPOGRAPHY ---
   paragraph: { marginBottom: 6 },
-  h1: { fontSize: 18, fontFamily: 'Helvetica-Bold', marginTop: 12, marginBottom: 6, color: '#111827' },
-  h2: { fontSize: 15, fontFamily: 'Helvetica-Bold', marginTop: 10, marginBottom: 4, color: '#374151' },
-  h3: { fontSize: 13, fontFamily: 'Helvetica-Bold', marginTop: 8, marginBottom: 2, color: '#4b5563' },
+  h1: { 
+    fontSize: 18, 
+    fontFamily: mode === 'MORSE' ? 'Courier-Bold' : 'Helvetica-Bold', 
+    marginTop: 12, 
+    marginBottom: 6, 
+    color: '#111827' 
+  },
+  h2: { 
+    fontSize: 15, 
+    fontFamily: mode === 'MORSE' ? 'Courier-Bold' : 'Helvetica-Bold', 
+    marginTop: 10, 
+    marginBottom: 4, 
+    color: '#374151' 
+  },
+  h3: { 
+    fontSize: 13, 
+    fontFamily: mode === 'MORSE' ? 'Courier-Bold' : 'Helvetica-Bold', 
+    marginTop: 8, 
+    marginBottom: 2, 
+    color: '#4b5563' 
+  },
   
   // --- INLINE STYLES ---
-  bold: { fontFamily: 'Helvetica-Bold' },
-  italic: { fontFamily: 'Helvetica-Oblique' },
-  boldItalic: { fontFamily: 'Helvetica-BoldOblique' },
+  bold: { fontFamily: mode === 'MORSE' ? 'Courier-Bold' : 'Helvetica-Bold' },
+  italic: { fontFamily: mode === 'MORSE' ? 'Courier-Oblique' : 'Helvetica-Oblique' },
+  boldItalic: { fontFamily: mode === 'MORSE' ? 'Courier-BoldOblique' : 'Helvetica-BoldOblique' },
   underline: { textDecoration: 'underline' },
   strikethrough: { textDecoration: 'line-through' },
   codeInline: { fontFamily: 'Courier', backgroundColor: '#f3f4f6', fontSize: 10, padding: 2 },
@@ -105,9 +158,9 @@ const styles = StyleSheet.create({
     paddingLeft: 4
   },
   listItemBullet: {
-    width: 15,
+    width: 25, 
     fontSize: 11,
-    fontFamily: 'Helvetica'
+    fontFamily: mode === 'MORSE' ? 'Courier' : 'Helvetica'
   },
   listItemContent: {
     flex: 1
@@ -155,13 +208,12 @@ const styles = StyleSheet.create({
   galleryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    // gap: 10 // REMOVED
   },
   imageWrapper: {
     width: '30%',
     height: 150,
     marginBottom: 10,
-    marginRight: '3%', // ADDED: Manual spacing
+    marginRight: '3%',
     borderRadius: 2,
     backgroundColor: '#f9fafb',
     alignItems: 'center',
@@ -175,24 +227,40 @@ const styles = StyleSheet.create({
 });
 
 // --- HELPER: FALLBACK MARKDOWN PARSER (Legacy support) ---
-const MarkdownText = ({ text }) => {
+const MarkdownText = ({ text, mode, styles }) => {
   if (!text) return null;
-  // Ensure text is a string to prevent .split crash
   const safeText = typeof text === 'string' ? text : JSON.stringify(text);
   const lines = safeText.split('\n');
 
   return lines.map((line, lineIdx) => {
-    if (line.startsWith('# ')) return <Text key={lineIdx} style={styles.h1}>{line.replace('# ', '')}</Text>;
-    if (line.startsWith('## ')) return <Text key={lineIdx} style={styles.h2}>{line.replace('## ', '')}</Text>;
+    let cleanLine = line;
+    let style = styles.paragraph;
+    
+    if (line.startsWith('# ')) {
+      style = styles.h1;
+      cleanLine = line.replace('# ', '');
+    } else if (line.startsWith('## ')) {
+      style = styles.h2;
+      cleanLine = line.replace('## ', '');
+    }
 
-    const parts = line.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+    const parts = cleanLine.split(/(\*\*.*?\*\*|\*.*?\*)/g);
 
     return (
-      <Text key={lineIdx} style={styles.paragraph}>
+      <Text key={lineIdx} style={style}>
         {parts.map((part, partIdx) => {
-          if (part.startsWith('**') && part.endsWith('**')) return <Text key={partIdx} style={styles.bold}>{part.slice(2, -2)}</Text>;
-          if (part.startsWith('*') && part.endsWith('*')) return <Text key={partIdx} style={styles.italic}>{part.slice(1, -1)}</Text>;
-          return <Text key={partIdx}>{part}</Text>;
+          let content = part;
+          let inlineStyle = {};
+
+          if (part.startsWith('**') && part.endsWith('**')) {
+            content = part.slice(2, -2);
+            inlineStyle = styles.bold;
+          } else if (part.startsWith('*') && part.endsWith('*')) {
+            content = part.slice(1, -1);
+            inlineStyle = styles.italic;
+          }
+          
+          return <Text key={partIdx} style={inlineStyle}>{transformText(content, mode)}</Text>;
         })}
       </Text>
     );
@@ -200,7 +268,7 @@ const MarkdownText = ({ text }) => {
 };
 
 // --- HELPER: PARSE INLINE CSS ---
-const parseInlineStyle = (styleString) => {
+const parseInlineStyle = (styleString, mode) => {
   if (!styleString) return {};
   const customStyles = {};
   const rules = styleString.split(';');
@@ -217,19 +285,21 @@ const parseInlineStyle = (styleString) => {
         customStyles.backgroundColor = val;
         break;
       case 'font-size':
-        // React-PDF expects numbers for font size
         const size = parseFloat(val);
         if(!isNaN(size)) customStyles.fontSize = size;
         break;
       case 'font-family':
-        // Map common web fonts to PDF standard fonts
-        const lowerVal = val.toLowerCase();
-        if (lowerVal.includes('courier') || lowerVal.includes('mono')) {
-          customStyles.fontFamily = 'Courier';
-        } else if (lowerVal.includes('times') || lowerVal.includes('serif') || lowerVal.includes('georgia')) {
-          customStyles.fontFamily = 'Times-Roman';
+        if (mode === 'MORSE') {
+           customStyles.fontFamily = 'Courier';
         } else {
-          customStyles.fontFamily = 'Helvetica';
+            const lowerVal = val.toLowerCase();
+            if (lowerVal.includes('courier') || lowerVal.includes('mono')) {
+            customStyles.fontFamily = 'Courier';
+            } else if (lowerVal.includes('times') || lowerVal.includes('serif') || lowerVal.includes('georgia')) {
+            customStyles.fontFamily = 'Times-Roman';
+            } else {
+            customStyles.fontFamily = 'Helvetica';
+            }
         }
         break;
       case 'text-decoration':
@@ -245,76 +315,71 @@ const parseInlineStyle = (styleString) => {
 };
 
 // --- HELPER: LEXICAL JSON RENDERER ---
-const RichTextRenderer = ({ content }) => {
+const RichTextRenderer = ({ content, mode, styles }) => {
   if (!content) return null;
 
   let root;
   try {
-    // FIX: Handle content if it is already an Object, or a JSON string
     const json = typeof content === 'string' ? JSON.parse(content) : content;
     if (json && json.root) root = json.root;
   } catch (e) {
-    // Not valid JSON, fallback to Markdown text
-    return <MarkdownText text={content} />;
+    return <MarkdownText text={content} mode={mode} styles={styles} />;
   }
 
-  if (!root) return <MarkdownText text={content} />;
+  if (!root) return <MarkdownText text={content} mode={mode} styles={styles} />;
 
-  // Recursive renderer for inline nodes (text, links, mentions)
+  // Recursive renderer
   const renderChildren = (children) => {
-    if(!children) return null;
+    if (!children) return null;
     return children.map((node, index) => {
       if (node.type === 'text') {
         const isBold = (node.format & 1) !== 0;
         const isItalic = (node.format & 2) !== 0;
         
-        // Handle font family logic specifically for bold/italic/bold-italic
-        let baseFont = styles.page.fontFamily; // Default
-        
-        // Parse custom style first to check if font-family is overridden
-        const customStyle = parseInlineStyle(node.style);
-        if (customStyle.fontFamily) {
-            // Mapping for custom fonts if needed
+        let customStyle = parseInlineStyle(node.style, mode);
+
+        // Font Logic handling Morse/Normal modes
+        if (mode === 'MORSE') {
+             if (isBold && isItalic) customStyle.fontFamily = 'Courier-BoldOblique';
+             else if (isBold) customStyle.fontFamily = 'Courier-Bold';
+             else if (isItalic) customStyle.fontFamily = 'Courier-Oblique';
+             else customStyle.fontFamily = 'Courier';
+        } else {
+            // Standard Font Mapping
             if (customStyle.fontFamily === 'Times-Roman') {
                  if (isBold && isItalic) customStyle.fontFamily = 'Times-BoldItalic';
                  else if (isBold) customStyle.fontFamily = 'Times-Bold';
                  else if (isItalic) customStyle.fontFamily = 'Times-Italic';
-            } else if (customStyle.fontFamily === 'Helvetica') {
+            } else if (customStyle.fontFamily === 'Helvetica' || !customStyle.fontFamily) {
                  if (isBold && isItalic) customStyle.fontFamily = 'Helvetica-BoldOblique';
                  else if (isBold) customStyle.fontFamily = 'Helvetica-Bold';
                  else if (isItalic) customStyle.fontFamily = 'Helvetica-Oblique';
-            } else if (customStyle.fontFamily === 'Courier') {
-                 if (isBold && isItalic) customStyle.fontFamily = 'Courier-BoldOblique';
-                 else if (isBold) customStyle.fontFamily = 'Courier-Bold';
-                 else if (isItalic) customStyle.fontFamily = 'Courier-Oblique';
+                 else customStyle.fontFamily = 'Helvetica';
             }
-        } else {
-            // Default styling logic
-            if (isBold && isItalic) customStyle.fontFamily = 'Helvetica-BoldOblique';
-            else if (isBold) customStyle.fontFamily = 'Helvetica-Bold';
-            else if (isItalic) customStyle.fontFamily = 'Helvetica-Oblique';
         }
 
         const nodeStyles = [
-          customStyle, // Custom font, color, size
+          customStyle, 
           (node.format & 4) ? styles.strikethrough : {},
           (node.format & 8) ? styles.underline : {},
           (node.format & 16) ? styles.codeInline : {},
         ];
 
-        return <Text key={index} style={nodeStyles}>{node.text}</Text>;
+        return <Text key={index} style={nodeStyles}>{transformText(node.text, mode)}</Text>;
       }
       
       if (node.type === 'linebreak') {
         return <Text key={index}>{'\n'}</Text>;
       }
 
-      // Handle Mentions
+      // Mentions
       if (node.type === 'mention') {
-          return <Text key={index} style={{ color: '#2563eb', fontFamily: 'Helvetica-Bold' }}>@{node.text}</Text>;
+          return <Text key={index} style={{ color: '#2563eb', fontFamily: mode === 'MORSE' ? 'Courier-Bold' : 'Helvetica-Bold' }}>
+            {mode === 'MORSE' ? transformText('@'+node.text, mode) : '@'+node.text}
+          </Text>;
       }
 
-      // Handle Links/AutoLinks
+      // Links
       if (node.type === 'link' || node.type === 'autolink') {
          return <Text key={index} style={{ color: '#2563eb', textDecoration: 'underline' }}>{renderChildren(node.children)}</Text>;
       }
@@ -323,20 +388,17 @@ const RichTextRenderer = ({ content }) => {
     });
   };
 
-  // Renderer for Block nodes
+  // Block Renderer
   return (
     <View>
       {root.children.map((block, index) => {
-        // Handle Alignment
         const alignStyle = block.format ? { textAlign: block.format } : {};
 
-        // Headings
         if (block.type === 'heading') {
           const hStyle = block.tag === 'h1' ? styles.h1 : block.tag === 'h2' ? styles.h2 : styles.h3;
           return <Text key={index} style={[hStyle, alignStyle]}>{renderChildren(block.children)}</Text>;
         }
         
-        // Blockquote
         if (block.type === 'quote') {
           return (
             <View key={index} style={[styles.quoteBlock, alignStyle]}>
@@ -345,7 +407,6 @@ const RichTextRenderer = ({ content }) => {
           );
         }
 
-        // Code Block
         if (block.type === 'code') {
            return (
              <View key={index} style={styles.codeBlock}>
@@ -354,7 +415,6 @@ const RichTextRenderer = ({ content }) => {
            );
         }
 
-        // Lists
         if (block.type === 'list') {
           const isNumbered = block.listType === 'number';
           return (
@@ -362,7 +422,7 @@ const RichTextRenderer = ({ content }) => {
               {block.children.map((listItem, i) => (
                 <View key={i} style={styles.listItem}>
                   <Text style={styles.listItemBullet}>
-                    {isNumbered ? `${listItem.value}.` : '•'}
+                    {isNumbered ? transformText(`${listItem.value}.`, mode) : (mode === 'MORSE' ? '' : '•')} 
                   </Text>
                   <View style={styles.listItemContent}>
                      <Text style={[styles.paragraph, alignStyle]}>{renderChildren(listItem.children)}</Text>
@@ -373,7 +433,6 @@ const RichTextRenderer = ({ content }) => {
           );
         }
 
-        // Default Paragraph
         return (
           <Text key={index} style={[styles.paragraph, alignStyle]}>
             {renderChildren(block.children)}
@@ -389,7 +448,8 @@ const formatTime = (dateObj) => {
 };
 
 // --- MAIN DOCUMENT ---
-const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
+const EntryPdfDocument = ({ entry, moodLabel, sleepSessions, printMode = 'NORMAL' }) => {
+  const styles = createStyles(printMode);
   const dateObj = new Date(entry.date);
   const dateString = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const timeString = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -398,7 +458,7 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
     <Document>
       <Page size="A4" style={styles.page}>
         
-        {/* HEADER */}
+        {/* HEADER (Always Readable) */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.date}>{dateString}</Text>
@@ -412,7 +472,7 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
           )}
         </View>
 
-        {/* META */}
+        {/* META (Always Readable) */}
         <View style={styles.metaContainer}>
           <View style={styles.metaItem}>
             <Text style={{ fontFamily: 'Helvetica-Bold' }}>Mood: </Text>
@@ -426,12 +486,12 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
           )}
         </View>
 
-        {/* CONTENT */}
+        {/* CONTENT (Transformed) */}
         <View style={styles.body}>
-          <RichTextRenderer content={entry.content} />
+          <RichTextRenderer content={entry.content} mode={printMode} styles={styles} />
         </View>
 
-        {/* SLEEP DATA */}
+        {/* SLEEP DATA (Always Readable) */}
         {sleepSessions && sleepSessions.length > 0 && (
             <View wrap={false} style={{ marginTop: 5 }}>
                 <Text style={styles.sectionTitle}>Sleep Insights</Text>
@@ -453,12 +513,6 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
                                 <Text style={styles.sleepLabel}>Deep Sleep:</Text>
                                 <Text style={styles.sleepValue}>{(session.deepSleepPerc * 100).toFixed(0)}%</Text>
                             </View>
-                            {session.rating > 0 && (
-                                <View style={styles.sleepRow}>
-                                    <Text style={styles.sleepLabel}>Efficiency:</Text>
-                                    <Text style={styles.sleepValue}>{session.rating.toFixed(1)} / 5.0</Text>
-                                </View>
-                            )}
                         </View>
                     );
                 })}
@@ -472,7 +526,6 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
             <View style={styles.galleryGrid}>
               {entry.images.map((imgSrc, index) => (
                 <View key={index} style={styles.imageWrapper}>
-                  {/* Ensure imgSrc is valid before rendering */}
                   {imgSrc ? <Image src={imgSrc} style={styles.image} /> : null}
                 </View>
               ))}

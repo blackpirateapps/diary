@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Clock, Trash2 } from 'lucide-react';
+import { Clock, Trash2, X, FileDown } from 'lucide-react'; // Added X, FileDown
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { db, useBlobUrl } from '../../db'; 
@@ -51,6 +51,68 @@ const BlobImage = ({ src, ...props }) => {
 
 const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
 
+// --- EXPORT MODAL COMPONENT ---
+const ExportModal = ({ isOpen, onClose, onConfirm }) => {
+  const [mode, setMode] = useState('NORMAL');
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100 dark:border-gray-800">
+        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-950">
+          <h3 className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+            <FileDown size={18} className="text-[var(--accent-500)]"/> Export Options
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="p-6">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">PDF Format Mode</label>
+          <div className="space-y-3">
+             {[
+               { id: 'NORMAL', label: 'Standard', desc: 'Clean, readable format' },
+               { id: 'MIRROR', label: 'Mirror Mode', desc: 'Flipped text for reflection reading' },
+               { id: 'MORSE', label: 'Morse Code', desc: 'Encrypted visual morse translation' }
+             ].map((opt) => (
+                <div 
+                  key={opt.id}
+                  onClick={() => setMode(opt.id)}
+                  className={`cursor-pointer p-3 rounded-lg border-2 transition-all ${
+                    mode === opt.id 
+                    ? 'border-[var(--accent-500)] bg-[var(--accent-50)] dark:bg-[var(--accent-900)]/20' 
+                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  }`}
+                >
+                  <div className="font-semibold text-sm text-gray-900 dark:text-white">{opt.label}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">{opt.desc}</div>
+                </div>
+             ))}
+          </div>
+        </div>
+
+        <div className="p-4 bg-gray-50 dark:bg-gray-950 flex justify-end gap-3">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={() => onConfirm(mode)}
+            className="px-4 py-2 text-sm font-medium text-white bg-[var(--accent-500)] hover:bg-[var(--accent-600)] rounded-lg shadow-sm transition-colors"
+          >
+            Download PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 // --- MAIN EDITOR ---
 const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }) => { 
   const [entryId] = useState(entry?.id || Date.now().toString());
@@ -80,6 +142,9 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
 
   const [previewSessionIndex, setPreviewSessionIndex] = useState(sessions.length - 1);
 
+  // New Export State
+  const [showExportModal, setShowExportModal] = useState(false);
+
   useEffect(() => {
       if (mode === 'edit') {
           setPreviewSessionIndex(sessions.length - 1);
@@ -103,14 +168,12 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
   const [locationLng, setLocationLng] = useState(entry?.locationLng || null);
   const [weather, setWeather] = useState(entry?.weather || '');
   
-  // New State: Location History Tracking
   const [locationHistory, setLocationHistory] = useState(entry?.locationHistory || []);
 
   const [tags, setTags] = useState(entry?.tags || []);
   const [images, setImages] = useState(entry?.images || []);
   const [taggedPeople, setTaggedPeople] = useState(entry?.people || []);
   
-  // Ref for stable state access in timeouts
   const stableStateRef = useRef({
     content, previewText, sessions, mood, location, locationLat, locationLng, weather, tags, images, taggedPeople, locationHistory
   });
@@ -269,7 +332,7 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
       location: state.location, 
       locationLat: state.locationLat, 
       locationLng: state.locationLng, 
-      locationHistory: state.locationHistory, // Persist history
+      locationHistory: state.locationHistory, 
       weather: state.weather, 
       tags: state.tags, 
       images: state.images, 
@@ -343,7 +406,6 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
     }
   };
 
-  // --- FIXED LOCATION HANDLER ---
   const handleLocation = useCallback(async () => {
     if (loadingLocation) return;
     setLoadingLocation(true);
@@ -357,10 +419,9 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
       let newWeather = weather;
-      let newAddress = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`; // Default fallback
+      let newAddress = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`; 
       
       try {
-        // 1. Fetch Weather
         const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
         if (wRes.ok) {
            const d = await wRes.json();
@@ -368,7 +429,6 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
            setWeather(newWeather);
         }
 
-        // 2. Fetch Address
         const locRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
         if (locRes.ok) {
             const d = await locRes.json();
@@ -377,7 +437,6 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
             setLocation(newAddress);
         }
 
-        // 3. Update History & State with Duplicate Prevention
         const newSnapshot = {
           timestamp: new Date().toISOString(),
           lat: latitude,
@@ -387,11 +446,9 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
         };
         
         setLocationHistory(prev => {
-            // Prevent exact duplicates within 1 minute
             const last = prev[prev.length - 1];
             if (last) {
                 const timeDiff = new Date(newSnapshot.timestamp) - new Date(last.timestamp);
-                // If same address and less than 1 minute has passed, do not add
                 if (timeDiff < 60000 && last.address === newAddress) {
                     return prev; 
                 }
@@ -404,7 +461,6 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
 
       } catch (e) { 
         console.error("Location fetch error:", e); 
-        // Still add the raw coordinates if API fails
         setLocationHistory(prev => [...prev, {
             timestamp: new Date().toISOString(),
             lat: latitude,
@@ -421,10 +477,10 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
       setLoadingLocation(false); 
     });
   }, [loadingLocation, weather]);
-  // --------------------------------
 
-  const handleExportPdf = async () => {
+  const handleExportPdf = async (selectedMode) => {
     setIsExporting(true);
+    setShowExportModal(false); // Close modal immediately
     try {
       const pdfImages = await Promise.all(images.map(img => blobToJpeg(img)));
       const doc = <EntryPdfDocument 
@@ -440,9 +496,10 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
           }} 
           moodLabel={MOODS_LABELS[mood]} 
           sleepSessions={todaysSleepSessions} 
+          printMode={selectedMode}
         />;
       const blob = await pdf(doc).toBlob();
-      saveAs(blob, `Journal_${currentDate.toISOString().split('T')[0]}.pdf`);
+      saveAs(blob, `Journal_${selectedMode}_${currentDate.toISOString().split('T')[0]}.pdf`);
     } catch (err) { 
       console.error("PDF Export Error:", err);
       alert(`PDF Failed: ${err.message}`); 
@@ -476,11 +533,17 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
     <>
       <Styles />
 
+      <ExportModal 
+        isOpen={showExportModal} 
+        onClose={() => setShowExportModal(false)} 
+        onConfirm={handleExportPdf}
+      />
+
       <div className={`fixed inset-y-0 right-0 left-0 bg-white dark:bg-gray-950 z-40 overflow-hidden flex flex-col transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:left-64' : 'md:left-0'}`}>
           <EditorHeader 
             onClose={onClose} 
             saveStatus={saveStatus} 
-            onExport={handleExportPdf} 
+            onExport={() => setShowExportModal(true)} // Open modal instead of direct export
             isExporting={isExporting} 
             onDelete={() => { if(window.confirm('Are you sure you want to delete this entry?')) onDelete(entryId); }}
             toggleMode={() => setMode(m => m === 'edit' ? 'preview' : 'edit')} 
