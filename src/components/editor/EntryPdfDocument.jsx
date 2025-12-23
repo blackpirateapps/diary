@@ -1,33 +1,15 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
-
-// --- MORSE CODE DICTIONARY ---
-const MORSE_MAP = {
-  'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.',
-  'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..',
-  'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.',
-  'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
-  'Y': '-.--', 'Z': '--..',
-  '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....',
-  '6': '-....', '7': '--...', '8': '---..', '9': '----.', '0': '-----',
-  ' ': '   ', // 3 spaces for word separation
-  '.': '.-.-.-', ',': '--..--', '?': '..--..', "'": '.----.', '!': '-.-.--',
-  '/': '-..-.', '(': '-.--.', ')': '-.--.-', '&': '.-...', ':': '---...',
-  ';': '-.-.-.', '=': '-...-', '+': '.-.-.', '-': '-....-', '_': '..--.-',
-  '"': '.-..-.', '$': '...-..-', '@': '.--.-.'
-};
+import morse from '@ozdemirburak/morse-code-translator'; //
 
 // --- HELPER: TEXT TRANSFORMER ---
 const transformText = (text, mode) => {
   if (!text) return '';
   
   if (mode === 'MORSE') {
-    // Convert to Uppercase, map to Morse, join with single space for char separation
-    return text
-      .toUpperCase()
-      .split('')
-      .map(char => MORSE_MAP[char] !== undefined ? MORSE_MAP[char] : char)
-      .join(' '); 
+    // Library returns '/' for spaces; we replace with 3 spaces for visual clarity in PDF
+    const encoded = morse.encode(text);
+    return encoded.replaceAll('/', '   '); 
   }
   
   return text;
@@ -89,6 +71,7 @@ const createStyles = (mode) => StyleSheet.create({
   body: {
     marginBottom: 15,
     textAlign: 'left',
+    // Apply transformations based on mode
     ...(mode === 'MIRROR' ? {
       transform: 'scale(-1, 1)', 
       opacity: 0.6,              
