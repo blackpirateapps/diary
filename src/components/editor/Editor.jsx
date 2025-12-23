@@ -444,7 +444,8 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
       const blob = await pdf(doc).toBlob();
       saveAs(blob, `Journal_${currentDate.toISOString().split('T')[0]}.pdf`);
     } catch (err) { 
-      alert("PDF Failed"); 
+      console.error("PDF Export Error:", err);
+      alert(`PDF Failed: ${err.message}`); 
     } finally { 
       setIsExporting(false); 
     }

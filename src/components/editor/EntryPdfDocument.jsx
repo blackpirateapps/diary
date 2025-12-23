@@ -6,7 +6,7 @@ const styles = StyleSheet.create({
   page: {
     padding: 40,
     backgroundColor: '#ffffff',
-    fontFamily: 'Helvetica', // Changed to Helvetica as a neutral default base
+    fontFamily: 'Helvetica',
     fontSize: 11,
     lineHeight: 1.5,
     color: '#1f2937'
@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
   },
   metaContainer: {
     flexDirection: 'row',
-    gap: 15,
+    // gap: 15, // REMOVED: 'gap' causes crashes in older React-PDF versions
     marginBottom: 10,
     fontSize: 10,
     color: '#4b5563',
@@ -53,6 +53,7 @@ const styles = StyleSheet.create({
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 15, // ADDED replacement for gap
   },
   body: {
     marginBottom: 15,
@@ -154,12 +155,13 @@ const styles = StyleSheet.create({
   galleryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10
+    // gap: 10 // REMOVED
   },
   imageWrapper: {
     width: '30%',
     height: 150,
     marginBottom: 10,
+    marginRight: '3%', // ADDED: Manual spacing
     borderRadius: 2,
     backgroundColor: '#f9fafb',
     alignItems: 'center',
@@ -175,7 +177,9 @@ const styles = StyleSheet.create({
 // --- HELPER: FALLBACK MARKDOWN PARSER (Legacy support) ---
 const MarkdownText = ({ text }) => {
   if (!text) return null;
-  const lines = text.split('\n');
+  // Ensure text is a string to prevent .split crash
+  const safeText = typeof text === 'string' ? text : JSON.stringify(text);
+  const lines = safeText.split('\n');
 
   return lines.map((line, lineIdx) => {
     if (line.startsWith('# ')) return <Text key={lineIdx} style={styles.h1}>{line.replace('# ', '')}</Text>;
@@ -214,7 +218,8 @@ const parseInlineStyle = (styleString) => {
         break;
       case 'font-size':
         // React-PDF expects numbers for font size
-        customStyles.fontSize = parseFloat(val);
+        const size = parseFloat(val);
+        if(!isNaN(size)) customStyles.fontSize = size;
         break;
       case 'font-family':
         // Map common web fonts to PDF standard fonts
@@ -245,8 +250,9 @@ const RichTextRenderer = ({ content }) => {
 
   let root;
   try {
-    const json = JSON.parse(content);
-    if (json.root) root = json.root;
+    // FIX: Handle content if it is already an Object, or a JSON string
+    const json = typeof content === 'string' ? JSON.parse(content) : content;
+    if (json && json.root) root = json.root;
   } catch (e) {
     // Not valid JSON, fallback to Markdown text
     return <MarkdownText text={content} />;
@@ -256,19 +262,19 @@ const RichTextRenderer = ({ content }) => {
 
   // Recursive renderer for inline nodes (text, links, mentions)
   const renderChildren = (children) => {
+    if(!children) return null;
     return children.map((node, index) => {
       if (node.type === 'text') {
         const isBold = (node.format & 1) !== 0;
         const isItalic = (node.format & 2) !== 0;
         
         // Handle font family logic specifically for bold/italic/bold-italic
-        // React-PDF handles this via explicit font families, not a 'fontWeight' prop
         let baseFont = styles.page.fontFamily; // Default
         
         // Parse custom style first to check if font-family is overridden
         const customStyle = parseInlineStyle(node.style);
         if (customStyle.fontFamily) {
-            // Mapping for custom fonts if needed, simplified here
+            // Mapping for custom fonts if needed
             if (customStyle.fontFamily === 'Times-Roman') {
                  if (isBold && isItalic) customStyle.fontFamily = 'Times-BoldItalic';
                  else if (isBold) customStyle.fontFamily = 'Times-Bold';
@@ -466,7 +472,8 @@ const EntryPdfDocument = ({ entry, moodLabel, sleepSessions }) => {
             <View style={styles.galleryGrid}>
               {entry.images.map((imgSrc, index) => (
                 <View key={index} style={styles.imageWrapper}>
-                  <Image src={imgSrc} style={styles.image} />
+                  {/* Ensure imgSrc is valid before rendering */}
+                  {imgSrc ? <Image src={imgSrc} style={styles.image} /> : null}
                 </View>
               ))}
             </View>
