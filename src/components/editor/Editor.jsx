@@ -52,9 +52,13 @@ const BlobImage = ({ src, ...props }) => {
 const MOODS_LABELS = { 1: 'Awful', 2: 'Bad', 3: 'Sad', 4: 'Meh', 5: 'Okay', 6: 'Good', 7: 'Great', 8: 'Happy', 9: 'Loved', 10: 'Amazing' };
 
 // --- MAIN EDITOR ---
-const Editor = ({ entry, onClose, onSave, onDelete, isSidebarOpen }) => { 
+const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }) => { 
   const [entryId] = useState(entry?.id || Date.now().toString());
-  const [currentDate, setCurrentDate] = useState(entry?.date ? new Date(entry.date) : new Date());
+  const [currentDate, setCurrentDate] = useState(
+    entry?.date 
+      ? new Date(entry.date) 
+      : (initialDate ? new Date(initialDate) : new Date())
+  );
   
   const isToday = currentDate.toDateString() === new Date().toDateString();
   const [mode, setMode] = useState(isToday ? 'edit' : 'preview');
