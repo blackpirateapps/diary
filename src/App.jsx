@@ -72,7 +72,7 @@ const App = () => {
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState(null);
-
+const [newEntryDate, setNewEntryDate] = useState(null);
   const entries = useLiveQuery(() => db.entries.orderBy('date').reverse().toArray());
 
   const dateInputRef = useRef(null);
@@ -135,18 +135,21 @@ const App = () => {
     }
   };
 
-  const openNewEditor = (date = new Date()) => {
-    const dateStr = date.toDateString();
-    const existing = entries?.find(e => new Date(e.date).toDateString() === dateStr);
-    
-    if (existing) {
-      setCurrentEntryId(existing.id);
-      navigate('editor');
-    } else {
-      setCurrentEntryId(null);
-      navigate('editor');
-    }
-  };
+  // Replace your existing openNewEditor function with this:
+const openNewEditor = (date = new Date()) => {
+  const dateStr = date.toDateString();
+  const existing = entries?.find(e => new Date(e.date).toDateString() === dateStr);
+  
+  if (existing) {
+    setCurrentEntryId(existing.id);
+    setNewEntryDate(null); // Clear it if editing existing
+    navigate('editor');
+  } else {
+    setCurrentEntryId(null);
+    setNewEntryDate(date); // <--- STORE THE CHOSEN DATE
+    navigate('editor');
+  }
+};
 
   const openEditEditor = (entry) => {
     setCurrentEntryId(entry.id);
@@ -292,6 +295,7 @@ const App = () => {
             {currentRoute === 'editor' ? (
               <Editor
                 entry={entries?.find(e => e.id === currentEntryId)}
+                initialDate={newEntryDate}
                 onClose={() => navigate('journal')}
                 onSave={handleSaveEntry}
                 onDelete={handleDeleteEntry}
