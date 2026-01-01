@@ -138,66 +138,57 @@ const JournalList = ({
 
   return (
     <div className="space-y-4 pb-24 md:pb-8 text-gray-900 dark:text-gray-100 transition-colors md:px-6 md:pt-6">
-      
       {/* HEADER */}
-      <header className="px-6 pt-6 pb-2 sticky top-0 md:relative bg-[#F3F4F6]/95 dark:bg-gray-950/95 md:bg-transparent backdrop-blur-md z-20 border-b md:border-b-0 border-gray-200/50 dark:border-gray-800/50 transition-colors -mx-6 md:mx-0">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2 px-6 md:px-0">
+    <header className="px-6 pt-6 pb-2 sticky top-0 md:relative bg-[#F3F4F6]/95 dark:bg-gray-950/95 md:bg-transparent backdrop-blur-md z-20 md:z-0 border-b md:border-b-0 border-gray-200/50 dark:border-gray-800/50 transition-colors -mx-6 md:mx-0">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4 px-6 md:px-0">
+        
+        {/* APP TITLE */}
+        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="min-w-0 flex-1">
+          <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight truncate md:mb-1">{appName}</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm flex items-center gap-2 font-medium">
+            {entries.length} memories
+            {isOffline && <span className="flex items-center gap-1 text-[10px] bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full"><WifiOff size={10} /> Offline</span>}
+          </p>
+        </motion.div>
+        
+        {/* DESKTOP ACTIONS */}
+        <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 flex-shrink-0 self-end md:self-auto">
           
-          <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="min-w-0 flex-1">
-            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight truncate md:mb-1">{appName}</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm flex items-center gap-2 font-medium">
-              {entries.length} memories
-              {isOffline && <span className="flex items-center gap-1 text-[10px] bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full"><WifiOff size={10} /> Offline</span>}
-            </p>
-          </motion.div>
-          
-          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 flex-shrink-0 self-end md:self-auto">
-            
-            {/* SEARCH BUTTON (Toggles the Search Component) */}
-            <motion.button 
+          <motion.button 
+            whileTap={{ scale: 0.9 }}
+            onClick={handleCreateNew} 
+            className="w-10 h-10 md:w-auto md:px-5 md:rounded-xl flex items-center justify-center gap-2 bg-[var(--accent-500)] text-white rounded-full shadow-lg shadow-[var(--accent-500)]/30 active:scale-95 transition-all hover:bg-[var(--accent-600)]"
+          >
+            <Plus size={20} />
+            <span className="hidden md:inline text-sm font-bold">New Entry</span>
+          </motion.button>
+
+          {/* VIEW TOGGLES */}
+          <div className="hidden md:flex bg-white dark:bg-gray-900 p-1 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+              {['list', 'grid', 'calendar'].map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`p-2 rounded-lg transition-all ${viewMode === mode ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-600)] dark:text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  {mode === 'list' && <LayoutList size={18} />}
+                  {mode === 'grid' && <LayoutGrid size={18} />}
+                  {mode === 'calendar' && <CalendarIcon size={18} />}
+                </button>
+              ))}
+          </div>
+
+          {/* MOBILE MENU */}
+          <div className="relative md:hidden">
+            <motion.button
               whileTap={{ scale: 0.9 }}
-              onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className={`w-10 h-10 md:w-auto md:px-4 md:rounded-xl flex items-center gap-2 justify-center rounded-full transition-colors ${isSearchOpen || searchTerm || dateFilter ? 'bg-[var(--accent-100)] dark:bg-[var(--accent-900)] text-[var(--accent-600)] ring-2 ring-[var(--accent-500)]/20' : 'bg-white dark:bg-gray-900 text-gray-500 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-900 text-gray-500 shadow-sm rounded-full hover:text-[var(--accent-600)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 transition-colors"
             >
-              <Search size={20} />
-              <span className="hidden md:inline text-sm font-medium">Search</span>
+              <MoreVertical size={20} />
             </motion.button>
-
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              onClick={handleCreateNew} 
-              className="w-10 h-10 md:w-auto md:px-5 md:rounded-xl flex items-center justify-center gap-2 bg-[var(--accent-500)] text-white rounded-full shadow-lg shadow-[var(--accent-500)]/30 active:scale-95 transition-all hover:bg-[var(--accent-600)]"
-            >
-              <Plus size={20} />
-              <span className="hidden md:inline text-sm font-bold">New Entry</span>
-            </motion.button>
-
-            {/* VIEW TOGGLES */}
-            <div className="hidden md:flex bg-white dark:bg-gray-900 p-1 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
-               {['list', 'grid', 'calendar'].map(mode => (
-                  <button
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    className={`p-2 rounded-lg transition-all ${viewMode === mode ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-600)] dark:text-white' : 'text-gray-400 hover:text-gray-600'}`}
-                  >
-                    {mode === 'list' && <LayoutList size={18} />}
-                    {mode === 'grid' && <LayoutGrid size={18} />}
-                    {mode === 'calendar' && <CalendarIcon size={18} />}
-                  </button>
-               ))}
-            </div>
-
-            {/* MOBILE MENU */}
-            <div className="relative md:hidden">
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-900 text-gray-500 shadow-sm rounded-full hover:text-[var(--accent-600)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 transition-colors"
-              >
-                <MoreVertical size={20} />
-              </motion.button>
-              
-              <AnimatePresence>
+            {/* ... Mobile Menu Content (Keep existing code) ... */}
+            <AnimatePresence>
                 {isMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-20" onClick={() => setIsMenuOpen(false)} />
@@ -229,28 +220,24 @@ const JournalList = ({
                   </>
                 )}
               </AnimatePresence>
-            </div>
-          </motion.div>
-        </div>
-        
-        <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
+          </div>
+        </motion.div>
+      </div>
+      
+      <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
 
-        {/* SEARCH & FILTER COMPONENT */}
-        <AnimatePresence>
-          {(isSearchOpen || searchTerm || activeFilters.mood || activeFilters.tag || activeFilters.location || dateFilter) && (
-             <JournalSearch 
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                activeFilters={activeFilters}
-                toggleFilter={toggleFilter}
-                uniqueTags={uniqueTags}
-                dateFilter={dateFilter}
-                setDateFilter={setDateFilter}
-                onClear={clearFilters}
-             />
-          )}
-        </AnimatePresence>
-      </header>
+      {/* SEARCH COMPONENT (Always visible now, expandable panel) */}
+      <JournalSearch 
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        activeFilters={activeFilters}
+        toggleFilter={toggleFilter}
+        uniqueTags={uniqueTags}
+        dateFilter={dateFilter}
+        setDateFilter={setDateFilter}
+        onClear={clearFilters}
+      />
+    </header>
 
       {/* CONTENT AREA */}
       <div className="px-4 md:px-0 min-h-[50vh]">
