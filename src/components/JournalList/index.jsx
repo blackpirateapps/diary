@@ -139,7 +139,7 @@ const JournalList = ({
   return (
     <div className="space-y-4 pb-24 md:pb-8 text-gray-900 dark:text-gray-100 transition-colors md:px-6 md:pt-6">
       {/* HEADER */}
-    <header className="px-6 pt-6 pb-2 sticky top-0 md:relative bg-[#F3F4F6]/95 dark:bg-gray-950/95 md:bg-transparent backdrop-blur-md z-20 md:z-0 border-b md:border-b-0 border-gray-200/50 dark:border-gray-800/50 transition-colors -mx-6 md:mx-0">
+    <header className="px-6 pt-6 pb-2 sticky top-0 md:relative bg-[#F3F4F6]/95 dark:bg-gray-950/95 md:bg-transparent backdrop-blur-md z-20 md:z-0 border-b md:border-b-0 border-gray-200/50 dark:border-gray-800/50 transition-colors -mx-6 md:mx-0 overflow-visible">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4 px-6 md:px-0">
         
         {/* APP TITLE */}

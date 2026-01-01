@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Search, X, Tag, Calendar as CalendarIcon, 
-  ChevronDown, Check, Smile, RefreshCcw
+  ChevronDown, Check, Smile, RefreshCcw, ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MOODS } from './constants';
@@ -16,7 +16,9 @@ const JournalSearch = ({
   setDateFilter,
   onClear
 }) => {
-  const [openDropdown, setOpenDropdown] = useState(null); // 'mood', 'tag', 'date'
+  const [openDropdown, setOpenDropdown] = useState(null); 
+  const [rangeStart, setRangeStart] = useState('');
+  const [rangeEnd, setRangeEnd] = useState('');
 
   const toggleDropdown = (name) => {
     setOpenDropdown(openDropdown === name ? null : name);
@@ -24,11 +26,9 @@ const JournalSearch = ({
 
   const hasActiveFilters = activeFilters.mood || activeFilters.tag || activeFilters.location || dateFilter;
 
-  // --- DATE HELPERS ---
   const applyDatePreset = (preset) => {
     const now = new Date();
     let start, end, label;
-
     switch (preset) {
       case 'today':
         start = new Date(now.setHours(0,0,0,0));
@@ -45,16 +45,33 @@ const JournalSearch = ({
         end = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
         label = now.getFullYear().toString();
         break;
-      default:
-        return;
+      default: return;
     }
     setDateFilter({ start, end, label });
     setOpenDropdown(null);
   };
 
+  const applyCustomRange = () => {
+    if (rangeStart && rangeEnd) {
+      const start = new Date(rangeStart);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(rangeEnd);
+      end.setHours(23, 59, 59, 999);
+      const label = `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+      setDateFilter({ start, end, label });
+      setOpenDropdown(null);
+    }
+  };
+
+  const handleReset = () => {
+    onClear();
+    setRangeStart('');
+    setRangeEnd('');
+  };
+
   return (
-    <div className="px-6 md:px-0 pb-2 relative z-[50]">
-      {/* 1. SEARCH INPUT (Notion Style: Minimalist) */}
+    <div className="px-6 md:px-0 pb-2 relative">
+      {/* 1. SEARCH INPUT */}
       <div className="relative group mb-4">
         <Search className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[var(--accent-500)] transition-colors" size={18} />
         <input 
@@ -79,14 +96,12 @@ const JournalSearch = ({
           onClick={() => toggleDropdown('date')}
           icon={<CalendarIcon size={14} />}
         />
-
         <FilterPill 
           label={activeFilters.mood ? activeFilters.mood : "Mood"} 
           isActive={!!activeFilters.mood} 
           onClick={() => toggleDropdown('mood')}
           icon={<Smile size={14} />}
         />
-
         <FilterPill 
           label={activeFilters.tag ? `#${activeFilters.tag}` : "Tags"} 
           isActive={!!activeFilters.tag} 
@@ -96,7 +111,7 @@ const JournalSearch = ({
 
         {hasActiveFilters && (
           <button 
-            onClick={onClear}
+            onClick={handleReset}
             className="flex items-center gap-1.5 px-2 py-1 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
           >
             <RefreshCcw size={12} /> Reset
@@ -107,21 +122,18 @@ const JournalSearch = ({
         <AnimatePresence>
           {openDropdown && (
             <>
-              {/* Higher-level invisible backdrop to catch clicks and close menu */}
-              <div 
-                className="fixed inset-0 z-[60]" 
-                onClick={() => setOpenDropdown(null)} 
-              />
+              {/* BACKDROP: Set to z-[110] */}
+              <div className="fixed inset-0 z-[110]" onClick={() => setOpenDropdown(null)} />
               
+              {/* PANEL: Set to z-[120] */}
               <motion.div 
                 initial={{ opacity: 0, y: 8, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                className="absolute left-0 top-full mt-2 z-[70] min-w-[220px] bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800 p-1.5 ring-1 ring-black/5"
+                className="absolute left-0 top-full mt-2 z-[120] min-w-[260px] bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800 p-1.5 ring-1 ring-black/5"
               >
-                {/* DATE OPTIONS */}
                 {openDropdown === 'date' && (
-                  <div className="flex flex-col">
+                  <div className="flex flex-col gap-1">
                     <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Presets</div>
                     {['today', 'thisMonth', 'thisYear'].map(preset => (
                       <DropdownItem 
@@ -130,10 +142,35 @@ const JournalSearch = ({
                         onClick={() => applyDatePreset(preset)}
                       />
                     ))}
+                    <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
+                    <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Custom Range</div>
+                    <div className="px-2 pb-2 pt-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="date" 
+                          value={rangeStart}
+                          onChange={(e) => setRangeStart(e.target.value)}
+                          className="flex-1 bg-gray-50 dark:bg-gray-800 border-none rounded-lg text-xs p-2 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-[var(--accent-500)]"
+                        />
+                        <ArrowRight size={12} className="text-gray-400" />
+                        <input 
+                          type="date" 
+                          value={rangeEnd}
+                          onChange={(e) => setRangeEnd(e.target.value)}
+                          className="flex-1 bg-gray-50 dark:bg-gray-800 border-none rounded-lg text-xs p-2 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-[var(--accent-500)]"
+                        />
+                      </div>
+                      <button 
+                        onClick={applyCustomRange}
+                        disabled={!rangeStart || !rangeEnd}
+                        className="w-full bg-[var(--accent-500)] hover:bg-[var(--accent-600)] disabled:opacity-50 text-white text-xs font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Check size={14} /> Apply Range
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                {/* MOOD OPTIONS */}
                 {openDropdown === 'mood' && (
                   <div className="flex flex-col">
                     <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Select Mood</div>
@@ -149,7 +186,6 @@ const JournalSearch = ({
                   </div>
                 )}
 
-                {/* TAG OPTIONS */}
                 {openDropdown === 'tag' && (
                   <div className="flex flex-col max-h-64 overflow-y-auto custom-scrollbar">
                     <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Select Tag</div>
@@ -174,20 +210,19 @@ const JournalSearch = ({
   );
 };
 
-// --- NOTION-STYLE SUB-COMPONENTS ---
-
+// --- SUB-COMPONENTS ---
 const FilterPill = ({ label, isActive, onClick, icon }) => (
   <button 
     onClick={onClick}
     className={`
       flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all border
       ${isActive 
-        ? 'bg-[var(--accent-50)] text-[var(--accent-600)] border-[var(--accent-200)] dark:bg-gray-800 dark:text-[var(--accent-400)] dark:border-gray-700' 
+        ? 'bg-[var(--accent-50)] text-[var(--accent-600)] border-[var(--accent-200)] dark:bg-gray-800 dark:text-[var(--accent-400)] dark:border-gray-700 shadow-sm' 
         : 'bg-white dark:bg-gray-900 text-gray-500 border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800'}
     `}
   >
     {icon}
-    <span>{label}</span>
+    <span className="max-w-[120px] truncate">{label}</span>
     <ChevronDown size={14} className={`opacity-50 transition-transform ${isActive ? 'rotate-180' : ''}`} />
   </button>
 );
@@ -195,7 +230,7 @@ const FilterPill = ({ label, isActive, onClick, icon }) => (
 const DropdownItem = ({ label, icon, onClick, isActive }) => (
   <button
     onClick={onClick}
-    className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors text-left group"
+    className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors text-left"
   >
     <div className="flex items-center gap-2.5">
       {icon}
