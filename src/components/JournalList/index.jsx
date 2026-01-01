@@ -1,191 +1,15 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import Calendar from 'react-calendar'; 
-import 'react-calendar/dist/Calendar.css'; 
 import { 
   Plus, Calendar as CalendarIcon, Search, WifiOff, Download, Upload,
-  X, Tag, MapPin, Smile, Frown, Meh, Heart, Sun, CloudRain,
-  LayoutList, LayoutGrid, Eye, CalendarDays, MoreVertical
+  X, Tag, Smile, LayoutList, LayoutGrid, Eye, MoreVertical
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useBlobUrl } from '../db';
 
-// --- CONFIGURATION ---
-const MOODS = [
-  { value: 1, icon: CloudRain, color: 'text-gray-400', label: 'Awful' },
-  { value: 2, icon: CloudRain, color: 'text-blue-400', label: 'Bad' },
-  { value: 3, icon: Frown, color: 'text-blue-500', label: 'Sad' },
-  { value: 4, icon: Meh, color: 'text-indigo-400', label: 'Meh' },
-  { value: 5, icon: Meh, color: 'text-indigo-500', label: 'Okay' },
-  { value: 6, icon: Sun, color: 'text-yellow-500', label: 'Good' },
-  { value: 7, icon: Sun, color: 'text-orange-500', label: 'Great' },
-  { value: 8, icon: Smile, color: 'text-orange-600', label: 'Happy' },
-  { value: 9, icon: Heart, color: 'text-pink-500', label: 'Loved' },
-  { value: 10, icon: Heart, color: 'text-red-500', label: 'Amazing' },
-];
-
-// --- HELPER: TEXT PREVIEW ---
-const getEntryPreview = (entry) => {
-  // 1. Use the pre-calculated preview if available (New Editor)
-  if (entry.preview) return entry.preview;
-
-  // 2. Check if content is raw JSON (Lexical State)
-  if (typeof entry.content === 'string' && entry.content.trim().startsWith('{')) {
-    return "View entry to read content..."; // Fallback for JSON entries missing preview
-  }
-
-  // 3. Fallback for Legacy Entries (Markdown/HTML) - Strip tags
-  return entry.content ? entry.content.replace(/<[^>]*>?/gm, ' ') : '';
-};
-
-// --- IOS STYLE WIDGET COMPONENT ---
-const DailyPromptWidget = ({ onWrite, isTodayDone }) => (
-  <div onClick={onWrite} className="mb-6 mx-6 md:mx-0 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-3xl p-6 shadow-lg shadow-blue-500/20 text-white cursor-pointer active:scale-[0.98] transition-all relative overflow-hidden group">
-    <div className="relative z-10 flex justify-between items-start">
-      <div>
-        <h2 className="text-xl font-bold mb-1 tracking-tight">
-          {isTodayDone ? "Continue Writing" : "Write your diary today"}
-        </h2>
-        <p className="text-blue-100 text-sm font-medium opacity-90">
-          {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-        </p>
-      </div>
-      <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm group-hover:bg-white/30 transition-colors shadow-inner">
-        <Plus size={24} className="text-white" strokeWidth={3} />
-      </div>
-    </div>
-    {/* Decorative Background Elements */}
-    <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
-    <div className="absolute top-[-20%] right-[20%] w-24 h-24 bg-white/5 rounded-full blur-xl" />
-  </div>
-);
-
-// --- OPTIMIZED SUB-COMPONENTS ---
-
-const JournalEntryImage = React.memo(({ src, className = "w-full h-full object-cover" }) => {
-  const url = useBlobUrl(src);
-  if (!url) return <div className={`bg-gray-100 dark:bg-gray-800 animate-pulse ${className}`} />;
-  return (
-    <img
-      src={url}
-      loading="lazy"
-      decoding="async"
-      className={`${className} transition-opacity duration-300`}
-      alt="Cover"
-    />
-  );
-});
-
-// Memoized List Card
-const ListCard = React.memo(({ entry, onClick, variants }) => {
-  const dateObj = new Date(entry.date);
-  const mainDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-  const yearTime = dateObj.toLocaleDateString(undefined, { year: 'numeric' }) + ' • ' + dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  const previewText = getEntryPreview(entry);
-
-  return (
-    <motion.div
-      variants={variants}
-      onClick={() => onClick(entry)}
-      whileTap={{ scale: 0.98 }}
-      className="transform-gpu will-change-transform bg-white dark:bg-gray-900 rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100/50 dark:border-gray-800 cursor-pointer group hover:shadow-md transition-all hover:border-[var(--accent-200)] dark:hover:border-gray-700"
-    >
-      <div className="flex justify-between items-start mb-2">
-        <div className="flex flex-col">
-          <span className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-[var(--accent-600)] dark:group-hover:text-[var(--accent-500)] transition-colors tracking-tight">{mainDate}</span>
-          <span className="text-xs text-gray-400 font-medium">{yearTime}</span>
-        </div>
-        {entry.mood && (() => {
-          const moodMeta = MOODS.find(m => m.value === entry.mood);
-          if (!moodMeta) return null;
-          const Icon = moodMeta.icon;
-          return (
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 dark:bg-gray-800 ${moodMeta.color}`}>
-              <Icon size={18} />
-            </div>
-          );
-        })()}
-      </div>
-      
-      <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 leading-relaxed mt-2 font-normal">
-        {previewText}
-      </p>
-
-      {(entry.tags?.length > 0 || entry.location) && (
-        <div className="mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar text-gray-400 dark:text-gray-500">
-          {entry.location && (
-            <div className="flex items-center text-[10px] font-medium bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-1 rounded-md border border-gray-100 dark:border-gray-700 flex-shrink-0">
-              <MapPin size={10} className="mr-1" /> {entry.location}
-            </div>
-          )}
-          {entry.tags?.map(tag => (
-            <div key={tag} className="flex items-center text-[10px] font-medium bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] px-2 py-1 rounded-md border border-[var(--accent-100)] dark:border-gray-700 flex-shrink-0">
-              #{tag}
-            </div>
-          ))}
-        </div>
-      )}
-      
-      {entry.images && entry.images.length > 0 && (
-        <div className="mt-3 h-32 md:h-48 w-full rounded-xl overflow-hidden relative border border-gray-100 dark:border-gray-800">
-          <JournalEntryImage src={entry.images[0]} />
-          {entry.images.length > 1 && (
-            <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-              +{entry.images.length - 1} photos
-            </div>
-          )}
-        </div>
-      )}
-    </motion.div>
-  );
-});
-
-// Memoized Grid Card
-const GridCard = React.memo(({ entry, onClick, variants }) => {
-  const hasImage = entry.images && entry.images.length > 0;
-  const dateObj = new Date(entry.date);
-  const day = dateObj.getDate();
-  const month = dateObj.toLocaleDateString(undefined, { month: 'short' });
-  const previewText = getEntryPreview(entry);
-
-  return (
-    <motion.div
-      variants={variants}
-      onClick={() => onClick(entry)}
-      whileTap={{ scale: 0.95 }}
-      whileHover={{ y: -4 }}
-      className="transform-gpu will-change-transform aspect-square rounded-xl overflow-hidden relative border border-gray-200 dark:border-gray-800 shadow-sm bg-white dark:bg-gray-900 cursor-pointer group transition-all"
-    >
-      {hasImage ? (
-        <>
-          <JournalEntryImage src={entry.images[0]} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
-          <div className="absolute bottom-2 left-2 text-white">
-             <span className="text-xl font-bold leading-none block">{day}</span>
-             <span className="text-xs font-medium uppercase opacity-90">{month}</span>
-          </div>
-        </>
-      ) : (
-        <div className="w-full h-full p-3 flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div className="flex flex-col">
-              <span className="text-lg font-bold text-gray-800 dark:text-gray-200 leading-none">{day}</span>
-              <span className="text-[10px] font-bold text-gray-400 uppercase">{month}</span>
-            </div>
-            {entry.mood && (() => {
-               const m = MOODS.find(x => x.value === entry.mood);
-               if(m) { const Icon = m.icon; return <Icon size={14} className={m.color} />; }
-            })()}
-          </div>
-          <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-3 leading-tight group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors">
-            {previewText}
-          </p>
-        </div>
-      )}
-    </motion.div>
-  );
-});
-
-// --- MAIN COMPONENT ---
+// Sub-components
+import { MOODS } from './constants';
+import DailyPromptWidget from './DailyPromptWidget';
+import JournalCalendar from './JournalCalendar';
+import { ListCard, GridCard } from './JournalCards';
 
 const JournalList = ({
   entries,
@@ -196,9 +20,10 @@ const JournalList = ({
   onImport,
   onExport,
   isOffline,
-  onOpenFlashback
+  onOpenFlashback,
+  initialView = 'list'
 }) => {
-  const [viewMode, setViewMode] = useState('list'); 
+  const [viewMode, setViewMode] = useState(initialView); 
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState({ mood: null, tag: null, location: null });
@@ -218,7 +43,6 @@ const JournalList = ({
 
   // --- DERIVE DATA ---
   const uniqueTags = useMemo(() => [...new Set(entries.flatMap(e => e.tags || []))], [entries]);
-  const uniqueLocations = useMemo(() => [...new Set(entries.map(e => e.location).filter(Boolean))], [entries]);
 
   // Check if there is an entry for today (for the Widget logic)
   const isTodayDone = useMemo(() => {
@@ -232,7 +56,7 @@ const JournalList = ({
     }
 
     return entries.filter(entry => {
-      // Basic Text Search (Check both preview and legacy content)
+      // Basic Text Search
       const lowerSearch = searchTerm.toLowerCase();
       const contentToSearch = (entry.preview || entry.content || '').toLowerCase();
       
@@ -463,53 +287,20 @@ const JournalList = ({
       {/* CONTENT */}
       <div className="px-4 md:px-0">
         
-        {/* NEW: IOS STYLE DAILY WIDGET */}
+        {/* WIDGET */}
         {viewMode === 'list' && (
           <DailyPromptWidget onWrite={() => onCreate(new Date())} isTodayDone={isTodayDone} />
         )}
 
         {/* CALENDAR */}
         {viewMode === 'calendar' && (
-           <div className="animate-slideUp space-y-4 max-w-4xl mx-auto">
-             <div className="flex justify-between items-center px-1">
-                <div className="flex items-center gap-2 text-gray-400 dark:text-gray-500 text-xs font-bold uppercase tracking-wider">
-                  <CalendarIcon size={12} />
-                  {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric'})}
-                </div>
-                <button 
-                  onClick={jumpToToday} 
-                  className="flex items-center gap-1 text-[var(--accent-500)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 px-2 py-1 rounded-lg text-xs font-bold transition-colors"
-                >
-                  <CalendarDays size={14} /> Today
-                </button>
-             </div>
-
-             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-4 overflow-hidden">
-               <Calendar 
-                 onChange={setSelectedDate} 
-                 value={selectedDate}
-                 className="w-full border-none font-sans"
-                 tileClassName={({ date, view }) => {
-                   if (view !== 'month') return null;
-                   const hasEntry = entries.some(e => new Date(e.date).toDateString() === date.toDateString());
-                   return hasEntry ? 'has-journal-entry' : null;
-                 }}
-                 tileContent={({ date, view }) => {
-                    if (view !== 'month') return null;
-                    const dayEntries = entries.filter(e => new Date(e.date).toDateString() === date.toDateString());
-                    if (dayEntries.length > 0) {
-                      return (
-                        <div className="flex justify-center mt-1 gap-0.5">
-                           {dayEntries.slice(0, 3).map((e, i) => (
-                             <div key={i} className={`w-1.5 h-1.5 rounded-full ${e.mood && e.mood >= 7 ? 'bg-orange-400' : 'bg-[var(--accent-400)]'}`} />
-                           ))}
-                        </div>
-                      );
-                    }
-                 }}
-               />
-             </div>
-           </div>
+           <JournalCalendar 
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              entries={entries}
+              jumpToToday={jumpToToday}
+              onCreate={onCreate}
+           />
         )}
 
         {/* LIST / GRID CONTAINER */}
@@ -519,8 +310,8 @@ const JournalList = ({
           animate="show"
           className={
             viewMode === 'grid' 
-            ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6" // Expanded grid for desktop
-            : "space-y-3 max-w-3xl mx-auto" // Centered max-width for readable list
+            ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6" 
+            : "space-y-3 max-w-3xl mx-auto" 
           }
         >
           {filteredEntries.length === 0 ? (
@@ -546,76 +337,6 @@ const JournalList = ({
           )}
         </motion.div>
       </div>
-
-      {/* CUSTOM CSS FOR CALENDAR REMAINS THE SAME */}
-      <style>{`
-        .react-calendar {
-          width: 100%;
-          background: transparent;
-          border: none;
-          font-family: inherit;
-        }
-        /* Increase calendar size for desktop */
-        @media (min-width: 768px) {
-           .react-calendar { font-size: 1.1em; }
-           .react-calendar__tile { height: 80px; display: flex; flex-direction: column; justify-content: flex-start; padding-top: 10px; }
-        }
-        .react-calendar__navigation button {
-          min-width: 44px;
-          background: none;
-          font-size: 16px;
-          font-weight: 600;
-          color: inherit;
-        }
-        .react-calendar__month-view__weekdays {
-          text-align: center;
-          text-transform: uppercase;
-          font-weight: bold;
-          font-size: 0.65em;
-          color: #9ca3af;
-          margin-bottom: 8px;
-        }
-        .react-calendar__month-view__days__day {
-          font-size: 14px;
-          font-weight: 500;
-          color: inherit;
-          padding: 8px 0;
-        }
-        .react-calendar__tile {
-          border-radius: 12px;
-          transition: 0.2s all;
-        }
-        .react-calendar__tile:enabled:hover,
-        .react-calendar__tile:enabled:focus {
-          background-color: var(--accent-50);
-        }
-        .dark .react-calendar__tile:enabled:hover {
-          background-color: #374151;
-        }
-        .react-calendar__tile--now {
-          background: var(--accent-50);
-          color: var(--accent-600);
-          font-weight: bold;
-        }
-        .dark .react-calendar__tile--now {
-          background: #374151;
-          color: var(--accent-400);
-        }
-        .react-calendar__tile--active {
-          background: var(--accent-500) !important;
-          color: white !important;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-        .react-calendar__tile--active div div {
-          background-color: white !important; 
-        }
-        .react-calendar__month-view__days__day--neighboringMonth {
-          color: #d1d5db;
-        }
-        .dark .react-calendar__month-view__days__day--neighboringMonth {
-          color: #4b5563;
-        }
-      `}</style>
     </div>
   );
 };
