@@ -37,7 +37,8 @@
     "react-calendar": "latest",
     "diff": "latest", 
     "@ozdemirburak/morse-code-translator": "latest",
-    "file-saver": "latest"
+    "file-saver": "latest",
+    "react-virtuoso": "latest"
   },
   "devDependencies": {
     "@types/react": "^18.2.15",
