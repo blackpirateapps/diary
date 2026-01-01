@@ -21,7 +21,7 @@ const MapPage = lazy(() => import('./components/MapPage'));
 // Lazy load named exports
 const SleepPage = lazy(() => import('./components/SleepPage').then(module => ({ default: module.SleepPage })));
 const WhatsAppPage = lazy(() => import('./components/WhatsAppPage').then(module => ({ default: module.WhatsAppPage })));
-const PeoplePage = lazy(() => import('./components/PeoplePage').then(module => ({ default: module.PeoplePage })));
+const PeoplePage = lazy(() => import('./components/people/PeoplePage').then(module => ({ default: module.PeoplePage })));
 
 // More Menu Pages
 const MoreMenu = lazy(() => import('./components/MorePages').then(module => ({ default: module.MoreMenu })));
