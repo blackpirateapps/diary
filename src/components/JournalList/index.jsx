@@ -365,7 +365,7 @@ const JournalList = ({
                  {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
                </div>
               {filteredEntries.length > 0 ? (
-                filteredEntries.map(entry => <ListCard key={entry.id} entry={entry} onClick={onEdit(selectedDate)} />)
+                filteredEntries.map(entry => <ListCard key={entry.id} entry={entry} onClick={onEdit} />)
               ) : (
                 renderEmptyState(selectedDate)
               )}
