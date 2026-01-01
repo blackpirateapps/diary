@@ -45,8 +45,6 @@ const JournalList = ({
   // --- LOGIC: DURATION METADATA ---
   const durationText = useMemo(() => {
     if (!entries || entries.length === 0) return "";
-    
-    // Find the earliest entry date
     const oldest = new Date([...entries].sort((a, b) => new Date(a.date) - new Date(b.date))[0].date);
     const now = new Date();
     
@@ -54,7 +52,6 @@ const JournalList = ({
     let months = now.getMonth() - oldest.getMonth();
     let days = now.getDate() - oldest.getDate();
 
-    // Adjust for negative differences
     if (days < 0) {
       months--;
       days += new Date(now.getFullYear(), now.getMonth(), 0).getDate();
@@ -72,7 +69,7 @@ const JournalList = ({
     return `since ${oldest.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })} (${parts.join(' ')})`;
   }, [entries]);
 
-  // --- LOGIC: FLASHBACK (FOR WIDGET) ---
+  // --- LOGIC: FLASHBACK ---
   const flashbackEntry = useMemo(() => {
     if (!entries) return null;
     const today = new Date();
@@ -112,7 +109,7 @@ const JournalList = ({
     });
   }, [entries, searchTerm, activeFilters, viewMode, selectedDate, dateFilter]);
 
-  // --- DAY ONE GROUPING ---
+  // --- GROUPING LOGIC ---
   const groupedEntries = useMemo(() => {
     const groups = [];
     filteredEntries.forEach(entry => {
@@ -128,7 +125,6 @@ const JournalList = ({
     return groups;
   }, [filteredEntries]);
 
-  // Flattened for Virtuoso List
   const flattenedList = useMemo(() => {
     const items = [];
     groupedEntries.forEach(group => {
@@ -148,12 +144,23 @@ const JournalList = ({
     setIsSearchExpanded(false);
   };
 
-  const renderEmptyState = () => (
+  // --- RENDER HELPERS ---
+  const renderEmptyState = (customDate = null) => (
     <div className="col-span-full text-center py-20 flex flex-col items-center animate-fadeIn">
       <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-300 dark:text-gray-600">
         <Eye size={24} />
       </div>
-      <p className="text-gray-400 dark:text-gray-500 font-bold tracking-tight">No entries found.</p>
+      <p className="text-gray-400 dark:text-gray-500 font-bold tracking-tight">
+        {searchTerm ? "No results found for this search." : "No memories found for this period."}
+      </p>
+      {customDate && (
+        <button 
+          onClick={() => onCreate(customDate)}
+          className="mt-4 text-sm font-black uppercase tracking-widest text-[var(--accent-600)] hover:underline"
+        >
+          Create entry for {customDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        </button>
+      )}
     </div>
   );
 
@@ -184,7 +191,6 @@ const JournalList = ({
                   <p className="text-[9px] md:text-[10px] font-bold text-gray-400 uppercase tracking-wider opacity-70 italic">
                     {durationText}
                   </p>
-                  {isOffline && <span className="flex items-center gap-1 bg-gray-200 dark:bg-gray-800 px-1.5 py-0.5 rounded text-[10px] font-bold"><WifiOff size={10} /> Offline</span>}
                 </div>
               </motion.div>
             ) : (
@@ -206,30 +212,14 @@ const JournalList = ({
             )}
           </AnimatePresence>
 
-          {/* ACTION BUTTONS */}
+          {/* ACTION ROW */}
           <div className="flex items-center gap-2 md:gap-3">
-            {/* Search Toggle (Desktop & Mobile) */}
             <button 
               onClick={() => setIsSearchExpanded(!isSearchExpanded)}
               className={`p-2.5 rounded-full bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 text-gray-500 hover:text-[var(--accent-600)] transition-all ${isSearchExpanded ? 'text-[var(--accent-600)] border-[var(--accent-200)] bg-[var(--accent-50)] dark:bg-gray-800' : ''}`}
             >
               <Search size={20} />
             </button>
-
-            {/* View Switchers (Visible Everywhere) */}
-            <div className="flex bg-white dark:bg-gray-900 p-1 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
-                {['list', 'grid', 'calendar'].map(mode => (
-                  <button
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    className={`p-1.5 md:p-2 rounded-lg transition-all ${viewMode === mode ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-600)] shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
-                  >
-                    {mode === 'list' && <LayoutList size={16} className="md:w-[18px]" />}
-                    {mode === 'grid' && <LayoutGrid size={16} className="md:w-[18px]" />}
-                    {mode === 'calendar' && <CalendarIcon size={16} className="md:w-[18px]" />}
-                  </button>
-                ))}
-            </div>
 
             <motion.button 
               whileTap={{ scale: 0.95 }}
@@ -240,7 +230,7 @@ const JournalList = ({
               <span className="hidden md:inline text-sm font-black uppercase tracking-tight">New</span>
             </motion.button>
 
-            {/* More Menu */}
+            {/* THREE DOT MENU */}
             <div className="relative">
               <button 
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -256,13 +246,36 @@ const JournalList = ({
                       initial={{ opacity: 0, scale: 0.9, y: 10, x: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
                       exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                      className="absolute right-0 top-12 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 p-2 w-48 z-50 flex flex-col gap-1 origin-top-right"
+                      className="absolute right-0 top-12 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-2 w-56 z-50 flex flex-col gap-1 origin-top-right"
                     >
-                      <button onClick={onAddOld} className="flex items-center gap-3 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors"><CalendarIcon size={16} /> Add Past Date</button>
-                      <button onClick={() => {onOpenFlashback(); setIsMenuOpen(false);}} className="flex items-center gap-3 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors"><Smile size={16} /> Flashback</button>
+                      {/* VIEW SWITCHER INSIDE MENU */}
+                      <div className="flex bg-gray-50 dark:bg-gray-800/50 p-1 rounded-xl mb-1">
+                          {['list', 'grid', 'calendar'].map(mode => (
+                            <button
+                              key={mode}
+                              onClick={() => { setViewMode(mode); setIsMenuOpen(false); }}
+                              className={`flex-1 flex items-center justify-center py-2 rounded-lg transition-all ${viewMode === mode ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                              {mode === 'list' && <LayoutList size={18} />}
+                              {mode === 'grid' && <LayoutGrid size={18} />}
+                              {mode === 'calendar' && <CalendarIcon size={18} />}
+                            </button>
+                          ))}
+                      </div>
+
+                      <button onClick={() => { onAddOld(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors">
+                        <CalendarIcon size={16} className="text-gray-400" /> Add Past Date
+                      </button>
+                      <button onClick={() => { onOpenFlashback(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors">
+                        <Smile size={16} className="text-gray-400" /> On This Day
+                      </button>
                       <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
-                      <button onClick={() => { onExport(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors"><Download size={16} /> Export Backup</button>
-                      <button onClick={() => { importInputRef.current.click(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors"><Upload size={16} /> Import Backup</button>
+                      <button onClick={() => { onExport(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors">
+                        <Download size={16} className="text-gray-400" /> Export Backup
+                      </button>
+                      <button onClick={() => { importInputRef.current.click(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors">
+                        <Upload size={16} className="text-gray-400" /> Import Backup
+                      </button>
                     </motion.div>
                   </>
                 )}
@@ -271,23 +284,14 @@ const JournalList = ({
           </div>
         </div>
 
-        {/* SEARCH & FILTER PANEL */}
+        {/* SEARCH PANEL */}
         <AnimatePresence>
           {isSearchExpanded && (
-            <motion.div 
-              initial={{ height: 0, opacity: 0 }} 
-              animate={{ height: 'auto', opacity: 1 }} 
-              exit={{ height: 0, opacity: 0 }} 
-              className="overflow-hidden"
-            >
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
               <JournalSearch 
-                searchTerm={searchTerm} 
-                setSearchTerm={setSearchTerm}
-                activeFilters={activeFilters} 
-                toggleFilter={(t, v) => setActiveFilters(prev => ({...prev, [t]: prev[t] === v ? null : v}))}
-                uniqueTags={uniqueTags} 
-                dateFilter={dateFilter} 
-                setDateFilter={setDateFilter}
+                searchTerm={searchTerm} setSearchTerm={setSearchTerm}
+                activeFilters={activeFilters} toggleFilter={(t, v) => setActiveFilters(prev => ({...prev, [t]: prev[t] === v ? null : v}))}
+                uniqueTags={uniqueTags} dateFilter={dateFilter} setDateFilter={setDateFilter}
                 onClear={clearFilters}
               />
             </motion.div>
@@ -295,10 +299,10 @@ const JournalList = ({
         </AnimatePresence>
       </header>
 
-      {/* CONTENT AREA */}
+      {/* MAIN CONTENT */}
       <main className="max-w-5xl mx-auto px-4 md:px-0 mt-4 min-h-[60vh]">
         
-        {/* WIDGETS */}
+        {/* WIDGETS (Only on List View) */}
         {viewMode === 'list' && !searchTerm && !dateFilter && (
           <div className="max-w-3xl mx-auto">
             <DailyPromptWidget 
@@ -310,69 +314,66 @@ const JournalList = ({
           </div>
         )}
 
-        {filteredEntries.length === 0 ? renderEmptyState() : (
-          <>
-            {/* LIST VIEW */}
-            {viewMode === 'list' && (
-              <Virtuoso
-                useWindowScroll
-                data={flattenedList}
-                className="max-w-3xl mx-auto"
-                itemContent={(index, item) => (
-                  item.type === 'header' ? (
-                    <div className="sticky top-16 md:top-24 z-10 py-4 bg-[#F3F4F6] dark:bg-gray-950">
-                      <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--accent-600)] dark:text-[var(--accent-400)]">
-                        {item.label}
-                      </h2>
-                    </div>
-                  ) : <div className="pb-4"><ListCard entry={item.data} onClick={onEdit} /></div>
-                )}
-              />
-            )}
-
-            {/* GRID VIEW */}
-            {viewMode === 'grid' && (
-              <div className="space-y-8">
-                {groupedEntries.map(group => (
-                  <section key={group.label}>
-                    <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4 px-1">
-                      {group.label}
+        {/* LIST VIEW */}
+        {viewMode === 'list' && (
+          filteredEntries.length === 0 ? renderEmptyState() : (
+            <Virtuoso
+              useWindowScroll
+              data={flattenedList}
+              className="max-w-3xl mx-auto"
+              itemContent={(index, item) => (
+                item.type === 'header' ? (
+                  <div className="sticky top-16 md:top-24 z-10 py-4 bg-[#F3F4F6] dark:bg-gray-950">
+                    <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--accent-600)] dark:text-[var(--accent-400)]">
+                      {item.label}
                     </h2>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-                      {group.entries.map(entry => (
-                        <GridCard key={entry.id} entry={entry} onClick={onEdit} />
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            )}
+                  </div>
+                ) : <div className="pb-4"><ListCard entry={item.data} onClick={onEdit} /></div>
+              )}
+            />
+          )
+        )}
 
-            {/* CALENDAR VIEW */}
-            {viewMode === 'calendar' && (
-              <div className="max-w-4xl mx-auto space-y-8">
-                <JournalCalendar 
-                  selectedDate={selectedDate} 
-                  setSelectedDate={setSelectedDate} 
-                  entries={entries} 
-                  jumpToToday={() => setSelectedDate(new Date())} 
-                  onCreate={onCreate} 
-                />
-                <div className="space-y-3 max-w-3xl mx-auto">
-                   <div className="px-1 text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
-                     Entries for {selectedDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
-                   </div>
-                  {filteredEntries.map(entry => (
-                    <ListCard key={entry.id} entry={entry} onClick={onEdit} />
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
+        {/* GRID VIEW */}
+        {viewMode === 'grid' && (
+          filteredEntries.length === 0 ? renderEmptyState() : (
+            <div className="space-y-8">
+              {groupedEntries.map(group => (
+                <section key={group.label}>
+                  <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4 px-1">{group.label}</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                    {group.entries.map(entry => <GridCard key={entry.id} entry={entry} onClick={onEdit} />)}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* CALENDAR VIEW */}
+        {viewMode === 'calendar' && (
+          <div className="max-w-4xl mx-auto space-y-8">
+            <JournalCalendar 
+              selectedDate={selectedDate} 
+              setSelectedDate={setSelectedDate} 
+              entries={entries} 
+              jumpToToday={() => setSelectedDate(new Date())} 
+              onCreate={onCreate} 
+            />
+            <div className="space-y-3 max-w-3xl mx-auto">
+               <div className="px-1 text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 border-b border-gray-100 dark:border-gray-800 pb-2">
+                 {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+               </div>
+              {filteredEntries.length > 0 ? (
+                filteredEntries.map(entry => <ListCard key={entry.id} entry={entry} onClick={onEdit} />)
+              ) : (
+                renderEmptyState(selectedDate)
+              )}
+            </div>
+          </div>
         )}
       </main>
 
-      {/* Hidden Inputs */}
       <input ref={importInputRef} type="file" className="hidden" accept=".zip" onChange={onImport} />
     </div>
   );
