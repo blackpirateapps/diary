@@ -45,7 +45,10 @@ const JournalList = ({
   // --- LOGIC: DURATION METADATA ---
   const durationText = useMemo(() => {
     if (!entries || entries.length === 0) return "";
-    const oldest = new Date([...entries].sort((a, b) => new Date(a.date) - new Date(b.date))[0].date);
+    
+    // Find the earliest entry date
+    const sorted = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const oldest = new Date(sorted[0].date);
     const now = new Date();
     
     let years = now.getFullYear() - oldest.getFullYear();
@@ -69,7 +72,7 @@ const JournalList = ({
     return `since ${oldest.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })} (${parts.join(' ')})`;
   }, [entries]);
 
-  // --- LOGIC: FLASHBACK ---
+  // --- LOGIC: FLASHBACK (FOR WIDGET) ---
   const flashbackEntry = useMemo(() => {
     if (!entries) return null;
     const today = new Date();
@@ -89,15 +92,13 @@ const JournalList = ({
       }
 
       const lowerSearch = searchTerm.toLowerCase();
-      const contentToSearch = (entry.preview || entry.content || '').toLowerCase();
       const matchesSearch = searchTerm === '' || 
-        contentToSearch.includes(lowerSearch) ||
+        (entry.preview || entry.content || '').toLowerCase().includes(lowerSearch) ||
         entry.tags?.some(tag => tag.toLowerCase().includes(lowerSearch)) ||
         (entry.location && entry.location.toLowerCase().includes(lowerSearch));
 
       const matchesMood = activeFilters.mood ? entry.mood === activeFilters.mood : true;
       const matchesTag = activeFilters.tag ? entry.tags?.includes(activeFilters.tag) : true;
-      const matchesLoc = activeFilters.location ? entry.location === activeFilters.location : true;
 
       let matchesDate = true;
       if (dateFilter?.start && dateFilter?.end) {
@@ -105,7 +106,7 @@ const JournalList = ({
         matchesDate = entryDate >= dateFilter.start && entryDate <= dateFilter.end;
       }
 
-      return matchesSearch && matchesMood && matchesTag && matchesLoc && matchesDate;
+      return matchesSearch && matchesMood && matchesTag && matchesDate;
     });
   }, [entries, searchTerm, activeFilters, viewMode, selectedDate, dateFilter]);
 
@@ -134,8 +135,13 @@ const JournalList = ({
     return items;
   }, [groupedEntries]);
 
-  const uniqueTags = useMemo(() => [...new Set(entries.flatMap(e => e.tags || []))], [entries]);
-  const isTodayDone = useMemo(() => entries.some(e => new Date(e.date).toDateString() === new Date().toDateString()), [entries]);
+  // --- ACTIONS ---
+  const handleCreateForDate = (date) => {
+    // Ensuring specific date logic matches 'add past entry' by normalizing to mid-day
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(12, 0, 0, 0);
+    onCreate(normalizedDate);
+  };
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -144,19 +150,18 @@ const JournalList = ({
     setIsSearchExpanded(false);
   };
 
-  // --- RENDER HELPERS ---
   const renderEmptyState = (customDate = null) => (
-    <div className="col-span-full text-center py-20 flex flex-col items-center animate-fadeIn">
+    <div className="col-span-full text-center py-20 flex flex-col items-center animate-fadeIn px-6">
       <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-300 dark:text-gray-600">
         <Eye size={24} />
       </div>
       <p className="text-gray-400 dark:text-gray-500 font-bold tracking-tight">
-        {searchTerm ? "No results found for this search." : "No memories found for this period."}
+        {searchTerm ? "No results found." : "No memories found for this period."}
       </p>
       {customDate && (
         <button 
-          onClick={() => onCreate(customDate)}
-          className="mt-4 text-sm font-black uppercase tracking-widest text-[var(--accent-600)] hover:underline"
+          onClick={() => handleCreateForDate(customDate)}
+          className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-[var(--accent-600)] hover:underline border border-[var(--accent-100)] px-4 py-2 rounded-full transition-all"
         >
           Create entry for {customDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
         </button>
@@ -173,17 +178,11 @@ const JournalList = ({
           
           <AnimatePresence mode="wait">
             {!isSearchExpanded ? (
-              <motion.div 
-                key="title"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="flex-1 min-w-0"
-              >
+              <motion.div key="title" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 min-w-0">
                 <h1 className="text-xl md:text-3xl font-black text-gray-900 dark:text-white tracking-tight truncate leading-none">
                   {appName}
                 </h1>
-                <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2 mt-1 md:mt-1.5">
+                <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2 mt-1 md:mt-2">
                   <p className="text-[10px] font-black uppercase tracking-[0.15em] text-gray-400">
                     {entries.length} Memories
                   </p>
@@ -194,17 +193,8 @@ const JournalList = ({
                 </div>
               </motion.div>
             ) : (
-              <motion.div 
-                key="search-ui"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="flex-1 flex items-center gap-2"
-              >
-                <button 
-                  onClick={() => {setIsSearchExpanded(false); clearFilters();}}
-                  className="p-2 -ml-2 text-gray-500 hover:text-[var(--accent-500)] transition-colors"
-                >
+              <motion.div key="search-ui" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="flex-1 flex items-center gap-2">
+                <button onClick={() => {setIsSearchExpanded(false); clearFilters();}} className="p-2 -ml-2 text-gray-500 hover:text-[var(--accent-500)] transition-colors">
                   <ArrowLeft size={20} />
                 </button>
                 <span className="text-lg font-black tracking-tight uppercase">Search</span>
@@ -212,18 +202,18 @@ const JournalList = ({
             )}
           </AnimatePresence>
 
-          {/* ACTION ROW */}
-          <div className="flex items-center gap-2 md:gap-3">
+          {/* ACTION BUTTONS */}
+          <div className="flex items-center gap-2">
             <button 
               onClick={() => setIsSearchExpanded(!isSearchExpanded)}
-              className={`p-2.5 rounded-full bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 text-gray-500 hover:text-[var(--accent-600)] transition-all ${isSearchExpanded ? 'text-[var(--accent-600)] border-[var(--accent-200)] bg-[var(--accent-50)] dark:bg-gray-800' : ''}`}
+              className={`p-2.5 rounded-full bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 text-gray-500 hover:text-[var(--accent-600)] transition-all ${isSearchExpanded ? 'text-[var(--accent-600)] border-[var(--accent-200)]' : ''}`}
             >
               <Search size={20} />
             </button>
 
             <motion.button 
               whileTap={{ scale: 0.95 }}
-              onClick={() => onCreate(viewMode === 'calendar' ? selectedDate : new Date())} 
+              onClick={() => handleCreateForDate(viewMode === 'calendar' ? selectedDate : new Date())} 
               className="flex items-center justify-center gap-2 bg-[var(--accent-500)] text-white p-2.5 md:px-5 md:py-2.5 rounded-full md:rounded-xl shadow-lg shadow-[var(--accent-500)]/25 hover:bg-[var(--accent-600)] transition-all"
             >
               <Plus size={20} strokeWidth={3} />
@@ -291,7 +281,7 @@ const JournalList = ({
               <JournalSearch 
                 searchTerm={searchTerm} setSearchTerm={setSearchTerm}
                 activeFilters={activeFilters} toggleFilter={(t, v) => setActiveFilters(prev => ({...prev, [t]: prev[t] === v ? null : v}))}
-                uniqueTags={uniqueTags} dateFilter={dateFilter} setDateFilter={setDateFilter}
+                uniqueTags={[...new Set(entries.flatMap(e => e.tags || []))]} dateFilter={dateFilter} setDateFilter={setDateFilter}
                 onClear={clearFilters}
               />
             </motion.div>
@@ -302,7 +292,7 @@ const JournalList = ({
       {/* MAIN CONTENT */}
       <main className="max-w-5xl mx-auto px-4 md:px-0 mt-4 min-h-[60vh]">
         
-        {/* WIDGETS (Only on List View) */}
+        {/* WIDGETS (List View) */}
         {viewMode === 'list' && !searchTerm && !dateFilter && (
           <div className="max-w-3xl mx-auto">
             <DailyPromptWidget 
@@ -358,7 +348,7 @@ const JournalList = ({
               setSelectedDate={setSelectedDate} 
               entries={entries} 
               jumpToToday={() => setSelectedDate(new Date())} 
-              onCreate={onCreate} 
+              onCreate={handleCreateForDate} 
             />
             <div className="space-y-3 max-w-3xl mx-auto">
                <div className="px-1 text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 border-b border-gray-100 dark:border-gray-800 pb-2">
