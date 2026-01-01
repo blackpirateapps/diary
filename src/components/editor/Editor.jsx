@@ -592,16 +592,22 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
 
                         <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 lg:px-12 lg:py-12">
                             
-                            <div className="lg:hidden mb-6">
-                                <div className="flex items-baseline gap-3 mb-1">
-                                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
-                                      {currentDate.toLocaleDateString(undefined, { weekday: 'long' })}
-                                    </h2>
-                                    <span className="text-xl text-gray-400 dark:text-gray-500 font-medium">
-                                      {currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
-                                    </span>
-                                </div>
-                            </div>
+                            <div className="lg:hidden mb-6 flex justify-between items-end">
+    <div>
+        <div className="flex items-baseline gap-3 mb-1">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+              {currentDate.toLocaleDateString(undefined, { weekday: 'long' })}
+            </h2>
+            <span className="text-xl text-gray-400 dark:text-gray-500 font-medium">
+              {currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
+            </span>
+        </div>
+    </div>
+    {/* Added Word Count for Mobile */}
+    <div className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest pb-1">
+        {wordCount} Words
+    </div>
+</div>
 
                             <div className="lg:hidden mb-8">
                                 <MetadataBar 
