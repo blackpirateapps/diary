@@ -1,28 +1,16 @@
 import React, { useState, useMemo, useEffect, useRef, forwardRef } from 'react';
 import { 
   Plus, Calendar as CalendarIcon, Search, WifiOff, Download, Upload,
-  LayoutList, LayoutGrid, Eye, MoreVertical, Smile
+  LayoutList, LayoutGrid, Eye, MoreVertical, Smile, ArrowLeft, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Virtuoso, VirtuosoGrid } from 'react-virtuoso';
+import { Virtuoso } from 'react-virtuoso';
 
 // Sub-components
 import DailyPromptWidget from './DailyPromptWidget';
 import JournalCalendar from './JournalCalendar';
 import { ListCard, GridCard } from './JournalCards';
-import JournalSearch from './JournalSearch'; // <--- IMPORT NEW SEARCH
-
-// --- CUSTOM VIRTUALIZED COMPONENTS ---
-const GridList = forwardRef(({ children, style, className, ...props }, ref) => (
-  <div
-    ref={ref}
-    style={style}
-    className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 ${className || ''}`}
-    {...props}
-  >
-    {children}
-  </div>
-));
+import JournalSearch from './JournalSearch';
 
 const JournalList = ({
   entries,
@@ -38,12 +26,9 @@ const JournalList = ({
 }) => {
   const [viewMode, setViewMode] = useState(initialView); 
   const [searchTerm, setSearchTerm] = useState('');
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  
-  // --- FILTER STATE ---
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [activeFilters, setActiveFilters] = useState({ mood: null, tag: null, location: null });
-  const [dateFilter, setDateFilter] = useState(null); // { start: Date, end: Date, label: String }
-
+  const [dateFilter, setDateFilter] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -51,32 +36,15 @@ const JournalList = ({
     return saved ? new Date(saved) : new Date();
   });
 
-  useEffect(() => {
-    localStorage.setItem('journal_selected_date', selectedDate.toISOString());
-  }, [selectedDate]);
-
   const importInputRef = useRef(null);
-  const uniqueTags = useMemo(() => [...new Set(entries.flatMap(e => e.tags || []))], [entries]);
-
-  const isTodayDone = useMemo(() => {
-    const todayStr = new Date().toDateString();
-    return entries.some(e => new Date(e.date).toDateString() === todayStr);
-  }, [entries]);
 
   // --- FILTERING LOGIC ---
   const filteredEntries = useMemo(() => {
-    // Optimization: If no filters active, return all (unless in calendar mode)
-    if (viewMode !== 'calendar' && !searchTerm && !activeFilters.mood && !activeFilters.tag && !activeFilters.location && !dateFilter) {
-      return entries;
-    }
-
     return entries.filter(entry => {
-      // 1. Calendar View Override
       if (viewMode === 'calendar') {
         return new Date(entry.date).toDateString() === selectedDate.toDateString();
       }
 
-      // 2. Text Search
       const lowerSearch = searchTerm.toLowerCase();
       const contentToSearch = (entry.preview || entry.content || '').toLowerCase();
       const matchesSearch = searchTerm === '' || 
@@ -84,14 +52,12 @@ const JournalList = ({
         entry.tags?.some(tag => tag.toLowerCase().includes(lowerSearch)) ||
         (entry.location && entry.location.toLowerCase().includes(lowerSearch));
 
-      // 3. Metadata Filters
       const matchesMood = activeFilters.mood ? entry.mood === activeFilters.mood : true;
       const matchesTag = activeFilters.tag ? entry.tags?.includes(activeFilters.tag) : true;
       const matchesLoc = activeFilters.location ? entry.location === activeFilters.location : true;
 
-      // 4. Date Range Filter
       let matchesDate = true;
-      if (dateFilter && dateFilter.start && dateFilter.end) {
+      if (dateFilter?.start && dateFilter?.end) {
         const entryDate = new Date(entry.date);
         matchesDate = entryDate >= dateFilter.start && entryDate <= dateFilter.end;
       }
@@ -99,6 +65,32 @@ const JournalList = ({
       return matchesSearch && matchesMood && matchesTag && matchesLoc && matchesDate;
     });
   }, [entries, searchTerm, activeFilters, viewMode, selectedDate, dateFilter]);
+
+  // --- DAY ONE GROUPING LOGIC ---
+  const groupedEntries = useMemo(() => {
+    const groups = [];
+    filteredEntries.forEach(entry => {
+      const date = new Date(entry.date);
+      const label = date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      let group = groups.find(g => g.label === label);
+      if (!group) {
+        group = { label, entries: [] };
+        groups.push(group);
+      }
+      group.entries.push(entry);
+    });
+    return groups;
+  }, [filteredEntries]);
+
+  // Flattened structure for Virtuoso (List Mode)
+  const flattenedList = useMemo(() => {
+    const items = [];
+    groupedEntries.forEach(group => {
+      items.push({ type: 'header', label: group.label });
+      group.entries.forEach(entry => items.push({ type: 'entry', data: entry }));
+    });
+    return items;
+  }, [groupedEntries]);
 
   const toggleFilter = (type, value) => {
     setActiveFilters(prev => ({ ...prev, [type]: prev[type] === value ? null : value }));
@@ -108,194 +100,194 @@ const JournalList = ({
     setSearchTerm('');
     setActiveFilters({ mood: null, tag: null, location: null });
     setDateFilter(null);
-    setIsSearchOpen(false);
+    setIsSearchExpanded(false);
   };
 
-  const handleCreateNew = () => {
-    const dateToUse = viewMode === 'calendar' ? selectedDate : new Date();
-    onCreate(dateToUse);
-  };
-
-  const jumpToToday = () => {
-    setSelectedDate(new Date());
-  };
-
-  const renderEmptyState = () => (
-    <div className="col-span-full text-center py-20 flex flex-col items-center animate-fadeIn">
-      <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-300 dark:text-gray-600">
-        {viewMode === 'calendar' ? <CalendarIcon size={24} /> : <Eye size={24} />}
-      </div>
-      <p className="text-gray-400 dark:text-gray-500 font-medium">
-        {viewMode === 'calendar' ? 'No entries for this day.' : 'No entries found.'}
-      </p>
-      {(viewMode === 'calendar' || !searchTerm) && (
-        <button onClick={() => onCreate(viewMode === 'calendar' ? selectedDate : new Date())} className="mt-2 text-[var(--accent-500)] text-sm font-medium hover:underline">
-          Create entry here
-        </button>
-      )}
-    </div>
-  );
+  const uniqueTags = useMemo(() => [...new Set(entries.flatMap(e => e.tags || []))], [entries]);
+  const isTodayDone = useMemo(() => entries.some(e => new Date(e.date).toDateString() === new Date().toDateString()), [entries]);
 
   return (
     <div className="space-y-4 pb-24 md:pb-8 text-gray-900 dark:text-gray-100 transition-colors md:px-6 md:pt-6">
-      {/* HEADER */}
-    <header className="px-6 pt-6 pb-2 sticky top-0 md:sticky bg-[#F3F4F6]/95 dark:bg-gray-950/95 md:bg-transparent backdrop-blur-md z-20 md:z-0 border-b md:border-b-0 border-gray-200/50 dark:border-gray-800/50 transition-colors -mx-6 md:mx-0">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4 px-6 md:px-0">
-        
-        {/* APP TITLE */}
-        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="min-w-0 flex-1">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight truncate md:mb-1">{appName}</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm flex items-center gap-2 font-medium">
-            {entries.length} memories
-            {isOffline && <span className="flex items-center gap-1 text-[10px] bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full"><WifiOff size={10} /> Offline</span>}
-          </p>
-        </motion.div>
-        
-        {/* DESKTOP ACTIONS */}
-        <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 flex-shrink-0 self-end md:self-auto">
+      
+      {/* IMPROVED HEADER */}
+      <header className="sticky top-0 z-40 bg-[#F3F4F6]/90 dark:bg-gray-950/90 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50 transition-all">
+        <div className="max-w-5xl mx-auto px-4 h-16 md:h-20 flex items-center justify-between gap-3">
           
-          <motion.button 
-            whileTap={{ scale: 0.9 }}
-            onClick={handleCreateNew} 
-            className="w-10 h-10 md:w-auto md:px-5 md:rounded-xl flex items-center justify-center gap-2 bg-[var(--accent-500)] text-white rounded-full shadow-lg shadow-[var(--accent-500)]/30 active:scale-95 transition-all hover:bg-[var(--accent-600)]"
-          >
-            <Plus size={20} />
-            <span className="hidden md:inline text-sm font-bold">New Entry</span>
-          </motion.button>
-
-          {/* VIEW TOGGLES */}
-          <div className="hidden md:flex bg-white dark:bg-gray-900 p-1 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
-              {['list', 'grid', 'calendar'].map(mode => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`p-2 rounded-lg transition-all ${viewMode === mode ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-600)] dark:text-white' : 'text-gray-400 hover:text-gray-600'}`}
+          <AnimatePresence mode="wait">
+            {!isSearchExpanded ? (
+              <motion.div 
+                key="title"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="flex-1 min-w-0"
+              >
+                <h1 className="text-xl md:text-3xl font-black text-gray-900 dark:text-white tracking-tight truncate">
+                  {appName}
+                </h1>
+                <p className="hidden md:flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                  {entries.length} Memories
+                  {isOffline && <span className="flex items-center gap-1 bg-gray-200 dark:bg-gray-800 px-1.5 py-0.5 rounded text-[10px]"><WifiOff size={10} /> Offline</span>}
+                </p>
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="search-input"
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: '100%' }}
+                exit={{ opacity: 0, width: 0 }}
+                className="flex-1 flex items-center gap-2"
+              >
+                <button 
+                  onClick={() => setIsSearchExpanded(false)}
+                  className="p-2 -ml-2 text-gray-500 hover:text-[var(--accent-500)] transition-colors"
                 >
-                  {mode === 'list' && <LayoutList size={18} />}
-                  {mode === 'grid' && <LayoutGrid size={18} />}
-                  {mode === 'calendar' && <CalendarIcon size={18} />}
+                  <ArrowLeft size={20} />
                 </button>
-              ))}
-          </div>
+                <input 
+                  autoFocus
+                  type="text"
+                  placeholder="Search your life..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-base font-medium placeholder-gray-400"
+                />
+                {searchTerm && (
+                  <button onClick={() => setSearchTerm('')} className="p-2 text-gray-400">
+                    <X size={18} />
+                  </button>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {/* MOBILE MENU */}
-          <div className="relative md:hidden">
-            <motion.button
-              whileTap={{ scale: 0.9 }}
+          {/* ACTION BUTTONS */}
+          <div className="flex items-center gap-2 md:gap-3">
+            {!isSearchExpanded && (
+              <button 
+                onClick={() => setIsSearchExpanded(true)}
+                className="p-2.5 rounded-full bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 text-gray-500 hover:text-[var(--accent-600)] transition-all md:hidden"
+              >
+                <Search size={20} />
+              </button>
+            )}
+
+            <div className="hidden md:flex bg-white dark:bg-gray-900 p-1 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+                {['list', 'grid', 'calendar'].map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={`p-2 rounded-lg transition-all ${viewMode === mode ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-600)] shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    {mode === 'list' && <LayoutList size={18} />}
+                    {mode === 'grid' && <LayoutGrid size={18} />}
+                    {mode === 'calendar' && <CalendarIcon size={18} />}
+                  </button>
+                ))}
+            </div>
+
+            <motion.button 
+              whileTap={{ scale: 0.95 }}
+              onClick={() => onCreate(viewMode === 'calendar' ? selectedDate : new Date())} 
+              className="flex items-center justify-center gap-2 bg-[var(--accent-500)] text-white px-4 py-2.5 md:px-5 rounded-full md:rounded-xl shadow-lg shadow-[var(--accent-500)]/25 hover:bg-[var(--accent-600)] transition-all"
+            >
+              <Plus size={20} strokeWidth={3} />
+              <span className="hidden md:inline text-sm font-black uppercase tracking-tight">New Entry</span>
+            </motion.button>
+
+            <button 
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-900 text-gray-500 shadow-sm rounded-full hover:text-[var(--accent-600)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 transition-colors"
+              className="p-2.5 md:p-3 rounded-full bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 text-gray-500 transition-all relative z-50"
             >
               <MoreVertical size={20} />
-            </motion.button>
-            {/* ... Mobile Menu Content (Keep existing code) ... */}
-            <AnimatePresence>
-                {isMenuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-20" onClick={() => setIsMenuOpen(false)} />
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.9, y: 10, x: 10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                      className="absolute right-0 top-12 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 p-2 w-48 z-30 flex flex-col gap-1 origin-top-right"
-                    >
-                      <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex mb-2">
-                        {['list', 'grid', 'calendar'].map(mode => (
-                          <button
-                            key={mode}
-                            onClick={() => setViewMode(mode)}
-                            className={`flex-1 flex items-center justify-center py-1.5 rounded-md transition-all ${viewMode === mode ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-                          >
-                            {mode === 'list' && <LayoutList size={16} />}
-                            {mode === 'grid' && <LayoutGrid size={16} />}
-                            {mode === 'calendar' && <CalendarIcon size={16} />}
-                          </button>
-                        ))}
-                      </div>
-                      <button onClick={onAddOld} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><CalendarIcon size={16} className="text-gray-400" /> Add Past Date</button>
-                      <button onClick={onOpenFlashback} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><Smile size={16} className="text-gray-400" /> On This Day</button>
-                      <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
-                      <button onClick={() => { onExport(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><Download size={16} className="text-gray-400" /> Export Backup</button>
-                      <button onClick={() => { importInputRef.current.click(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><Upload size={16} className="text-gray-400" /> Import Backup</button>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
+            </button>
           </div>
-        </motion.div>
-      </div>
-      
-      <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
+        </div>
 
-      {/* SEARCH COMPONENT (Always visible now, expandable panel) */}
-      <JournalSearch 
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        activeFilters={activeFilters}
-        toggleFilter={toggleFilter}
-        uniqueTags={uniqueTags}
-        dateFilter={dateFilter}
-        setDateFilter={setDateFilter}
-        onClear={clearFilters}
-      />
-    </header>
+        {/* PERSISTENT SEARCH/FILTER PANEL ON DESKTOP & MOBILE EXPANDED */}
+        <div className={`overflow-hidden transition-all duration-300 ${isSearchExpanded || searchTerm || activeFilters.mood || activeFilters.tag ? 'max-h-64' : 'max-h-0 md:max-h-64'}`}>
+          <JournalSearch 
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            activeFilters={activeFilters}
+            toggleFilter={toggleFilter}
+            uniqueTags={uniqueTags}
+            dateFilter={dateFilter}
+            setDateFilter={setDateFilter}
+            onClear={clearFilters}
+          />
+        </div>
+      </header>
 
       {/* CONTENT AREA */}
-      <div className="px-4 md:px-0 min-h-[50vh] relative z-0">
-        {/* WIDGET */}
+      <main className="max-w-5xl mx-auto px-4 md:px-0 mt-6 min-h-[60vh]">
         {viewMode === 'list' && !searchTerm && !dateFilter && (
-          <DailyPromptWidget onWrite={() => onCreate(new Date())} isTodayDone={isTodayDone} />
+          <div className="max-w-3xl mx-auto">
+            <DailyPromptWidget onWrite={() => onCreate(new Date())} isTodayDone={isTodayDone} />
+          </div>
+        )}
+
+        {/* DAY ONE LIST VIEW */}
+        {viewMode === 'list' && (
+          <Virtuoso
+            useWindowScroll
+            data={flattenedList}
+            className="max-w-3xl mx-auto"
+            itemContent={(index, item) => {
+              if (item.type === 'header') {
+                return (
+                  <div className="sticky top-16 md:top-20 z-10 py-4 bg-[#F3F4F6] dark:bg-gray-950">
+                    <h2 className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-[var(--accent-600)] dark:text-[var(--accent-400)]">
+                      {item.label}
+                    </h2>
+                  </div>
+                );
+              }
+              return (
+                <div className="pb-4"> 
+                   <ListCard entry={item.data} onClick={onEdit} />
+                </div>
+              );
+            }}
+          />
+        )}
+
+        {/* DAY ONE GRID VIEW (Grouped) */}
+        {viewMode === 'grid' && (
+          <div className="space-y-8">
+            {groupedEntries.map(group => (
+              <section key={group.label}>
+                <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4 px-1">
+                  {group.label}
+                </h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
+                  {group.entries.map(entry => (
+                    <GridCard key={entry.id} entry={entry} onClick={onEdit} />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         )}
 
         {/* CALENDAR VIEW */}
         {viewMode === 'calendar' && (
-           <>
+           <div className="max-w-4xl mx-auto space-y-6">
              <JournalCalendar 
                 selectedDate={selectedDate}
                 setSelectedDate={setSelectedDate}
                 entries={entries}
-                jumpToToday={jumpToToday}
+                jumpToToday={() => setSelectedDate(new Date())}
                 onCreate={onCreate}
              />
-             <div className="space-y-3 max-w-3xl mx-auto mt-4">
-                {filteredEntries.length === 0 ? renderEmptyState() : (
-                    filteredEntries.map(entry => (
-                       <ListCard key={entry.id} entry={entry} onClick={onEdit} />
-                    ))
-                )}
+             <div className="space-y-3 max-w-3xl mx-auto">
+                {filteredEntries.map(entry => <ListCard key={entry.id} entry={entry} onClick={onEdit} />)}
              </div>
-           </>
+           </div>
         )}
+      </main>
 
-        {/* VIRTUALIZED LIST VIEW */}
-        {viewMode === 'list' && (
-           filteredEntries.length === 0 ? renderEmptyState() : (
-             <Virtuoso
-               useWindowScroll
-               data={filteredEntries}
-               className="max-w-3xl mx-auto"
-               itemContent={(index, entry) => (
-                 <div className="pb-3"> 
-                    <ListCard entry={entry} onClick={onEdit} />
-                 </div>
-               )}
-             />
-           )
-        )}
-
-        {/* VIRTUALIZED GRID VIEW */}
-        {viewMode === 'grid' && (
-            filteredEntries.length === 0 ? renderEmptyState() : (
-              <VirtuosoGrid
-                useWindowScroll
-                data={filteredEntries}
-                components={{ List: GridList }}
-                itemContent={(index, entry) => (
-                   <GridCard entry={entry} onClick={onEdit} />
-                )}
-              />
-            )
-        )}
-      </div>
+      <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
     </div>
   );
 };
