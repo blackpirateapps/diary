@@ -7,19 +7,19 @@ const JournalCalendar = ({ selectedDate, setSelectedDate, entries, jumpToToday, 
   return (
     <div className="animate-slideUp space-y-4 max-w-4xl mx-auto">
       <div className="flex justify-between items-center px-1">
-        <div className="flex items-center gap-2 text-gray-400 dark:text-gray-500 text-xs font-bold uppercase tracking-wider">
-          <CalendarIcon size={12} />
+        <div className="flex items-center gap-2 text-gray-400 dark:text-gray-500 text-[10px] font-black uppercase tracking-[0.2em]">
+          <CalendarIcon size={12} strokeWidth={2.5} />
           {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric'})}
         </div>
         <button 
           onClick={jumpToToday} 
-          className="flex items-center gap-1 text-[var(--accent-500)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 px-2 py-1 rounded-lg text-xs font-bold transition-colors"
+          className="flex items-center gap-1.5 text-[var(--accent-600)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border border-[var(--accent-100)] dark:border-gray-800 shadow-sm"
         >
           <CalendarDays size={14} /> Today
         </button>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-4 overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-xl shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-800 p-6 overflow-hidden">
         <Calendar 
           onChange={setSelectedDate} 
           value={selectedDate}
@@ -34,9 +34,9 @@ const JournalCalendar = ({ selectedDate, setSelectedDate, entries, jumpToToday, 
             const dayEntries = entries.filter(e => new Date(e.date).toDateString() === date.toDateString());
             if (dayEntries.length > 0) {
               return (
-                <div className="flex justify-center mt-1 gap-0.5">
+                <div className="flex justify-center mt-1.5 gap-1">
                     {dayEntries.slice(0, 3).map((e, i) => (
-                      <div key={i} className={`w-1.5 h-1.5 rounded-full ${e.mood && e.mood >= 7 ? 'bg-orange-400' : 'bg-[var(--accent-400)]'}`} />
+                      <div key={i} className={`w-1.5 h-1.5 rounded-full shadow-sm ${e.mood && e.mood >= 7 ? 'bg-orange-400' : 'bg-[var(--accent-400)]'}`} />
                     ))}
                 </div>
               );
@@ -54,62 +54,59 @@ const JournalCalendar = ({ selectedDate, setSelectedDate, entries, jumpToToday, 
         }
         @media (min-width: 768px) {
            .react-calendar { font-size: 1.1em; }
-           .react-calendar__tile { height: 80px; display: flex; flex-direction: column; justify-content: flex-start; padding-top: 10px; }
+           .react-calendar__tile { height: 90px; display: flex; flex-direction: column; justify-content: flex-start; padding-top: 15px !important; }
+        }
+        .react-calendar__navigation {
+          margin-bottom: 20px;
+          height: 44px;
         }
         .react-calendar__navigation button {
           min-width: 44px;
           background: none;
-          font-size: 16px;
-          font-weight: 600;
+          font-size: 18px;
+          font-weight: 800;
           color: inherit;
+          border-radius: 12px;
+          transition: 0.2s all;
+        }
+        .react-calendar__navigation button:hover {
+          background-color: var(--accent-50) !important;
         }
         .react-calendar__month-view__weekdays {
           text-align: center;
           text-transform: uppercase;
-          font-weight: bold;
+          font-weight: 900;
           font-size: 0.65em;
           color: #9ca3af;
-          margin-bottom: 8px;
+          margin-bottom: 12px;
+          letter-spacing: 0.1em;
         }
         .react-calendar__month-view__days__day {
           font-size: 14px;
-          font-weight: 500;
+          font-weight: 700;
           color: inherit;
-          padding: 8px 0;
         }
         .react-calendar__tile {
-          border-radius: 12px;
+          border-radius: 16px;
           transition: 0.2s all;
-        }
-        .react-calendar__tile:enabled:hover,
-        .react-calendar__tile:enabled:focus {
-          background-color: var(--accent-50);
-        }
-        .dark .react-calendar__tile:enabled:hover {
-          background-color: #374151;
+          border: 2px solid transparent !important;
         }
         .react-calendar__tile--now {
-          background: var(--accent-50);
-          color: var(--accent-600);
-          font-weight: bold;
-        }
-        .dark .react-calendar__tile--now {
-          background: #374151;
-          color: var(--accent-400);
+          background: var(--accent-50) !important;
+          color: var(--accent-600) !important;
+          font-weight: 900;
         }
         .react-calendar__tile--active {
           background: var(--accent-500) !important;
           color: white !important;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 10px 15px -3px rgba(var(--accent-rgb), 0.4);
         }
         .react-calendar__tile--active div div {
           background-color: white !important; 
         }
         .react-calendar__month-view__days__day--neighboringMonth {
           color: #d1d5db;
-        }
-        .dark .react-calendar__month-view__days__day--neighboringMonth {
-          color: #4b5563;
+          opacity: 0.5;
         }
       `}</style>
     </div>
