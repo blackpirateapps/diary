@@ -42,7 +42,37 @@ const JournalList = ({
     localStorage.setItem('journal_selected_date', selectedDate.toISOString());
   }, [selectedDate]);
 
-  // --- FLASHBACK LOGIC ---
+  // --- LOGIC: DURATION METADATA ---
+  const durationText = useMemo(() => {
+    if (!entries || entries.length === 0) return "";
+    
+    // Find the earliest entry date
+    const oldest = new Date([...entries].sort((a, b) => new Date(a.date) - new Date(b.date))[0].date);
+    const now = new Date();
+    
+    let years = now.getFullYear() - oldest.getFullYear();
+    let months = now.getMonth() - oldest.getMonth();
+    let days = now.getDate() - oldest.getDate();
+
+    // Adjust for negative differences
+    if (days < 0) {
+      months--;
+      days += new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+    }
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    const parts = [];
+    if (years > 0) parts.push(`${years}y`);
+    if (months > 0) parts.push(`${months}m`);
+    if (days > 0 || parts.length === 0) parts.push(`${days}d`);
+    
+    return `since ${oldest.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })} (${parts.join(' ')})`;
+  }, [entries]);
+
+  // --- LOGIC: FLASHBACK (FOR WIDGET) ---
   const flashbackEntry = useMemo(() => {
     if (!entries) return null;
     const today = new Date();
@@ -98,6 +128,7 @@ const JournalList = ({
     return groups;
   }, [filteredEntries]);
 
+  // Flattened for Virtuoso List
   const flattenedList = useMemo(() => {
     const items = [];
     groupedEntries.forEach(group => {
@@ -122,7 +153,7 @@ const JournalList = ({
       <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-300 dark:text-gray-600">
         <Eye size={24} />
       </div>
-      <p className="text-gray-400 dark:text-gray-500 font-medium">No entries found.</p>
+      <p className="text-gray-400 dark:text-gray-500 font-bold tracking-tight">No entries found.</p>
     </div>
   );
 
@@ -131,50 +162,71 @@ const JournalList = ({
       
       {/* HEADER */}
       <header className="sticky top-0 z-40 bg-[#F3F4F6]/90 dark:bg-gray-950/90 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50 transition-all">
-        <div className="max-w-5xl mx-auto px-4 h-16 md:h-20 flex items-center justify-between gap-3">
+        <div className="max-w-5xl mx-auto px-4 h-16 md:h-24 flex items-center justify-between gap-3">
           
           <AnimatePresence mode="wait">
             {!isSearchExpanded ? (
-              <motion.div key="title" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="flex-1 min-w-0">
+              <motion.div 
+                key="title"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="flex-1 min-w-0"
+              >
                 <h1 className="text-xl md:text-3xl font-black text-gray-900 dark:text-white tracking-tight truncate leading-none">
                   {appName}
                 </h1>
-                <p className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                  {entries.length} Memories
-                  {isOffline && <span className="flex items-center gap-1 bg-gray-200 dark:bg-gray-800 px-1.5 py-0.5 rounded text-[10px]"><WifiOff size={10} /> Offline</span>}
-                </p>
+                <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2 mt-1 md:mt-1.5">
+                  <p className="text-[10px] font-black uppercase tracking-[0.15em] text-gray-400">
+                    {entries.length} Memories
+                  </p>
+                  <span className="hidden md:inline text-gray-300 dark:text-gray-700">•</span>
+                  <p className="text-[9px] md:text-[10px] font-bold text-gray-400 uppercase tracking-wider opacity-70 italic">
+                    {durationText}
+                  </p>
+                  {isOffline && <span className="flex items-center gap-1 bg-gray-200 dark:bg-gray-800 px-1.5 py-0.5 rounded text-[10px] font-bold"><WifiOff size={10} /> Offline</span>}
+                </div>
               </motion.div>
             ) : (
-              <motion.div key="search-ui" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="flex-1 flex items-center gap-2">
-                <button onClick={() => {setIsSearchExpanded(false); clearFilters();}} className="p-2 -ml-2 text-gray-500 hover:text-[var(--accent-500)] transition-colors">
+              <motion.div 
+                key="search-ui"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="flex-1 flex items-center gap-2"
+              >
+                <button 
+                  onClick={() => {setIsSearchExpanded(false); clearFilters();}}
+                  className="p-2 -ml-2 text-gray-500 hover:text-[var(--accent-500)] transition-colors"
+                >
                   <ArrowLeft size={20} />
                 </button>
-                <span className="text-lg font-black tracking-tight">Search</span>
+                <span className="text-lg font-black tracking-tight uppercase">Search</span>
               </motion.div>
             )}
           </AnimatePresence>
 
           {/* ACTION BUTTONS */}
           <div className="flex items-center gap-2 md:gap-3">
-            {!isSearchExpanded && (
-              <button 
-                onClick={() => setIsSearchExpanded(true)}
-                className="p-2.5 rounded-full bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 text-gray-500 hover:text-[var(--accent-600)] transition-all md:hidden"
-              >
-                <Search size={20} />
-              </button>
-            )}
+            {/* Search Toggle (Desktop & Mobile) */}
+            <button 
+              onClick={() => setIsSearchExpanded(!isSearchExpanded)}
+              className={`p-2.5 rounded-full bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 text-gray-500 hover:text-[var(--accent-600)] transition-all ${isSearchExpanded ? 'text-[var(--accent-600)] border-[var(--accent-200)] bg-[var(--accent-50)] dark:bg-gray-800' : ''}`}
+            >
+              <Search size={20} />
+            </button>
 
-            <div className="hidden md:flex bg-white dark:bg-gray-900 p-1 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+            {/* View Switchers (Visible Everywhere) */}
+            <div className="flex bg-white dark:bg-gray-900 p-1 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
                 {['list', 'grid', 'calendar'].map(mode => (
                   <button
                     key={mode}
                     onClick={() => setViewMode(mode)}
-                    className={`p-2 rounded-lg transition-all ${viewMode === mode ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-600)] shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
+                    className={`p-1.5 md:p-2 rounded-lg transition-all ${viewMode === mode ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-600)] shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
                   >
-                    {mode === 'list' && <LayoutList size={18} />}
-                    {mode === 'grid' && <LayoutGrid size={18} />}
-                    {mode === 'calendar' && <CalendarIcon size={18} />}
+                    {mode === 'list' && <LayoutList size={16} className="md:w-[18px]" />}
+                    {mode === 'grid' && <LayoutGrid size={16} className="md:w-[18px]" />}
+                    {mode === 'calendar' && <CalendarIcon size={16} className="md:w-[18px]" />}
                   </button>
                 ))}
             </div>
@@ -182,12 +234,13 @@ const JournalList = ({
             <motion.button 
               whileTap={{ scale: 0.95 }}
               onClick={() => onCreate(viewMode === 'calendar' ? selectedDate : new Date())} 
-              className="flex items-center justify-center gap-2 bg-[var(--accent-500)] text-white px-4 py-2.5 md:px-5 rounded-full md:rounded-xl shadow-lg shadow-[var(--accent-500)]/25 hover:bg-[var(--accent-600)] transition-all"
+              className="flex items-center justify-center gap-2 bg-[var(--accent-500)] text-white p-2.5 md:px-5 md:py-2.5 rounded-full md:rounded-xl shadow-lg shadow-[var(--accent-500)]/25 hover:bg-[var(--accent-600)] transition-all"
             >
               <Plus size={20} strokeWidth={3} />
-              <span className="hidden md:inline text-sm font-black uppercase tracking-tight">New Entry</span>
+              <span className="hidden md:inline text-sm font-black uppercase tracking-tight">New</span>
             </motion.button>
 
+            {/* More Menu */}
             <div className="relative">
               <button 
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -206,7 +259,7 @@ const JournalList = ({
                       className="absolute right-0 top-12 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 p-2 w-48 z-50 flex flex-col gap-1 origin-top-right"
                     >
                       <button onClick={onAddOld} className="flex items-center gap-3 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors"><CalendarIcon size={16} /> Add Past Date</button>
-                      <button onClick={() => {onOpenFlashback(); setIsMenuOpen(false);}} className="flex items-center gap-3 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors"><Smile size={16} /> On This Day</button>
+                      <button onClick={() => {onOpenFlashback(); setIsMenuOpen(false);}} className="flex items-center gap-3 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors"><Smile size={16} /> Flashback</button>
                       <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
                       <button onClick={() => { onExport(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors"><Download size={16} /> Export Backup</button>
                       <button onClick={() => { importInputRef.current.click(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left transition-colors"><Upload size={16} /> Import Backup</button>
@@ -218,14 +271,23 @@ const JournalList = ({
           </div>
         </div>
 
-        {/* SEARCH & FILTERS - ONLY VISIBLE WHEN SEARCH IS EXPANDED */}
+        {/* SEARCH & FILTER PANEL */}
         <AnimatePresence>
           {isSearchExpanded && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }} 
+              animate={{ height: 'auto', opacity: 1 }} 
+              exit={{ height: 0, opacity: 0 }} 
+              className="overflow-hidden"
+            >
               <JournalSearch 
-                searchTerm={searchTerm} setSearchTerm={setSearchTerm}
-                activeFilters={activeFilters} toggleFilter={(t, v) => setActiveFilters(prev => ({...prev, [t]: prev[t] === v ? null : v}))}
-                uniqueTags={uniqueTags} dateFilter={dateFilter} setDateFilter={setDateFilter}
+                searchTerm={searchTerm} 
+                setSearchTerm={setSearchTerm}
+                activeFilters={activeFilters} 
+                toggleFilter={(t, v) => setActiveFilters(prev => ({...prev, [t]: prev[t] === v ? null : v}))}
+                uniqueTags={uniqueTags} 
+                dateFilter={dateFilter} 
+                setDateFilter={setDateFilter}
                 onClear={clearFilters}
               />
             </motion.div>
@@ -233,8 +295,10 @@ const JournalList = ({
         </AnimatePresence>
       </header>
 
-      {/* MAIN CONTENT AREA */}
+      {/* CONTENT AREA */}
       <main className="max-w-5xl mx-auto px-4 md:px-0 mt-4 min-h-[60vh]">
+        
+        {/* WIDGETS */}
         {viewMode === 'list' && !searchTerm && !dateFilter && (
           <div className="max-w-3xl mx-auto">
             <DailyPromptWidget 
@@ -248,6 +312,7 @@ const JournalList = ({
 
         {filteredEntries.length === 0 ? renderEmptyState() : (
           <>
+            {/* LIST VIEW */}
             {viewMode === 'list' && (
               <Virtuoso
                 useWindowScroll
@@ -255,7 +320,7 @@ const JournalList = ({
                 className="max-w-3xl mx-auto"
                 itemContent={(index, item) => (
                   item.type === 'header' ? (
-                    <div className="sticky top-16 md:top-20 z-10 py-4 bg-[#F3F4F6] dark:bg-gray-950">
+                    <div className="sticky top-16 md:top-24 z-10 py-4 bg-[#F3F4F6] dark:bg-gray-950">
                       <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--accent-600)] dark:text-[var(--accent-400)]">
                         {item.label}
                       </h2>
@@ -265,27 +330,41 @@ const JournalList = ({
               />
             )}
 
+            {/* GRID VIEW */}
             {viewMode === 'grid' && (
               <div className="space-y-8">
                 {groupedEntries.map(group => (
                   <section key={group.label}>
-                    <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4 px-1">{group.label}</h2>
+                    <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4 px-1">
+                      {group.label}
+                    </h2>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-                      {group.entries.map(entry => <GridCard key={entry.id} entry={entry} onClick={onEdit} />)}
+                      {group.entries.map(entry => (
+                        <GridCard key={entry.id} entry={entry} onClick={onEdit} />
+                      ))}
                     </div>
                   </section>
                 ))}
               </div>
             )}
 
+            {/* CALENDAR VIEW */}
             {viewMode === 'calendar' && (
-              <div className="max-w-4xl mx-auto space-y-6">
+              <div className="max-w-4xl mx-auto space-y-8">
                 <JournalCalendar 
-                  selectedDate={selectedDate} setSelectedDate={setSelectedDate} entries={entries} 
-                  jumpToToday={() => setSelectedDate(new Date())} onCreate={onCreate} 
+                  selectedDate={selectedDate} 
+                  setSelectedDate={setSelectedDate} 
+                  entries={entries} 
+                  jumpToToday={() => setSelectedDate(new Date())} 
+                  onCreate={onCreate} 
                 />
                 <div className="space-y-3 max-w-3xl mx-auto">
-                  {filteredEntries.map(entry => <ListCard key={entry.id} entry={entry} onClick={onEdit} />)}
+                   <div className="px-1 text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+                     Entries for {selectedDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
+                   </div>
+                  {filteredEntries.map(entry => (
+                    <ListCard key={entry.id} entry={entry} onClick={onEdit} />
+                  ))}
                 </div>
               </div>
             )}
@@ -293,7 +372,8 @@ const JournalList = ({
         )}
       </main>
 
-      <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
+      {/* Hidden Inputs */}
+      <input ref={importInputRef} type="file" className="hidden" accept=".zip" onChange={onImport} />
     </div>
   );
 };
