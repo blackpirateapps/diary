@@ -10,7 +10,7 @@ import { Virtuoso, VirtuosoGrid } from 'react-virtuoso';
 import DailyPromptWidget from './DailyPromptWidget';
 import JournalCalendar from './JournalCalendar';
 import { ListCard, GridCard } from './JournalCards';
-import JournalSearch from './JournalSearch';
+import JournalSearch from './JournalSearch'; // <--- IMPORT NEW SEARCH
 
 // --- CUSTOM VIRTUALIZED COMPONENTS ---
 const GridList = forwardRef(({ children, style, className, ...props }, ref) => (
@@ -42,7 +42,7 @@ const JournalList = ({
   
   // --- FILTER STATE ---
   const [activeFilters, setActiveFilters] = useState({ mood: null, tag: null, location: null });
-  const [dateFilter, setDateFilter] = useState(null);
+  const [dateFilter, setDateFilter] = useState(null); // { start: Date, end: Date, label: String }
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
@@ -65,6 +65,7 @@ const JournalList = ({
 
   // --- FILTERING LOGIC ---
   const filteredEntries = useMemo(() => {
+    // Optimization: If no filters active, return all (unless in calendar mode)
     if (viewMode !== 'calendar' && !searchTerm && !activeFilters.mood && !activeFilters.tag && !activeFilters.location && !dateFilter) {
       return entries;
     }
@@ -138,107 +139,108 @@ const JournalList = ({
   return (
     <div className="space-y-4 pb-24 md:pb-8 text-gray-900 dark:text-gray-100 transition-colors md:px-6 md:pt-6">
       {/* HEADER */}
-      <header className="px-6 pt-6 pb-2 sticky top-0 md:relative bg-[#F3F4F6]/95 dark:bg-gray-950/95 md:bg-transparent backdrop-blur-md z-[90] md:z-0 border-b md:border-b-0 border-gray-200/50 dark:border-gray-800/50 transition-colors -mx-6 md:mx-0">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4 px-6 md:px-0">
-          
-          {/* APP TITLE */}
-          <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="min-w-0 flex-1">
-            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight truncate md:mb-1">{appName}</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm flex items-center gap-2 font-medium">
-              {entries.length} memories
-              {isOffline && <span className="flex items-center gap-1 text-[10px] bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full"><WifiOff size={10} /> Offline</span>}
-            </p>
-          </motion.div>
-          
-          {/* DESKTOP ACTIONS */}
-          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 flex-shrink-0 self-end md:self-auto">
-            
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              onClick={handleCreateNew} 
-              className="w-10 h-10 md:w-auto md:px-5 md:rounded-xl flex items-center justify-center gap-2 bg-[var(--accent-500)] text-white rounded-full shadow-lg shadow-[var(--accent-500)]/30 active:scale-95 transition-all hover:bg-[var(--accent-600)]"
-            >
-              <Plus size={20} />
-              <span className="hidden md:inline text-sm font-bold">New Entry</span>
-            </motion.button>
-
-            {/* VIEW TOGGLES */}
-            <div className="hidden md:flex bg-white dark:bg-gray-900 p-1 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
-                {['list', 'grid', 'calendar'].map(mode => (
-                  <button
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    className={`p-2 rounded-lg transition-all ${viewMode === mode ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-600)] dark:text-white' : 'text-gray-400 hover:text-gray-600'}`}
-                  >
-                    {mode === 'list' && <LayoutList size={18} />}
-                    {mode === 'grid' && <LayoutGrid size={18} />}
-                    {mode === 'calendar' && <CalendarIcon size={18} />}
-                  </button>
-                ))}
-            </div>
-
-            {/* MOBILE MENU */}
-            <div className="relative md:hidden z-[95]">
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-900 text-gray-500 shadow-sm rounded-full hover:text-[var(--accent-600)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 transition-colors"
-              >
-                <MoreVertical size={20} />
-              </motion.button>
-              <AnimatePresence>
-                  {isMenuOpen && (
-                    <>
-                      <div className="fixed inset-0 z-[96]" onClick={() => setIsMenuOpen(false)} />
-                      <motion.div 
-                        initial={{ opacity: 0, scale: 0.9, y: 10, x: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                        className="absolute right-0 top-12 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 p-2 w-48 z-[97] flex flex-col gap-1 origin-top-right"
-                      >
-                        <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex mb-2">
-                          {['list', 'grid', 'calendar'].map(mode => (
-                            <button
-                              key={mode}
-                              onClick={() => setViewMode(mode)}
-                              className={`flex-1 flex items-center justify-center py-1.5 rounded-md transition-all ${viewMode === mode ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-                            >
-                              {mode === 'list' && <LayoutList size={16} />}
-                              {mode === 'grid' && <LayoutGrid size={16} />}
-                              {mode === 'calendar' && <CalendarIcon size={16} />}
-                            </button>
-                          ))}
-                        </div>
-                        <button onClick={onAddOld} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><CalendarIcon size={16} className="text-gray-400" /> Add Past Date</button>
-                        <button onClick={onOpenFlashback} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><Smile size={16} className="text-gray-400" /> On This Day</button>
-                        <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
-                        <button onClick={() => { onExport(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><Download size={16} className="text-gray-400" /> Export Backup</button>
-                        <button onClick={() => { importInputRef.current.click(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><Upload size={16} className="text-gray-400" /> Import Backup</button>
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-            </div>
-          </motion.div>
-        </div>
+    <header className="px-6 pt-6 pb-2 sticky top-0 md:sticky bg-[#F3F4F6]/95 dark:bg-gray-950/95 md:bg-transparent backdrop-blur-md z-20 md:z-0 border-b md:border-b-0 border-gray-200/50 dark:border-gray-800/50 transition-colors -mx-6 md:mx-0">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4 px-6 md:px-0">
         
-        <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
+        {/* APP TITLE */}
+        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="min-w-0 flex-1">
+          <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight truncate md:mb-1">{appName}</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm flex items-center gap-2 font-medium">
+            {entries.length} memories
+            {isOffline && <span className="flex items-center gap-1 text-[10px] bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full"><WifiOff size={10} /> Offline</span>}
+          </p>
+        </motion.div>
+        
+        {/* DESKTOP ACTIONS */}
+        <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 flex-shrink-0 self-end md:self-auto">
+          
+          <motion.button 
+            whileTap={{ scale: 0.9 }}
+            onClick={handleCreateNew} 
+            className="w-10 h-10 md:w-auto md:px-5 md:rounded-xl flex items-center justify-center gap-2 bg-[var(--accent-500)] text-white rounded-full shadow-lg shadow-[var(--accent-500)]/30 active:scale-95 transition-all hover:bg-[var(--accent-600)]"
+          >
+            <Plus size={20} />
+            <span className="hidden md:inline text-sm font-bold">New Entry</span>
+          </motion.button>
 
-        {/* SEARCH COMPONENT */}
-        <JournalSearch 
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          activeFilters={activeFilters}
-          toggleFilter={toggleFilter}
-          uniqueTags={uniqueTags}
-          dateFilter={dateFilter}
-          setDateFilter={setDateFilter}
-          onClear={clearFilters}
-        />
-      </header>
+          {/* VIEW TOGGLES */}
+          <div className="hidden md:flex bg-white dark:bg-gray-900 p-1 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+              {['list', 'grid', 'calendar'].map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`p-2 rounded-lg transition-all ${viewMode === mode ? 'bg-gray-100 dark:bg-gray-800 text-[var(--accent-600)] dark:text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  {mode === 'list' && <LayoutList size={18} />}
+                  {mode === 'grid' && <LayoutGrid size={18} />}
+                  {mode === 'calendar' && <CalendarIcon size={18} />}
+                </button>
+              ))}
+          </div>
+
+          {/* MOBILE MENU */}
+          <div className="relative md:hidden">
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-900 text-gray-500 shadow-sm rounded-full hover:text-[var(--accent-600)] hover:bg-[var(--accent-50)] dark:hover:bg-gray-800 transition-colors"
+            >
+              <MoreVertical size={20} />
+            </motion.button>
+            {/* ... Mobile Menu Content (Keep existing code) ... */}
+            <AnimatePresence>
+                {isMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setIsMenuOpen(false)} />
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9, y: 10, x: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                      className="absolute right-0 top-12 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 p-2 w-48 z-30 flex flex-col gap-1 origin-top-right"
+                    >
+                      <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex mb-2">
+                        {['list', 'grid', 'calendar'].map(mode => (
+                          <button
+                            key={mode}
+                            onClick={() => setViewMode(mode)}
+                            className={`flex-1 flex items-center justify-center py-1.5 rounded-md transition-all ${viewMode === mode ? 'bg-white dark:bg-gray-700 text-[var(--accent-600)] dark:text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                          >
+                            {mode === 'list' && <LayoutList size={16} />}
+                            {mode === 'grid' && <LayoutGrid size={16} />}
+                            {mode === 'calendar' && <CalendarIcon size={16} />}
+                          </button>
+                        ))}
+                      </div>
+                      <button onClick={onAddOld} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><CalendarIcon size={16} className="text-gray-400" /> Add Past Date</button>
+                      <button onClick={onOpenFlashback} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><Smile size={16} className="text-gray-400" /> On This Day</button>
+                      <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
+                      <button onClick={() => { onExport(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><Download size={16} className="text-gray-400" /> Export Backup</button>
+                      <button onClick={() => { importInputRef.current.click(); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg w-full text-left"><Upload size={16} className="text-gray-400" /> Import Backup</button>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+          </div>
+        </motion.div>
+      </div>
+      
+      <input ref={importInputRef} type="file" className="hidden" accept=".zip,.json" onChange={onImport} />
+
+      {/* SEARCH COMPONENT (Always visible now, expandable panel) */}
+      <JournalSearch 
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        activeFilters={activeFilters}
+        toggleFilter={toggleFilter}
+        uniqueTags={uniqueTags}
+        dateFilter={dateFilter}
+        setDateFilter={setDateFilter}
+        onClear={clearFilters}
+      />
+    </header>
 
       {/* CONTENT AREA */}
-      <div className="px-4 md:px-0 min-h-[50vh]">
+      <div className="px-4 md:px-0 min-h-[50vh] relative z-0">
         {/* WIDGET */}
         {viewMode === 'list' && !searchTerm && !dateFilter && (
           <DailyPromptWidget onWrite={() => onCreate(new Date())} isTodayDone={isTodayDone} />
