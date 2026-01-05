@@ -42,8 +42,7 @@ db.version(5).stores({
   people: '++id, name, relationship'
 });
 
-// Version 6: Added support for Location History [NEW]
-// We keep the same indexes, but the objects will now store a 'locationHistory' array.
+// Version 6: Added support for Location History
 db.version(6).stores({
   entries: '++id, date, mood, *tags, *people',
   sleep_sessions: 'id, startTime',
@@ -51,6 +50,103 @@ db.version(6).stores({
   meditation_sessions: '++id, startTime, duration',
   people: '++id, name, relationship'
 });
+
+// --- [NEW] Version 7: Optimized Travel Route Storage ---
+// Implements Strategy A & C: Separate Metadata from Heavy Data
+// Implements Strategy B: Support for compressed strings
+db.version(7).stores({
+  entries: '++id, date, mood, *tags, *people',
+  sleep_sessions: 'id, startTime',
+  chat_analytics: 'id, name',
+  meditation_sessions: '++id, startTime, duration',
+  people: '++id, name, relationship',
+  
+  // LIGHTWEIGHT: For the sidebar list (Fast queries, small size)
+  // Indexing 'year' and 'month' allows for fast filtering without loading all data
+  routes_meta: 'id, date, year, month', 
+  
+  // HEAVYWEIGHT: For the map view (Lazy loaded only when needed)
+  // 'id' matches the meta store. 'compressedPath' stores the encoded polyline string.
+  routes_data: 'id' 
+});
+
+// --- [NEW] Strategy D: Persistence Request ---
+// Tries to prevent the browser from wiping data if disk space is low
+export const requestPersistence = async () => {
+  if (navigator.storage && navigator.storage.persist) {
+    const isPersisted = await navigator.storage.persisted();
+    if (!isPersisted) {
+      const result = await navigator.storage.persist();
+      console.log(`[Storage] Persistent storage granted: ${result}`);
+    } else {
+      console.log('[Storage] Already persisted.');
+    }
+  }
+};
+// Trigger once on load
+requestPersistence();
+
+// --- [NEW] Strategy B: Polyline Encoding Utils ---
+// Google's Polyline Algorithm to compress GPS arrays by ~90%
+export const PolylineUtils = {
+  encode: (coords) => {
+    let str = '';
+    let lastLat = 0;
+    let lastLng = 0;
+
+    for (const point of coords) {
+      // Input: [lat, lng]
+      const lat = Math.round(point[0] * 1e5);
+      const lng = Math.round(point[1] * 1e5);
+
+      const dLat = lat - lastLat;
+      const dLng = lng - lastLng;
+
+      lastLat = lat;
+      lastLng = lng;
+
+      str += PolylineUtils._encodeValue(dLat) + PolylineUtils._encodeValue(dLng);
+    }
+    return str;
+  },
+
+  decode: (str) => {
+    let index = 0, lat = 0, lng = 0, coords = [];
+    const factor = 1e5;
+
+    while (index < str.length) {
+      let result = 1, shift = 0, b;
+      do {
+        b = str.charCodeAt(index++) - 63 - 1;
+        result += b << shift;
+        shift += 5;
+      } while (b >= 0x1f);
+      lat += (result & 1 ? ~(result >> 1) : (result >> 1));
+
+      result = 1; shift = 0;
+      do {
+        b = str.charCodeAt(index++) - 63 - 1;
+        result += b << shift;
+        shift += 5;
+      } while (b >= 0x1f);
+      lng += (result & 1 ? ~(result >> 1) : (result >> 1));
+
+      coords.push([lat / factor, lng / factor]);
+    }
+    return coords;
+  },
+
+  _encodeValue: (val) => {
+    val = val < 0 ? ~(val << 1) : (val << 1);
+    let str = '';
+    while (val >= 0x20) {
+      str += String.fromCharCode((0x20 | (val & 0x1f)) + 63);
+      val >>= 5;
+    }
+    str += String.fromCharCode(val + 63);
+    return str;
+  }
+};
 
 // --- POPULATE DEFAULT DATA ---
 db.on('populate', () => {
@@ -65,7 +161,7 @@ db.on('populate', () => {
     description: 'The person I am becoming.',
     dates: [{ label: 'Started Journaling', icon: 'Star', date: todayStr, hasYear: true }],
     giftIdeas: ['Peace of mind', 'New experiences'],
-    image: null // Placeholder
+    image: null
   });
 
   // 2. Add Welcome Entry
@@ -75,20 +171,19 @@ db.on('populate', () => {
     tags: ['welcome', 'guide'],
     location: 'My Mind Palace',
     weather: 'Clear',
-    locationHistory: [], // Initialized for Version 6
+    locationHistory: [],
     content: "# Welcome to your new Journal! 📔\n\nThis is a safe, offline-first space for your thoughts. Here are a few things you can do:\n\n* **Rich Text:** Use bold, italics, lists, and more.\n* **Mentions:** Go to the People page to add contacts, then type '@' in the editor to link them.\n* **Privacy:** Your data stays on your device.\n\nTry exploring the menu to see stats, maps, and more. Happy journaling!",
     preview: "Welcome to your new Journal! 📔 This is a safe, offline-first space for your thoughts...",
     people: ['1']
   });
 
-  // 3. Add Default Sleep Data (Showcase Charts)
+  // 3. Add Default Sleep Data
   const oneDay = 24 * 60 * 60 * 1000;
-  
   const sleepSamples = [
     {
       id: (now.getTime() - oneDay * 1).toString(),
       dateString: new Date(now.getTime() - oneDay * 1).toLocaleDateString(),
-      startTime: now.getTime() - oneDay * 1 - (8 * 60 * 60 * 1000), // Yesterday night
+      startTime: now.getTime() - oneDay * 1 - (8 * 60 * 60 * 1000),
       duration: 7.5,
       rating: 4.2,
       deepSleepPerc: 0.45,
@@ -102,7 +197,7 @@ db.on('populate', () => {
     {
       id: (now.getTime() - oneDay * 2).toString(),
       dateString: new Date(now.getTime() - oneDay * 2).toLocaleDateString(),
-      startTime: now.getTime() - oneDay * 2 - (7 * 60 * 60 * 1000), // 2 days ago
+      startTime: now.getTime() - oneDay * 2 - (7 * 60 * 60 * 1000),
       duration: 6.8,
       rating: 3.5,
       deepSleepPerc: 0.30,
@@ -114,8 +209,27 @@ db.on('populate', () => {
       hypnogram: [] 
     }
   ];
-  
   db.sleep_sessions.bulkAdd(sleepSamples);
+
+  // 4. [NEW] Add Sample Route Data (V7 Validation)
+  // This helps verify the map system works immediately upon install
+  const sampleRouteDate = now.toISOString().split('T')[0];
+  db.routes_meta.add({
+    id: `sample-${sampleRouteDate}`,
+    date: sampleRouteDate,
+    year: now.getFullYear(),
+    month: now.toLocaleString('default', { month: 'long' }),
+    distance: 2.5,
+    durationStr: '30m',
+    mode: 'WALKING'
+  });
+  
+  // Encoded polyline sample (Short walk)
+  db.routes_data.add({
+    id: `sample-${sampleRouteDate}`,
+    compressedPath: '_p~iF~ps|U_ulLnnqC_mqNvxq', 
+    type: 'SAMPLE'
+  });
 });
 
 // --- HELPER: IMAGE URL HOOK ---
@@ -127,12 +241,10 @@ export const useBlobUrl = (imageFile) => {
       setUrl('');
       return;
     }
-    // Handle string (Base64/URL)
     if (typeof imageFile === 'string') {
       setUrl(imageFile);
       return;
     }
-    // Handle Blob/File
     if (imageFile instanceof Blob) {
       const objectUrl = URL.createObjectURL(imageFile);
       setUrl(objectUrl);
@@ -174,6 +286,10 @@ export const exportToZip = async (triggerDownload = false) => {
   const meditations = await db.meditation_sessions.toArray();
   const people = await db.people.toArray();
   
+  // [NEW] Fetch Route Data (Meta + Data)
+  const routesMeta = await db.routes_meta.toArray();
+  const routesData = await db.routes_data.toArray();
+  
   // 2. Process Journal Images
   const cleanEntries = entries.map(entry => {
     const doc = { ...entry, images: [] };
@@ -194,7 +310,7 @@ export const exportToZip = async (triggerDownload = false) => {
     return doc;
   });
 
-  // 3. Process People Images (Profile & Gallery)
+  // 3. Process People Images
   if (people.length > 0) {
     const cleanPeople = people.map(p => {
       const doc = { ...p };
@@ -230,6 +346,12 @@ export const exportToZip = async (triggerDownload = false) => {
   if (sleepSessions.length > 0) zip.file("sleep_data.json", JSON.stringify(sleepSessions, null, 2));
   if (chats.length > 0) zip.file("chat_data.json", JSON.stringify(chats, null, 2));
   if (meditations.length > 0) zip.file("meditation_data.json", JSON.stringify(meditations, null, 2));
+
+  // [NEW] Add Routes to Zip
+  if (routesMeta.length > 0) {
+    zip.file("routes_meta.json", JSON.stringify(routesMeta, null, 2));
+    zip.file("routes_data.json", JSON.stringify(routesData, null, 2));
+  }
 
   // 5. Generate Blob
   const content = await zip.generateAsync({ type: "blob" });
@@ -273,7 +395,7 @@ export const importFromZip = async (file) => {
       importCount += processedEntries.length;
   }
 
-  // 2. Parse People Data (With Images)
+  // 2. Parse People Data
   const peopleFile = zip.file("people_data.json");
   if (peopleFile) {
       const pStr = await peopleFile.async("string");
@@ -325,6 +447,19 @@ export const importFromZip = async (file) => {
   if (medFile) {
       const medData = JSON.parse(await medFile.async("string"));
       if (Array.isArray(medData)) await db.meditation_sessions.bulkPut(medData);
+  }
+
+  // [NEW] Parse Route Data
+  const routesMetaFile = zip.file("routes_meta.json");
+  if (routesMetaFile) {
+      const meta = JSON.parse(await routesMetaFile.async("string"));
+      if (Array.isArray(meta)) await db.routes_meta.bulkPut(meta);
+  }
+
+  const routesDataFile = zip.file("routes_data.json");
+  if (routesDataFile) {
+      const data = JSON.parse(await routesDataFile.async("string"));
+      if (Array.isArray(data)) await db.routes_data.bulkPut(data);
   }
 
   return importCount;
