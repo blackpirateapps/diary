@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  ChevronDown, ChevronRight, Map as MapIcon, 
-  Clock, Calendar, Plus, X, Eye, EyeOff, 
-  ArrowLeft, Search, Navigation
+  Map as MapIcon, Clock, Calendar, Plus, X, 
+  ArrowLeft, Navigation, Car, Bike, Footprints, Plane, Train, 
+  MapPin, AlertCircle 
 } from 'lucide-react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -22,6 +22,9 @@ L.Icon.Default.mergeOptions({
 
 // --- UTILS ---
 
+// Google uses "E7" format (integers) for lat/lng. Example: 334567890 -> 33.4567890
+const parseE7 = (val) => val / 1e7;
+
 const calculateDistance = (coords) => {
   if (coords.length < 2) return 0;
   let totalDistance = 0;
@@ -39,18 +42,25 @@ const calculateDistance = (coords) => {
   return totalDistance;
 };
 
-// Things 3 Palette: Blue is primary accent
-const COLORS = {
-  blue: '#007AFF',
-  gray: '#8E8E93',
-  lightGray: '#F2F2F7',
-  white: '#FFFFFF',
-  text: '#1C1C1E',
-  border: '#E5E5EA'
+// Activity Icon Helper
+const getActivityIcon = (type) => {
+  if (!type) return <Navigation size={14} />;
+  const t = type.toUpperCase();
+  if (t.includes('WALK') || t.includes('HIKE') || t.includes('RUN')) return <Footprints size={14} />;
+  if (t.includes('CYCL') || t.includes('BIKE')) return <Bike size={14} />;
+  if (t.includes('IN_PASSENGER_VEHICLE') || t.includes('DRIVE') || t.includes('CAR')) return <Car size={14} />;
+  if (t.includes('FLY') || t.includes('AIR')) return <Plane size={14} />;
+  if (t.includes('TRAIN') || t.includes('SUBWAY') || t.includes('TRAM')) return <Train size={14} />;
+  return <Navigation size={14} />;
+};
+
+const formatActivityName = (type) => {
+  if (!type) return 'Travel';
+  return type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 };
 
 const generateColor = (idx) => {
-  const hues = [211, 25, 45, 150, 280, 35]; // Blue, Orange, Yellow, Green, Purple, Brown
+  const hues = [211, 25, 45, 150, 280, 35]; 
   return `hsl(${hues[idx % hues.length]}, 90%, 55%)`;
 };
 
@@ -74,29 +84,34 @@ const RouteItem = ({ route, onToggle, isSelected }) => (
       ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50 active:scale-[0.99]'}
     `}
   >
-    {/* Checkbox / Visibility Toggle */}
     <div className={`
-      w-5 h-5 rounded-full border-[1.5px] flex items-center justify-center transition-colors
+      w-5 h-5 rounded-full border-[1.5px] flex items-center justify-center transition-colors flex-shrink-0
       ${route.visible ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}
     `}>
       {route.visible && <div className="w-2 h-2 bg-white rounded-full" />}
     </div>
 
-    {/* Info */}
     <div className="flex-1 min-w-0">
-      <div className="flex justify-between items-center">
-        <h4 className={`text-[15px] font-medium truncate ${route.visible ? 'text-gray-900' : 'text-gray-400'}`}>
-          {new Date(route.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+      <div className="flex justify-between items-baseline mb-0.5">
+        <h4 className={`text-[15px] font-medium truncate flex items-center gap-2 ${route.visible ? 'text-gray-900' : 'text-gray-400'}`}>
+           {route.locationName ? (
+             <span className="truncate">To: {route.locationName}</span>
+           ) : (
+             <span>{new Date(route.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+           )}
         </h4>
-        <span className="text-xs font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+        <span className="text-xs font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded ml-2 flex-shrink-0">
           {route.distance.toFixed(1)} km
         </span>
       </div>
-      <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-        <Clock size={10} />
-        <span>{route.durationStr}</span>
+      
+      <div className="flex items-center gap-2 text-xs text-gray-400">
+        <span className="text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 rounded-sm">
+           {getActivityIcon(route.activityType)}
+           <span className="uppercase tracking-wide text-[10px] font-semibold">{route.activityType ? formatActivityName(route.activityType) : 'Route'}</span>
+        </span>
         <span className="text-gray-300">•</span>
-        <span className="truncate max-w-[120px]">{route.fileName}</span>
+        <span>{route.durationStr}</span>
       </div>
     </div>
   </div>
@@ -106,18 +121,18 @@ const RouteItem = ({ route, onToggle, isSelected }) => (
 
 const TravelRoute = ({ navigate }) => {
   const [routes, setRoutes] = useState([]);
-  const [panelOpen, setPanelOpen] = useState(true); // Mobile: Bottom sheet up/down
+  const [panelOpen, setPanelOpen] = useState(true);
   const [searchDate, setSearchDate] = useState('');
+  const [errorMsg, setErrorMsg] = useState(null);
   const fileInputRef = useRef(null);
 
-  // --- LOGIC ---
+  // --- PROCESSING ---
   const { groupedRoutes, stats, allBounds } = useMemo(() => {
     const grouped = {};
     let totalDist = 0;
     const bounds = [];
     let tripCount = 0;
 
-    // Sort: Newest first
     const sorted = [...routes].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     sorted.forEach(route => {
@@ -143,57 +158,142 @@ const TravelRoute = ({ navigate }) => {
     };
   }, [routes]);
 
+  // --- PARSERS ---
+
+  const parseGPX = (text, fileName) => {
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, "text/xml");
+    const trkpts = xml.getElementsByTagName("trkpt");
+    if (!trkpts.length) return [];
+
+    const temp = {};
+    for (let i = 0; i < trkpts.length; i++) {
+      const lat = parseFloat(trkpts[i].getAttribute("lat"));
+      const lon = parseFloat(trkpts[i].getAttribute("lon"));
+      const timeTag = trkpts[i].getElementsByTagName("time")[0];
+      if (lat && lon && timeTag) {
+        const t = new Date(timeTag.textContent);
+        const key = t.toISOString().split('T')[0];
+        if (!temp[key]) temp[key] = { coords: [], start: t, end: t };
+        temp[key].coords.push([lat, lon]);
+        if (t > temp[key].end) temp[key].end = t;
+        if (t < temp[key].start) temp[key].start = t;
+      }
+    }
+
+    return Object.entries(temp).map(([d, data]) => ({
+      date: d,
+      coordinates: data.coords,
+      startTime: data.start,
+      endTime: data.end,
+      fileName,
+      type: 'GPX'
+    }));
+  };
+
+  const parseGoogleJSON = (text, fileName) => {
+    const data = JSON.parse(text);
+    const items = data.timelineObjects || []; // Standard Semantic format
+    const results = [];
+
+    items.forEach(item => {
+      // We are looking for 'activitySegment' which contains the path
+      if (item.activitySegment) {
+        const seg = item.activitySegment;
+        
+        // 1. Extract Coordinates
+        let coords = [];
+        
+        // Try waypointPath (detailed)
+        if (seg.waypointPath?.waypoints) {
+          coords = seg.waypointPath.waypoints.map(wp => [parseE7(wp.latE7), parseE7(wp.lngE7)]);
+        } 
+        // Fallback to simplifiedRawPath (less detailed but often present)
+        else if (seg.simplifiedRawPath?.points) {
+          coords = seg.simplifiedRawPath.points.map(p => [parseE7(p.latE7), parseE7(p.lngE7)]);
+        }
+        // Fallback to just Start/End
+        else if (seg.startLocation && seg.endLocation) {
+          coords = [
+            [parseE7(seg.startLocation.latitudeE7), parseE7(seg.startLocation.longitudeE7)],
+            [parseE7(seg.endLocation.latitudeE7), parseE7(seg.endLocation.longitudeE7)]
+          ];
+        }
+
+        if (coords.length > 0) {
+          const start = new Date(seg.duration?.startTimestamp);
+          const end = new Date(seg.duration?.endTimestamp);
+          
+          results.push({
+            date: start.toISOString().split('T')[0],
+            coordinates: coords,
+            startTime: start,
+            endTime: end,
+            activityType: seg.activityType, // e.g., "WALKING", "IN_PASSENGER_VEHICLE"
+            locationName: seg.endLocation?.name || null, // Capture name if available
+            fileName,
+            type: 'JSON'
+          });
+        }
+      }
+    });
+    
+    return results;
+  };
+
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
+    setErrorMsg(null);
 
-    files.forEach((file, fileIdx) => {
+    files.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (ev) => {
         try {
-          const parser = new DOMParser();
-          const xml = parser.parseFromString(ev.target.result, "text/xml");
-          const trkpts = xml.getElementsByTagName("trkpt");
-          if (!trkpts.length) return;
+          const content = ev.target.result;
+          let parsedRoutes = [];
 
-          const temp = {};
-          for (let i = 0; i < trkpts.length; i++) {
-            const lat = parseFloat(trkpts[i].getAttribute("lat"));
-            const lon = parseFloat(trkpts[i].getAttribute("lon"));
-            const timeTag = trkpts[i].getElementsByTagName("time")[0];
-            if (lat && lon && timeTag) {
-              const t = new Date(timeTag.textContent);
-              const key = t.toISOString().split('T')[0];
-              if (!temp[key]) temp[key] = { coords: [], start: t, end: t };
-              temp[key].coords.push([lat, lon]);
-              if (t > temp[key].end) temp[key].end = t;
-              if (t < temp[key].start) temp[key].start = t;
-            }
+          if (file.name.toLowerCase().endsWith('.gpx')) {
+            parsedRoutes = parseGPX(content, file.name);
+          } else if (file.name.toLowerCase().endsWith('.json')) {
+            parsedRoutes = parseGoogleJSON(content, file.name);
+          } else {
+            throw new Error("Unsupported file format");
+          }
+
+          if (parsedRoutes.length === 0) {
+            console.warn(`No valid routes found in ${file.name}`);
+            return;
           }
 
           setRoutes(prev => {
-            const newR = [];
-            Object.entries(temp).forEach(([d, data], i) => {
-              const dur = data.end - data.start;
-              const h = Math.floor(dur / 3600000);
-              const m = Math.round((dur % 3600000) / 60000);
-              // Avoid duplicates (simple check)
-              if (!prev.some(p => p.date === d && p.fileName === file.name)) {
-                newR.push({
-                  id: `${d}-${file.name}-${Date.now()}`,
-                  date: d,
-                  coordinates: data.coords,
-                  distance: calculateDistance(data.coords),
-                  durationStr: `${h}h ${m}m`,
-                  fileName: file.name,
-                  visible: true,
-                  color: generateColor(prev.length + newR.length + i)
-                });
-              }
+            const newEntries = parsedRoutes.map((r, i) => {
+              const durMs = r.endTime - r.startTime;
+              const h = Math.floor(durMs / 3600000);
+              const m = Math.round((durMs % 3600000) / 60000);
+              
+              return {
+                id: `${r.date}-${file.name}-${i}-${Date.now()}`,
+                date: r.date,
+                coordinates: r.coordinates,
+                distance: calculateDistance(r.coordinates),
+                durationStr: h > 0 ? `${h}h ${m}m` : `${m}m`,
+                fileName: r.fileName,
+                activityType: r.activityType, // New Field
+                locationName: r.locationName, // New Field
+                visible: true,
+                color: generateColor(prev.length + i)
+              };
             });
-            return [...prev, ...newR];
+            // Dedup simple check
+            const unique = newEntries.filter(n => !prev.some(p => p.id === n.id));
+            return [...prev, ...unique];
           });
-        } catch (err) { console.error(err); }
+
+        } catch (err) {
+          console.error(err);
+          setErrorMsg(`Error parsing ${file.name}: ${err.message}`);
+        }
       };
       reader.readAsText(file);
     });
@@ -204,14 +304,9 @@ const TravelRoute = ({ navigate }) => {
     const date = e.target.value;
     setSearchDate(date);
     if (date) {
-      // Logic: Hide all others, show only this date
-      setRoutes(prev => prev.map(r => ({
-        ...r,
-        visible: r.date === date
-      })));
-      setPanelOpen(false); // On mobile, close panel to show map
+      setRoutes(prev => prev.map(r => ({ ...r, visible: r.date === date })));
+      setPanelOpen(false);
     } else {
-      // If cleared, maybe show all? Or leave as is. Let's show all.
       setRoutes(prev => prev.map(r => ({ ...r, visible: true })));
     }
   };
@@ -224,29 +319,18 @@ const TravelRoute = ({ navigate }) => {
   return (
     <div className="relative h-screen w-full bg-[#F5F5F7] text-[#1C1C1E] font-sans overflow-hidden flex flex-col md:flex-row">
       
-      {/* --- CONTROL PANEL (Sheet/Sidebar) --- 
-        Mobile: Bottom Sheet
-        Desktop: Left Sidebar
-      */}
+      {/* --- PANEL --- */}
       <div 
         className={`
-          absolute z-[1000] 
-          bg-white/90 backdrop-blur-xl 
-          shadow-[0_8px_30px_rgb(0,0,0,0.12)]
+          absolute z-[1000] bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)]
           border-t md:border-r border-black/5
-          
-          /* Mobile Transitions */
           bottom-0 left-0 right-0 
           transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
           ${panelOpen ? 'h-[60%] md:h-full' : 'h-[100px] md:h-full'}
-          
-          /* Desktop Overrides */
           md:relative md:w-[380px] md:translate-y-0
-          rounded-t-2xl md:rounded-none
-          flex flex-col
+          rounded-t-2xl md:rounded-none flex flex-col
         `}
       >
-        {/* Drag Handle (Mobile Only) */}
         <div 
           className="md:hidden w-full h-6 flex justify-center items-center cursor-grab active:cursor-grabbing"
           onClick={() => setPanelOpen(!panelOpen)}
@@ -254,18 +338,11 @@ const TravelRoute = ({ navigate }) => {
           <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
         </div>
 
-        {/* Header Area */}
         <div className="px-6 pb-4 pt-2 md:pt-8 flex-shrink-0">
           <div className="flex items-center justify-between mb-6">
-            <button 
-              onClick={() => navigate('more')} 
-              className="flex items-center text-blue-500 font-medium text-base hover:opacity-70 transition-opacity"
-            >
-              <ArrowLeft size={20} className="mr-1" />
-              Back
+            <button onClick={() => navigate('more')} className="flex items-center text-blue-500 font-medium hover:opacity-70">
+              <ArrowLeft size={20} className="mr-1" /> Back
             </button>
-            
-            {/* Stats Summary Small */}
             <div className="text-right">
               <div className="text-xs text-gray-400 font-medium uppercase tracking-wider">Total</div>
               <div className="text-sm font-bold text-gray-900">{Math.round(stats.dist)} km</div>
@@ -274,44 +351,34 @@ const TravelRoute = ({ navigate }) => {
 
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-4">Routes</h1>
 
-          {/* Date Picker (Things 3 "Jump to" style) */}
           <div className="relative group">
             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-gray-400">
               <Calendar size={16} />
             </div>
             <input 
-              type="date"
-              value={searchDate}
-              onChange={handleDateSelect}
-              className="
-                w-full bg-[#767680]/10 border-0 rounded-lg py-2 pl-9 pr-3
-                text-[15px] font-medium text-gray-900
-                focus:ring-2 focus:ring-blue-500/50 focus:bg-white transition-all
-              "
+              type="date" value={searchDate} onChange={handleDateSelect}
+              className="w-full bg-[#767680]/10 border-0 rounded-lg py-2 pl-9 pr-3 text-[15px] font-medium text-gray-900 focus:ring-2 focus:ring-blue-500/50 focus:bg-white transition-all"
             />
-            {!searchDate && (
-              <span className="absolute right-3 top-2 text-xs text-gray-400 pointer-events-none">
-                Pick a date
-              </span>
-            )}
             {searchDate && (
-              <button 
-                onClick={() => handleDateSelect({target: {value: ''}})}
-                className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-red-500"
-              >
+              <button onClick={() => handleDateSelect({target: {value: ''}})} className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-red-500">
                 <X size={14} />
               </button>
             )}
           </div>
+
+          {errorMsg && (
+            <div className="mt-3 bg-red-50 text-red-600 text-xs p-2 rounded-lg flex items-center gap-2">
+              <AlertCircle size={14} /> {errorMsg}
+            </div>
+          )}
         </div>
 
-        {/* Scrollable List Area */}
         <div className="flex-1 overflow-y-auto px-4 pb-24 md:pb-4 custom-scrollbar">
           {routes.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-gray-400 text-center px-8">
               <Navigation size={48} className="mb-4 text-gray-300" strokeWidth={1} />
               <p className="text-sm">No routes yet.</p>
-              <p className="text-xs mt-1">Tap the + button to add GPX files.</p>
+              <p className="text-xs mt-1">Add GPX or Google JSON files.</p>
             </div>
           ) : (
             Object.keys(groupedRoutes).sort((a,b)=>b-a).map(year => (
@@ -322,21 +389,14 @@ const TravelRoute = ({ navigate }) => {
                     {Object.values(groupedRoutes[year]).flat().length}
                   </span>
                 </h3>
-                
                 <div className="space-y-4">
                   {Object.keys(groupedRoutes[year]).map(month => (
                     <div key={month} className="relative pl-4 border-l-2 border-gray-100">
                       <div className="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-gray-200 border-2 border-white" />
-                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2 pl-1">
-                        {month}
-                      </h4>
+                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2 pl-1">{month}</h4>
                       <div className="space-y-1">
                         {groupedRoutes[year][month].map(route => (
-                          <RouteItem 
-                            key={route.id} 
-                            route={route} 
-                            onToggle={toggleRoute}
-                          />
+                          <RouteItem key={route.id} route={route} onToggle={toggleRoute} />
                         ))}
                       </div>
                     </div>
@@ -347,100 +407,52 @@ const TravelRoute = ({ navigate }) => {
           )}
         </div>
 
-        {/* Floating Action Button (Things 3 Style) */}
         <div className="absolute bottom-6 right-6 md:right-8 z-50">
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="
-              w-14 h-14 rounded-full bg-blue-500 text-white shadow-lg shadow-blue-500/30 
-              flex items-center justify-center hover:scale-105 active:scale-95 transition-all
-            "
+            className="w-14 h-14 rounded-full bg-blue-500 text-white shadow-lg shadow-blue-500/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
           >
             <Plus size={28} strokeWidth={2.5} />
           </button>
-          <input 
-            ref={fileInputRef} 
-            type="file" 
-            accept=".gpx" 
-            multiple 
-            className="hidden" 
-            onChange={handleFileUpload} 
-          />
+          <input ref={fileInputRef} type="file" accept=".gpx,.json" multiple className="hidden" onChange={handleFileUpload} />
         </div>
       </div>
 
-      {/* --- MAP BACKGROUND --- 
-      */}
+      {/* --- MAP --- */}
       <div className="absolute inset-0 md:relative md:flex-1 h-full z-0 bg-gray-100">
-        <MapContainer 
-          center={[20, 0]} 
-          zoom={2} 
-          zoomControl={false} // We can add custom zoom buttons if needed
-          style={{ height: "100%", width: "100%" }}
-        >
+        <MapContainer center={[20, 0]} zoom={2} zoomControl={false} style={{ height: "100%", width: "100%" }}>
           <AutoZoom bounds={allBounds} />
-          {/* CartoDB Voyager Tile - Clean, minimalistic, Apple Maps-ish look */}
-          <TileLayer
-            attribution='&copy; OpenStreetMap &copy; CARTO'
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          />
+          <TileLayer attribution='&copy; OpenStreetMap &copy; CARTO' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
           
           {routes.filter(r => r.visible).map(route => (
             <React.Fragment key={route.id}>
-              {/* Route Path */}
               <Polyline 
                 positions={route.coordinates} 
-                pathOptions={{ 
-                  color: route.color, 
-                  weight: 5, 
-                  opacity: 0.85,
-                  lineCap: 'round', 
-                  lineJoin: 'round' 
-                }} 
-              />
-              
-              {/* Start Marker (Minimal) */}
-              <Marker 
-                position={route.coordinates[0]} 
-                icon={L.divIcon({
-                  className: 'bg-transparent',
-                  html: `<div style="background-color: ${route.color};" class="w-3 h-3 rounded-full ring-2 ring-white shadow-md"></div>`
-                })}
-              />
-
-              {/* End Marker (Flag) */}
-              <Marker 
-                position={route.coordinates[route.coordinates.length-1]} 
-                icon={L.divIcon({
-                  className: 'bg-transparent',
-                  html: `
-                    <div class="relative">
-                      <div style="background-color: ${route.color};" class="w-4 h-4 rounded-full ring-2 ring-white shadow-lg flex items-center justify-center">
-                        <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
-                      </div>
-                    </div>
-                  `
-                })}
+                pathOptions={{ color: route.color, weight: 5, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }} 
               >
-                <Popup className="custom-popup font-sans">
-                  <div className="p-1 min-w-[120px]">
-                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
-                      {new Date(route.date).toLocaleDateString()}
+                <Popup className="custom-popup">
+                  <div className="p-2 min-w-[150px]">
+                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 flex items-center gap-2">
+                       {getActivityIcon(route.activityType)}
+                       {route.activityType ? formatActivityName(route.activityType) : 'Route'}
                     </div>
-                    <div className="text-sm font-semibold text-gray-800">
-                      {route.distance.toFixed(2)} km
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      {route.durationStr}
+                    {route.locationName && (
+                      <div className="font-bold text-gray-800 text-sm mb-1">{route.locationName}</div>
+                    )}
+                    <div className="text-xs text-gray-600">
+                      <div>{new Date(route.date).toLocaleDateString()}</div>
+                      <div>{route.distance.toFixed(2)} km • {route.durationStr}</div>
                     </div>
                   </div>
                 </Popup>
-              </Marker>
+              </Polyline>
+              
+              <Marker position={route.coordinates[0]} icon={L.divIcon({ className: 'bg-transparent', html: `<div style="background-color: ${route.color};" class="w-3 h-3 rounded-full ring-2 ring-white shadow-md"></div>` })} />
+              
+              <Marker position={route.coordinates[route.coordinates.length-1]} icon={L.divIcon({ className: 'bg-transparent', html: `<div class="relative"><div style="background-color: ${route.color};" class="w-4 h-4 rounded-full ring-2 ring-white shadow-lg flex items-center justify-center"><div class="w-1.5 h-1.5 bg-white rounded-full"></div></div></div>` })} />
             </React.Fragment>
           ))}
         </MapContainer>
-        
-        {/* Mobile: Map Cover/Gradient at bottom when panel is partially open */}
         <div className="md:hidden absolute bottom-[100px] left-0 right-0 h-24 bg-gradient-to-t from-black/5 to-transparent pointer-events-none" />
       </div>
 
