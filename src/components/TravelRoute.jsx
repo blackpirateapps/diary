@@ -7,7 +7,7 @@ import {
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { db } from './db'; // Import database
+import { db } from '../db'; // Import database
 import { useLiveQuery } from 'dexie-react-hooks';
 
 // --- LEAFLET ICONS FIX ---
