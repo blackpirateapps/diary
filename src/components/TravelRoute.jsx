@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Map as MapIcon, Clock, Calendar, Plus, X, 
   ArrowLeft, Navigation, Car, Bike, Footprints, Plane, Train, 
-  CheckCircle2, Loader2, AlertCircle 
+  CheckCircle2, Loader2, AlertCircle, Eye, EyeOff
 } from 'lucide-react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -132,7 +132,7 @@ const TravelRoute = ({ navigate }) => {
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
-  const [importStats, setImportStats] = useState(null); // { added, distance, range, activities }
+  const [importStats, setImportStats] = useState(null);
 
   // --- LOGIC ---
   const { groupedRoutes, stats, allBounds } = useMemo(() => {
@@ -208,10 +208,13 @@ const TravelRoute = ({ navigate }) => {
     }
 
     const segments = data.semanticSegments || [];
-    const results = [];
+    
+    // 1. Separate Detailed Paths from Activity Summaries
+    const rawPaths = [];
+    const activities = [];
 
     segments.forEach(segment => {
-        // Timeline Path
+        // Detailed Path (Breadcrumbs)
         if (segment.timelinePath && Array.isArray(segment.timelinePath)) {
             const coords = [];
             segment.timelinePath.forEach(pt => {
@@ -222,19 +225,19 @@ const TravelRoute = ({ navigate }) => {
             if (coords.length > 1) {
                 const start = new Date(segment.startTime);
                 const end = new Date(segment.endTime);
-                results.push({
+                rawPaths.push({
                     date: start.toISOString().split('T')[0],
                     coordinates: coords,
                     startTime: start,
                     endTime: end,
-                    activityType: 'TIMELINE_PATH',
+                    activityType: null, // Will try to fill from activities
                     locationName: null,
                     fileName,
                     type: 'JSON_PATH'
                 });
             }
         }
-        // Activity Segment
+        // Activity Summary (Metadata)
         else if (segment.activity) {
             const act = segment.activity;
             const startCoord = parseCoordString(act.start?.latLng);
@@ -243,7 +246,7 @@ const TravelRoute = ({ navigate }) => {
             if (startCoord && endCoord) {
                  const start = new Date(segment.startTime);
                  const end = new Date(segment.endTime);
-                 results.push({
+                 activities.push({
                     date: start.toISOString().split('T')[0],
                     coordinates: [startCoord, endCoord],
                     startTime: start,
@@ -256,7 +259,40 @@ const TravelRoute = ({ navigate }) => {
             }
         }
     });
-    return results;
+
+    // 2. Merge Logic: Attribute Activity Types to Paths & Remove Duplicate "Straight Lines"
+    const finalRoutes = [...rawPaths];
+    const usedActivities = new Set();
+
+    finalRoutes.forEach(path => {
+        // Find an activity that encompasses this path
+        const matchingAct = activities.find(act => 
+            act.startTime <= path.startTime && act.endTime >= path.endTime
+        );
+
+        if (matchingAct) {
+            path.activityType = matchingAct.activityType; // Apply label to detailed path
+            usedActivities.add(matchingAct); // Mark activity as "consumed"
+        }
+    });
+
+    // 3. Add only UNUSED activities (True Gaps)
+    // Only add an activity line if we didn't use it to label a detailed path
+    // AND if it's not overlapping significantly with any existing path
+    activities.forEach(act => {
+        if (!usedActivities.has(act)) {
+             // Double check: Does this activity overlap with any path?
+             const overlaps = finalRoutes.some(path => 
+                 (act.startTime < path.endTime && act.endTime > path.startTime)
+             );
+             
+             if (!overlaps) {
+                 finalRoutes.push(act); // It's a true gap (e.g. flight), show the straight line
+             }
+        }
+    });
+
+    return finalRoutes;
   };
 
   const handleFileUpload = async (e) => {
@@ -272,7 +308,6 @@ const TravelRoute = ({ navigate }) => {
     let totalSize = files.reduce((acc, file) => acc + file.size, 0);
     let loadedSize = 0;
 
-    // Process files sequentially
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         setStatusText(`Reading ${file.name}...`);
@@ -280,7 +315,6 @@ const TravelRoute = ({ navigate }) => {
         try {
             const content = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                
                 reader.onprogress = (event) => {
                     if (event.lengthComputable) {
                         const fileProgress = event.loaded;
@@ -288,15 +322,12 @@ const TravelRoute = ({ navigate }) => {
                         setProgress(Math.round(totalProgress));
                     }
                 };
-
                 reader.onload = (ev) => resolve(ev.target.result);
                 reader.onerror = (err) => reject(err);
                 reader.readAsText(file);
             });
 
             loadedSize += file.size;
-            
-            // Allow UI to update before parsing heavy JSON
             await new Promise(r => setTimeout(r, 50)); 
             setStatusText(`Parsing ${file.name}...`);
             
@@ -307,9 +338,7 @@ const TravelRoute = ({ navigate }) => {
                 parsed = parseGoogleJSON(content, file.name);
             }
 
-            if (parsed.length) {
-                newRoutes.push(...parsed);
-            }
+            if (parsed.length) newRoutes.push(...parsed);
 
         } catch (err) {
             console.error(`Error reading ${file.name}:`, err);
@@ -318,7 +347,6 @@ const TravelRoute = ({ navigate }) => {
 
     setStatusText('Finalizing data...');
     
-    // Process gathered data into Route objects
     setRoutes(prev => {
         const nextIdStart = prev.length;
         const processedEntries = newRoutes.map((r, idx) => {
@@ -339,12 +367,11 @@ const TravelRoute = ({ navigate }) => {
             };
         });
 
-        // Filter duplicates based on ID or content
+        // Dedup
         const uniqueNew = processedEntries.filter(n => 
-            !prev.some(p => p.date === n.date && p.startTime === n.startTime && p.distance === n.distance)
+            !prev.some(p => p.date === n.date && p.startTime === n.startTime && Math.abs(p.distance - n.distance) < 0.1)
         );
 
-        // Generate Stats
         if (uniqueNew.length > 0) {
             const acts = {};
             let dist = 0;
@@ -390,11 +417,9 @@ const TravelRoute = ({ navigate }) => {
     setRoutes(prev => prev.map(r => r.id === id ? { ...r, visible: !r.visible } : r));
   };
 
-  // --- RENDER ---
   return (
     <div className="relative h-screen w-full bg-[#F5F5F7] text-[#1C1C1E] font-sans overflow-hidden flex flex-col md:flex-row">
       
-      {/* --- IMPORT OVERLAY (Progress) --- */}
       {isImporting && (
         <div className="absolute inset-0 z-[2000] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm animate-scaleIn">
@@ -413,7 +438,6 @@ const TravelRoute = ({ navigate }) => {
         </div>
       )}
 
-      {/* --- IMPORT STATS MODAL --- */}
       {!isImporting && importStats && (
         <div className="absolute inset-0 z-[2000] bg-black/10 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-scaleIn overflow-hidden flex flex-col max-h-[80vh]">
@@ -426,7 +450,6 @@ const TravelRoute = ({ navigate }) => {
                 Successfully added {importStats.added} new segments.
               </p>
             </div>
-            
             <div className="p-6 space-y-4 overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                  <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
@@ -438,7 +461,6 @@ const TravelRoute = ({ navigate }) => {
                     <div className="text-xs font-bold text-gray-900 mt-1">{importStats.dateRange}</div>
                  </div>
               </div>
-
               <div>
                 <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Activity Breakdown</h4>
                 <div className="space-y-2">
@@ -454,22 +476,14 @@ const TravelRoute = ({ navigate }) => {
                 </div>
               </div>
             </div>
-
             <div className="p-4 border-t border-gray-100 bg-gray-50">
-              <button 
-                onClick={() => setImportStats(null)}
-                className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors"
-              >
-                Done
-              </button>
+              <button onClick={() => setImportStats(null)} className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors">Done</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* --- SIDEBAR PANEL --- */}
-      <div 
-        className={`
+      <div className={`
           absolute z-[1000] bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)]
           border-t md:border-r border-black/5
           bottom-0 left-0 right-0 
@@ -477,12 +491,8 @@ const TravelRoute = ({ navigate }) => {
           ${panelOpen ? 'h-[60%] md:h-full' : 'h-[100px] md:h-full'}
           md:relative md:w-[380px] md:translate-y-0
           rounded-t-2xl md:rounded-none flex flex-col
-        `}
-      >
-        <div 
-          className="md:hidden w-full h-6 flex justify-center items-center cursor-grab active:cursor-grabbing"
-          onClick={() => setPanelOpen(!panelOpen)}
-        >
+        `}>
+        <div className="md:hidden w-full h-6 flex justify-center items-center cursor-grab active:cursor-grabbing" onClick={() => setPanelOpen(!panelOpen)}>
           <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
         </div>
 
@@ -560,7 +570,6 @@ const TravelRoute = ({ navigate }) => {
         </div>
       </div>
 
-      {/* --- MAP --- */}
       <div className="absolute inset-0 md:relative md:flex-1 h-full z-0 bg-gray-100">
         <MapContainer center={[20, 0]} zoom={2} zoomControl={false} style={{ height: "100%", width: "100%" }}>
           <AutoZoom bounds={allBounds} />
@@ -570,7 +579,15 @@ const TravelRoute = ({ navigate }) => {
             <React.Fragment key={route.id}>
               <Polyline 
                 positions={route.coordinates} 
-                pathOptions={{ color: route.color, weight: 5, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }} 
+                pathOptions={{ 
+                  color: route.color, 
+                  weight: 5, 
+                  opacity: 0.85, 
+                  lineCap: 'round', 
+                  lineJoin: 'round',
+                  // If it's a straight line (gap fill), make it dashed
+                  dashArray: route.type === 'JSON_ACTIVITY' ? '10, 10' : null 
+                }} 
               >
                 <Popup className="custom-popup">
                   <div className="p-2 min-w-[150px]">
