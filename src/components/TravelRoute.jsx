@@ -9,7 +9,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
 // --- IMPORT DB & UTILS ---
-import { db, PolylineUtils } from './db';
+import { db, PolylineUtils } from '../db';
 
 // --- LEAFLET ICONS FIX ---
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
