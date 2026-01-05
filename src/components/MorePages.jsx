@@ -4,7 +4,7 @@ import {
   ChevronLeft, Settings, Info, Download, Upload, 
   ChevronRight, Github, Mail, Moon, MessageCircle, Flower2, 
   BookOpen, Palette, Check, Type, Sliders, Monitor, Shield,
-  Users // New Icon
+  Users, Map as MapIcon // New Icon
 } from 'lucide-react';
 import CloudBackup from './CloudBackup';
 import GoogleBackup from './GoogleBackup';
@@ -49,6 +49,7 @@ export const MoreMenu = ({ navigate }) => {
            <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-2">Tools</h3>
            <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800">
              <MenuItem icon={Users} label="People & Contacts" onClick={() => navigate('people')} />
+                <MenuItem icon={MapIcon} label="Travel Route" onClick={() => navigate('travel-route')} />
              <MenuItem icon={Moon} label="Sleep Insights" onClick={() => navigate('sleep')} />
              <MenuItem icon={Flower2} label="Meditation" onClick={() => navigate('meditation')} />
              <MenuItem icon={BookOpen} label="Year in Review (PDF)" onClick={() => navigate('year-review')} />
