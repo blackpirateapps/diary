@@ -7,7 +7,7 @@ import {
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { db, PolylineUtils } from '../db'; // Import database and encoding utils
+import { db } from './db'; // Import database
 import { useLiveQuery } from 'dexie-react-hooks';
 
 // --- LEAFLET ICONS FIX ---
@@ -140,14 +140,12 @@ const TravelRoute = ({ navigate }) => {
   const routesMeta = useLiveQuery(() => db.routes_meta.toArray(), []);
   const routesData = useLiveQuery(() => db.routes_data.toArray(), []);
 
-  // Load and decode routes from database
+  // Load routes from database
   useEffect(() => {
     if (routesMeta && routesData) {
       const loadedRoutes = routesMeta.map((meta, idx) => {
         const data = routesData.find(d => d.id === meta.id);
-        const coordinates = data?.compressedPath 
-          ? PolylineUtils.decode(data.compressedPath)
-          : [];
+        const coordinates = data?.coordinates || [];
         
         return {
           id: meta.id,
@@ -159,7 +157,8 @@ const TravelRoute = ({ navigate }) => {
           activityType: meta.mode || meta.activityType,
           locationName: meta.locationName,
           visible: true,
-          color: generateColor(idx)
+          color: generateColor(idx),
+          type: data?.type
         };
       });
       
@@ -319,7 +318,7 @@ const TravelRoute = ({ navigate }) => {
     return finalRoutes;
   };
 
-  // Save routes to database
+  // Save routes to database (NO COMPRESSION)
   const saveRoutesToDB = async (parsedRoutes) => {
     const metaEntries = [];
     const dataEntries = [];
@@ -328,8 +327,11 @@ const TravelRoute = ({ navigate }) => {
       const d = new Date(r.date);
       const routeId = `${r.date}-${r.startTime.getTime()}-${Math.random().toString(36).substr(2, 9)}`;
       
-      // Compress coordinates using polyline encoding
-      const compressedPath = PolylineUtils.encode(r.coordinates);
+      const distance = calculateDistance(r.coordinates);
+      const durMs = r.endTime - r.startTime;
+      const h = Math.floor(durMs / 3600000);
+      const m = Math.round((durMs % 3600000) / 60000);
+      const durationStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
 
       // Save metadata
       metaEntries.push({
@@ -337,22 +339,17 @@ const TravelRoute = ({ navigate }) => {
         date: r.date,
         year: d.getFullYear(),
         month: d.toLocaleString('default', { month: 'long' }),
-        distance: calculateDistance(r.coordinates),
-        durationStr: (() => {
-          const durMs = r.endTime - r.startTime;
-          const h = Math.floor(durMs / 3600000);
-          const m = Math.round((durMs % 3600000) / 60000);
-          return h > 0 ? `${h}h ${m}m` : `${m}m`;
-        })(),
+        distance: distance,
+        durationStr: durationStr,
         mode: r.activityType,
         activityType: r.activityType,
         locationName: r.locationName
       });
 
-      // Save compressed coordinate data
+      // Save raw coordinates (NO COMPRESSION)
       dataEntries.push({
         id: routeId,
-        compressedPath,
+        coordinates: r.coordinates, // Store raw array
         type: r.type,
         fileName: r.fileName
       });
