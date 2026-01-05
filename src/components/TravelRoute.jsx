@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Map as MapIcon, Clock, Calendar, Plus, X, 
   ArrowLeft, Navigation, Car, Bike, Footprints, Plane, Train, 
-  MapPin, AlertCircle 
+  CheckCircle2, Loader2, AlertCircle 
 } from 'lucide-react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -22,8 +22,12 @@ L.Icon.Default.mergeOptions({
 
 // --- UTILS ---
 
-// Google uses "E7" format (integers) for lat/lng. Example: 334567890 -> 33.4567890
-const parseE7 = (val) => val / 1e7;
+const parseCoordString = (coordStr) => {
+  if (!coordStr) return null;
+  const parts = coordStr.replace(/°/g, '').split(',');
+  if (parts.length !== 2) return null;
+  return [parseFloat(parts[0].trim()), parseFloat(parts[1].trim())];
+};
 
 const calculateDistance = (coords) => {
   if (coords.length < 2) return 0;
@@ -42,13 +46,12 @@ const calculateDistance = (coords) => {
   return totalDistance;
 };
 
-// Activity Icon Helper
 const getActivityIcon = (type) => {
   if (!type) return <Navigation size={14} />;
   const t = type.toUpperCase();
-  if (t.includes('WALK') || t.includes('HIKE') || t.includes('RUN')) return <Footprints size={14} />;
+  if (t.includes('WALK') || t.includes('HIKE') || t.includes('RUN') || t.includes('FOOT')) return <Footprints size={14} />;
   if (t.includes('CYCL') || t.includes('BIKE')) return <Bike size={14} />;
-  if (t.includes('IN_PASSENGER_VEHICLE') || t.includes('DRIVE') || t.includes('CAR')) return <Car size={14} />;
+  if (t.includes('VEHICLE') || t.includes('DRIVE') || t.includes('CAR')) return <Car size={14} />;
   if (t.includes('FLY') || t.includes('AIR')) return <Plane size={14} />;
   if (t.includes('TRAIN') || t.includes('SUBWAY') || t.includes('TRAM')) return <Train size={14} />;
   return <Navigation size={14} />;
@@ -56,7 +59,7 @@ const getActivityIcon = (type) => {
 
 const formatActivityName = (type) => {
   if (!type) return 'Travel';
-  return type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  return type.replace(/IN_|_/g, ' ').toLowerCase().trim().replace(/\b\w/g, c => c.toUpperCase());
 };
 
 const generateColor = (idx) => {
@@ -123,10 +126,15 @@ const TravelRoute = ({ navigate }) => {
   const [routes, setRoutes] = useState([]);
   const [panelOpen, setPanelOpen] = useState(true);
   const [searchDate, setSearchDate] = useState('');
-  const [errorMsg, setErrorMsg] = useState(null);
   const fileInputRef = useRef(null);
+  
+  // Import States
+  const [isImporting, setIsImporting] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [statusText, setStatusText] = useState('');
+  const [importStats, setImportStats] = useState(null); // { added, distance, range, activities }
 
-  // --- PROCESSING ---
+  // --- LOGIC ---
   const { groupedRoutes, stats, allBounds } = useMemo(() => {
     const grouped = {};
     let totalDist = 0;
@@ -192,111 +200,178 @@ const TravelRoute = ({ navigate }) => {
   };
 
   const parseGoogleJSON = (text, fileName) => {
-    const data = JSON.parse(text);
-    const items = data.timelineObjects || []; // Standard Semantic format
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch(e) {
+        throw new Error("Invalid JSON file");
+    }
+
+    const segments = data.semanticSegments || [];
     const results = [];
 
-    items.forEach(item => {
-      // We are looking for 'activitySegment' which contains the path
-      if (item.activitySegment) {
-        const seg = item.activitySegment;
-        
-        // 1. Extract Coordinates
-        let coords = [];
-        
-        // Try waypointPath (detailed)
-        if (seg.waypointPath?.waypoints) {
-          coords = seg.waypointPath.waypoints.map(wp => [parseE7(wp.latE7), parseE7(wp.lngE7)]);
-        } 
-        // Fallback to simplifiedRawPath (less detailed but often present)
-        else if (seg.simplifiedRawPath?.points) {
-          coords = seg.simplifiedRawPath.points.map(p => [parseE7(p.latE7), parseE7(p.lngE7)]);
-        }
-        // Fallback to just Start/End
-        else if (seg.startLocation && seg.endLocation) {
-          coords = [
-            [parseE7(seg.startLocation.latitudeE7), parseE7(seg.startLocation.longitudeE7)],
-            [parseE7(seg.endLocation.latitudeE7), parseE7(seg.endLocation.longitudeE7)]
-          ];
-        }
+    segments.forEach(segment => {
+        // Timeline Path
+        if (segment.timelinePath && Array.isArray(segment.timelinePath)) {
+            const coords = [];
+            segment.timelinePath.forEach(pt => {
+                const parsed = parseCoordString(pt.point);
+                if (parsed) coords.push(parsed);
+            });
 
-        if (coords.length > 0) {
-          const start = new Date(seg.duration?.startTimestamp);
-          const end = new Date(seg.duration?.endTimestamp);
-          
-          results.push({
-            date: start.toISOString().split('T')[0],
-            coordinates: coords,
-            startTime: start,
-            endTime: end,
-            activityType: seg.activityType, // e.g., "WALKING", "IN_PASSENGER_VEHICLE"
-            locationName: seg.endLocation?.name || null, // Capture name if available
-            fileName,
-            type: 'JSON'
-          });
+            if (coords.length > 1) {
+                const start = new Date(segment.startTime);
+                const end = new Date(segment.endTime);
+                results.push({
+                    date: start.toISOString().split('T')[0],
+                    coordinates: coords,
+                    startTime: start,
+                    endTime: end,
+                    activityType: 'TIMELINE_PATH',
+                    locationName: null,
+                    fileName,
+                    type: 'JSON_PATH'
+                });
+            }
         }
-      }
+        // Activity Segment
+        else if (segment.activity) {
+            const act = segment.activity;
+            const startCoord = parseCoordString(act.start?.latLng);
+            const endCoord = parseCoordString(act.end?.latLng);
+
+            if (startCoord && endCoord) {
+                 const start = new Date(segment.startTime);
+                 const end = new Date(segment.endTime);
+                 results.push({
+                    date: start.toISOString().split('T')[0],
+                    coordinates: [startCoord, endCoord],
+                    startTime: start,
+                    endTime: end,
+                    activityType: act.topCandidate?.type,
+                    locationName: null,
+                    fileName,
+                    type: 'JSON_ACTIVITY'
+                 });
+            }
+        }
     });
-    
     return results;
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
-    setErrorMsg(null);
 
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
+    setIsImporting(true);
+    setProgress(0);
+    setImportStats(null);
+    setStatusText('Starting upload...');
+
+    const newRoutes = [];
+    let totalSize = files.reduce((acc, file) => acc + file.size, 0);
+    let loadedSize = 0;
+
+    // Process files sequentially
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setStatusText(`Reading ${file.name}...`);
+
         try {
-          const content = ev.target.result;
-          let parsedRoutes = [];
+            const content = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                
+                reader.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const fileProgress = event.loaded;
+                        const totalProgress = ((loadedSize + fileProgress) / totalSize) * 100;
+                        setProgress(Math.round(totalProgress));
+                    }
+                };
 
-          if (file.name.toLowerCase().endsWith('.gpx')) {
-            parsedRoutes = parseGPX(content, file.name);
-          } else if (file.name.toLowerCase().endsWith('.json')) {
-            parsedRoutes = parseGoogleJSON(content, file.name);
-          } else {
-            throw new Error("Unsupported file format");
-          }
+                reader.onload = (ev) => resolve(ev.target.result);
+                reader.onerror = (err) => reject(err);
+                reader.readAsText(file);
+            });
 
-          if (parsedRoutes.length === 0) {
-            console.warn(`No valid routes found in ${file.name}`);
-            return;
-          }
+            loadedSize += file.size;
+            
+            // Allow UI to update before parsing heavy JSON
+            await new Promise(r => setTimeout(r, 50)); 
+            setStatusText(`Parsing ${file.name}...`);
+            
+            let parsed = [];
+            if (file.name.toLowerCase().endsWith('.gpx')) {
+                parsed = parseGPX(content, file.name);
+            } else if (file.name.toLowerCase().endsWith('.json')) {
+                parsed = parseGoogleJSON(content, file.name);
+            }
 
-          setRoutes(prev => {
-            const newEntries = parsedRoutes.map((r, i) => {
-              const durMs = r.endTime - r.startTime;
-              const h = Math.floor(durMs / 3600000);
-              const m = Math.round((durMs % 3600000) / 60000);
-              
-              return {
-                id: `${r.date}-${file.name}-${i}-${Date.now()}`,
+            if (parsed.length) {
+                newRoutes.push(...parsed);
+            }
+
+        } catch (err) {
+            console.error(`Error reading ${file.name}:`, err);
+        }
+    }
+
+    setStatusText('Finalizing data...');
+    
+    // Process gathered data into Route objects
+    setRoutes(prev => {
+        const nextIdStart = prev.length;
+        const processedEntries = newRoutes.map((r, idx) => {
+            const durMs = r.endTime - r.startTime;
+            const h = Math.floor(durMs / 3600000);
+            const m = Math.round((durMs % 3600000) / 60000);
+            return {
+                id: `${r.date}-${idx}-${Date.now()}`,
                 date: r.date,
                 coordinates: r.coordinates,
                 distance: calculateDistance(r.coordinates),
                 durationStr: h > 0 ? `${h}h ${m}m` : `${m}m`,
                 fileName: r.fileName,
-                activityType: r.activityType, // New Field
-                locationName: r.locationName, // New Field
+                activityType: r.activityType,
+                locationName: r.locationName,
                 visible: true,
-                color: generateColor(prev.length + i)
-              };
-            });
-            // Dedup simple check
-            const unique = newEntries.filter(n => !prev.some(p => p.id === n.id));
-            return [...prev, ...unique];
-          });
+                color: generateColor(nextIdStart + idx)
+            };
+        });
 
-        } catch (err) {
-          console.error(err);
-          setErrorMsg(`Error parsing ${file.name}: ${err.message}`);
+        // Filter duplicates based on ID or content
+        const uniqueNew = processedEntries.filter(n => 
+            !prev.some(p => p.date === n.date && p.startTime === n.startTime && p.distance === n.distance)
+        );
+
+        // Generate Stats
+        if (uniqueNew.length > 0) {
+            const acts = {};
+            let dist = 0;
+            const dates = uniqueNew.map(r => new Date(r.date));
+            const minDate = new Date(Math.min.apply(null, dates));
+            const maxDate = new Date(Math.max.apply(null, dates));
+
+            uniqueNew.forEach(r => {
+                dist += r.distance;
+                const type = r.activityType || 'Unknown';
+                acts[type] = (acts[type] || 0) + 1;
+            });
+
+            setImportStats({
+                added: uniqueNew.length,
+                totalDistance: dist,
+                dateRange: `${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`,
+                activities: acts
+            });
+        } else {
+             setImportStats({ added: 0, totalDistance: 0, dateRange: '-', activities: {} });
         }
-      };
-      reader.readAsText(file);
+
+        setIsImporting(false);
+        return [...prev, ...uniqueNew];
     });
+
     e.target.value = '';
   };
 
@@ -319,7 +394,80 @@ const TravelRoute = ({ navigate }) => {
   return (
     <div className="relative h-screen w-full bg-[#F5F5F7] text-[#1C1C1E] font-sans overflow-hidden flex flex-col md:flex-row">
       
-      {/* --- PANEL --- */}
+      {/* --- IMPORT OVERLAY (Progress) --- */}
+      {isImporting && (
+        <div className="absolute inset-0 z-[2000] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm animate-scaleIn">
+            <div className="flex items-center gap-3 mb-4">
+               <Loader2 className="animate-spin text-blue-500" />
+               <h3 className="font-semibold text-lg">Importing Routes</h3>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2 mb-2 overflow-hidden">
+               <div className="bg-blue-500 h-full transition-all duration-300" style={{width: `${progress}%`}} />
+            </div>
+            <div className="flex justify-between text-xs text-gray-500">
+               <span>{statusText}</span>
+               <span>{progress}%</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- IMPORT STATS MODAL --- */}
+      {!isImporting && importStats && (
+        <div className="absolute inset-0 z-[2000] bg-black/10 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-scaleIn overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+              <div className="flex items-center justify-center w-12 h-12 bg-green-100 text-green-600 rounded-full mb-4 mx-auto">
+                <CheckCircle2 size={24} />
+              </div>
+              <h2 className="text-xl font-bold text-center text-gray-900">Import Complete</h2>
+              <p className="text-sm text-gray-500 text-center mt-1">
+                Successfully added {importStats.added} new segments.
+              </p>
+            </div>
+            
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                    <div className="text-xs text-blue-500 font-semibold uppercase">Total Distance</div>
+                    <div className="text-lg font-bold text-gray-900">{importStats.totalDistance.toFixed(1)} km</div>
+                 </div>
+                 <div className="bg-purple-50/50 p-3 rounded-xl border border-purple-100">
+                    <div className="text-xs text-purple-500 font-semibold uppercase">Date Range</div>
+                    <div className="text-xs font-bold text-gray-900 mt-1">{importStats.dateRange}</div>
+                 </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Activity Breakdown</h4>
+                <div className="space-y-2">
+                   {Object.entries(importStats.activities).map(([type, count]) => (
+                     <div key={type} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-gray-50">
+                        <div className="flex items-center gap-2">
+                           <span className="text-gray-400">{getActivityIcon(type)}</span>
+                           <span className="text-gray-700 capitalize">{formatActivityName(type)}</span>
+                        </div>
+                        <span className="font-medium bg-gray-100 px-2 py-0.5 rounded-md text-xs">{count}</span>
+                     </div>
+                   ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-100 bg-gray-50">
+              <button 
+                onClick={() => setImportStats(null)}
+                className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- SIDEBAR PANEL --- */}
       <div 
         className={`
           absolute z-[1000] bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)]
@@ -365,12 +513,6 @@ const TravelRoute = ({ navigate }) => {
               </button>
             )}
           </div>
-
-          {errorMsg && (
-            <div className="mt-3 bg-red-50 text-red-600 text-xs p-2 rounded-lg flex items-center gap-2">
-              <AlertCircle size={14} /> {errorMsg}
-            </div>
-          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 pb-24 md:pb-4 custom-scrollbar">
@@ -378,7 +520,7 @@ const TravelRoute = ({ navigate }) => {
             <div className="flex flex-col items-center justify-center h-48 text-gray-400 text-center px-8">
               <Navigation size={48} className="mb-4 text-gray-300" strokeWidth={1} />
               <p className="text-sm">No routes yet.</p>
-              <p className="text-xs mt-1">Add GPX or Google JSON files.</p>
+              <p className="text-xs mt-1">Tap + to add GPX or Google JSON.</p>
             </div>
           ) : (
             Object.keys(groupedRoutes).sort((a,b)=>b-a).map(year => (
@@ -446,10 +588,6 @@ const TravelRoute = ({ navigate }) => {
                   </div>
                 </Popup>
               </Polyline>
-              
-              <Marker position={route.coordinates[0]} icon={L.divIcon({ className: 'bg-transparent', html: `<div style="background-color: ${route.color};" class="w-3 h-3 rounded-full ring-2 ring-white shadow-md"></div>` })} />
-              
-              <Marker position={route.coordinates[route.coordinates.length-1]} icon={L.divIcon({ className: 'bg-transparent', html: `<div class="relative"><div style="background-color: ${route.color};" class="w-4 h-4 rounded-full ring-2 ring-white shadow-lg flex items-center justify-center"><div class="w-1.5 h-1.5 bg-white rounded-full"></div></div></div>` })} />
             </React.Fragment>
           ))}
         </MapContainer>
