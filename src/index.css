@@ -10,3 +10,8 @@ html {
 body {
   background-color: #F8F9FA;
 }
+/* Ensure the map container can take full height */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}
