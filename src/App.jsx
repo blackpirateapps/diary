@@ -17,6 +17,7 @@ const StatsPage = lazy(() => import('./components/StatsPage'));
 const MediaGallery = lazy(() => import('./components/MediaGallery'));
 const FlashbackPage = lazy(() => import('./components/FlashbackPage'));
 const MapPage = lazy(() => import('./components/MapPage'));
+const TravelRoute = lazy(() => import('./components/TravelRoute'));
 
 // Lazy load named exports
 const SleepPage = lazy(() => import('./components/SleepPage').then(module => ({ default: module.SleepPage })));
@@ -328,6 +329,7 @@ const openNewEditor = (date = new Date()) => {
                 {currentRoute === 'media' && <MediaGallery entries={entries || []} onEdit={openEditEditor} />}
                 
                 {currentRoute === 'more' && <MoreMenu navigate={navigate} />}
+                {currentRoute === 'travel-route' && <TravelRoute navigate={navigate} />}
                 {currentRoute === 'sleep' && <SleepPage navigate={navigate} />}
                 {currentRoute === 'whatsapp' && <WhatsAppPage navigate={navigate} />}
                 {currentRoute === 'meditation' && <MeditationPage navigate={navigate} />}
