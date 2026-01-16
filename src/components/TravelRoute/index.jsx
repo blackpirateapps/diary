@@ -151,7 +151,10 @@ const TravelRoute = ({ navigate }) => {
                                 <Popup className="custom-popup">
                                     <div className="p-2 min-w-[150px]">
                                         <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 flex items-center gap-2">
-                                            {getActivityIcon(route.activityType)}
+                                            {(() => {
+                                                const ActivityIcon = getActivityIcon(route.activityType);
+                                                return <ActivityIcon size={14} />;
+                                            })()}
                                             {route.activityType ? formatActivityName(route.activityType) : 'Route'}
                                         </div>
                                         {route.locationName && (

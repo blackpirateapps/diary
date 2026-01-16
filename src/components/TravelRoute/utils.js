@@ -1,4 +1,3 @@
-import React from 'react';
 import { Navigation, Car, Bike, Footprints, Plane, Train } from 'lucide-react';
 import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -40,14 +39,14 @@ export const calculateDistance = (coords) => {
 };
 
 export const getActivityIcon = (type) => {
-    if (!type) return <Navigation size={14} />;
+    if (!type) return Navigation;
     const t = type.toUpperCase();
-    if (t.includes('WALK') || t.includes('HIKE') || t.includes('RUN') || t.includes('FOOT')) return <Footprints size={14} />;
-    if (t.includes('CYCL') || t.includes('BIKE')) return <Bike size={14} />;
-    if (t.includes('VEHICLE') || t.includes('DRIVE') || t.includes('CAR')) return <Car size={14} />;
-    if (t.includes('FLY') || t.includes('AIR')) return <Plane size={14} />;
-    if (t.includes('TRAIN') || t.includes('SUBWAY') || t.includes('TRAM')) return <Train size={14} />;
-    return <Navigation size={14} />;
+    if (t.includes('WALK') || t.includes('HIKE') || t.includes('RUN') || t.includes('FOOT')) return Footprints;
+    if (t.includes('CYCL') || t.includes('BIKE')) return Bike;
+    if (t.includes('VEHICLE') || t.includes('DRIVE') || t.includes('CAR')) return Car;
+    if (t.includes('FLY') || t.includes('AIR')) return Plane;
+    if (t.includes('TRAIN') || t.includes('SUBWAY') || t.includes('TRAM')) return Train;
+    return Navigation;
 };
 
 export const formatActivityName = (type) => {

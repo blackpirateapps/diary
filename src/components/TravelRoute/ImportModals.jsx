@@ -46,15 +46,20 @@ export const ImportCompleteModal = ({ importStats, onClose }) => (
                 <div>
                     <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Activity Breakdown</h4>
                     <div className="space-y-2">
-                        {Object.entries(importStats.activities).map(([type, count]) => (
-                            <div key={type} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-gray-50">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-gray-400">{getActivityIcon(type)}</span>
-                                    <span className="text-gray-700 capitalize">{formatActivityName(type)}</span>
+                        {Object.entries(importStats.activities).map(([type, count]) => {
+                            const ActivityIcon = getActivityIcon(type);
+                            return (
+                                <div key={type} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-gray-50">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-gray-400">
+                                            <ActivityIcon size={14} />
+                                        </span>
+                                        <span className="text-gray-700 capitalize">{formatActivityName(type)}</span>
+                                    </div>
+                                    <span className="font-medium bg-gray-100 px-2 py-0.5 rounded-md text-xs">{count}</span>
                                 </div>
-                                <span className="font-medium bg-gray-100 px-2 py-0.5 rounded-md text-xs">{count}</span>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </div>
