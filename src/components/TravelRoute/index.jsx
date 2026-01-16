@@ -1,10 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
-    Map as MapIcon, Clock, Calendar, Plus, X,
-    ArrowLeft, Navigation, Car, Bike, Footprints, Plane, Train,
-    CheckCircle2, Loader2, AlertCircle, Eye, EyeOff
+    Calendar, Plus, X,
+    ArrowLeft, Navigation
 } from 'lucide-react';
-import { MapContainer, TileLayer, Polyline, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { useRoutes, useFileUpload } from './hooks';
