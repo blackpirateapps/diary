@@ -101,7 +101,7 @@ const TravelRoute = ({ navigate }) => {
                                     <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                                         {Object.values(groupedRoutes[year]).flat().length}
                                     </span>
-                                H3>
+                                </h3>
                                 <div className="space-y-4">
                                     {Object.keys(groupedRoutes[year]).map(month => (
                                         <div key={month} className="relative pl-4 border-l-2 border-gray-100">
