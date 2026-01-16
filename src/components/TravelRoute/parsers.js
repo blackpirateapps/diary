@@ -1,5 +1,27 @@
 import { parseCoordString } from './utils';
 
+const toLatLngFromE7 = (obj) => {
+    if (!obj) return null;
+    const lat = obj.latE7 ?? obj.latitudeE7 ?? obj.lat ?? obj.latitude;
+    const lng = obj.lngE7 ?? obj.longitudeE7 ?? obj.lng ?? obj.longitude;
+    if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+    return [lat / 1e7, lng / 1e7];
+};
+
+const toDate = (value) => (value ? new Date(value) : null);
+
+const buildRoute = ({ date, coordinates, startTime, endTime, activityType, locationName, fileName, type, distanceMeters }) => ({
+    date,
+    coordinates,
+    startTime,
+    endTime,
+    activityType,
+    locationName,
+    fileName,
+    type,
+    distanceKm: typeof distanceMeters === 'number' ? distanceMeters / 1000 : undefined
+});
+
 export const parseGPX = (text, fileName) => {
     const parser = new DOMParser();
     const xml = parser.parseFromString(text, "text/xml");
@@ -40,6 +62,7 @@ export const parseGoogleJSON = (text, fileName) => {
     }
 
     const segments = data.semanticSegments || [];
+    const timelineObjects = data.timelineObjects || [];
 
     const rawPaths = [];
     const activities = [];
@@ -55,7 +78,7 @@ export const parseGoogleJSON = (text, fileName) => {
             if (coords.length > 1) {
                 const start = new Date(segment.startTime);
                 const end = new Date(segment.endTime);
-                rawPaths.push({
+                rawPaths.push(buildRoute({
                     date: start.toISOString().split('T')[0],
                     coordinates: coords,
                     startTime: start,
@@ -63,8 +86,9 @@ export const parseGoogleJSON = (text, fileName) => {
                     activityType: null,
                     locationName: null,
                     fileName,
-                    type: 'JSON_PATH'
-                });
+                    type: 'JSON_PATH',
+                    distanceMeters: segment.distanceMeters
+                }));
             }
         }
         else if (segment.activity) {
@@ -75,7 +99,7 @@ export const parseGoogleJSON = (text, fileName) => {
             if (startCoord && endCoord) {
                 const start = new Date(segment.startTime);
                 const end = new Date(segment.endTime);
-                activities.push({
+                activities.push(buildRoute({
                     date: start.toISOString().split('T')[0],
                     coordinates: [startCoord, endCoord],
                     startTime: start,
@@ -83,9 +107,64 @@ export const parseGoogleJSON = (text, fileName) => {
                     activityType: act.topCandidate?.type,
                     locationName: null,
                     fileName,
-                    type: 'JSON_ACTIVITY'
-                });
+                    type: 'JSON_ACTIVITY',
+                    distanceMeters: segment.distanceMeters
+                }));
             }
+        }
+    });
+
+    timelineObjects.forEach(obj => {
+        const segment = obj.activitySegment;
+        if (!segment) return;
+
+        const duration = segment.duration || {};
+        const start = toDate(segment.startTimestamp || duration.startTimestamp);
+        const end = toDate(segment.endTimestamp || duration.endTimestamp);
+        if (!start || !end) return;
+
+        const date = start.toISOString().split('T')[0];
+        const activityType = segment.activityType;
+        const distanceMeters = typeof segment.distance === 'number' ? segment.distance : segment.distanceMeters;
+
+        const coords = [];
+        if (segment.simplifiedRawPath?.points?.length) {
+            segment.simplifiedRawPath.points.forEach(pt => {
+                const parsed = toLatLngFromE7(pt);
+                if (parsed) coords.push(parsed);
+            });
+        }
+        if (coords.length === 0 && segment.waypointPath?.waypoints?.length) {
+            segment.waypointPath.waypoints.forEach(pt => {
+                const parsed = toLatLngFromE7(pt);
+                if (parsed) coords.push(parsed);
+            });
+        }
+        if (coords.length === 0 && segment.transitPath?.transitStops?.length) {
+            segment.transitPath.transitStops.forEach(stop => {
+                const parsed = toLatLngFromE7(stop);
+                if (parsed) coords.push(parsed);
+            });
+        }
+
+        if (coords.length < 2) {
+            const startCoord = toLatLngFromE7(segment.startLocation);
+            const endCoord = toLatLngFromE7(segment.endLocation);
+            if (startCoord && endCoord) coords.push(startCoord, endCoord);
+        }
+
+        if (coords.length > 1) {
+            rawPaths.push(buildRoute({
+                date,
+                coordinates: coords,
+                startTime: start,
+                endTime: end,
+                activityType,
+                locationName: null,
+                fileName,
+                type: 'JSON_PATH',
+                distanceMeters
+            }));
         }
     });
 

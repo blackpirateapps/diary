@@ -78,7 +78,7 @@ export const saveRoutesToDB = async (parsedRoutes) => {
         const d = new Date(r.date);
         const routeId = `${r.date}-${r.startTime.getTime()}-${Math.random().toString(36).substr(2, 9)}`;
 
-        const distance = calculateDistance(r.coordinates);
+        const distance = typeof r.distanceKm === 'number' ? r.distanceKm : calculateDistance(r.coordinates);
         const durMs = r.endTime - r.startTime;
         const h = Math.floor(durMs / 3600000);
         const m = Math.round((durMs % 3600000) / 60000);
@@ -180,7 +180,7 @@ export const useFileUpload = () => {
                 const maxDate = new Date(Math.max.apply(null, dates));
 
                 newRoutes.forEach(r => {
-                    dist += calculateDistance(r.coordinates);
+                    dist += typeof r.distanceKm === 'number' ? r.distanceKm : calculateDistance(r.coordinates);
                     const type = r.activityType || 'Unknown';
                     acts[type] = (acts[type] || 0) + 1;
                 });
