@@ -101,7 +101,8 @@ export const saveRoutesToDB = async (parsedRoutes) => {
             id: routeId,
             coordinates: r.coordinates,
             type: r.type,
-            fileName: r.fileName
+            fileName: r.fileName,
+            raw: r.raw || null
         });
     });
 

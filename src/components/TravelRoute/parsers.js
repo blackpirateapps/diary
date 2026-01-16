@@ -10,7 +10,7 @@ const toLatLngFromE7 = (obj) => {
 
 const toDate = (value) => (value ? new Date(value) : null);
 
-const buildRoute = ({ date, coordinates, startTime, endTime, activityType, locationName, fileName, type, distanceMeters }) => ({
+const buildRoute = ({ date, coordinates, startTime, endTime, activityType, locationName, fileName, type, distanceMeters, raw }) => ({
     date,
     coordinates,
     startTime,
@@ -19,8 +19,44 @@ const buildRoute = ({ date, coordinates, startTime, endTime, activityType, locat
     locationName,
     fileName,
     type,
-    distanceKm: typeof distanceMeters === 'number' ? distanceMeters / 1000 : undefined
+    distanceKm: typeof distanceMeters === 'number' ? distanceMeters / 1000 : undefined,
+    raw
 });
+
+const normalizeLine = (coords) => {
+    const filtered = coords.filter(Boolean);
+    if (filtered.length === 1) {
+        filtered.push([...filtered[0]]);
+    }
+    return filtered;
+};
+
+const extractTimelinePathCoords = (segment) => {
+    const coords = [];
+    const timelinePath = segment.timelinePath;
+
+    if (Array.isArray(timelinePath)) {
+        timelinePath.forEach((pt) => {
+            const parsed = parseCoordString(pt.point || pt.latLng);
+            if (parsed) coords.push(parsed);
+            else {
+                const fallback = toLatLngFromE7(pt);
+                if (fallback) coords.push(fallback);
+            }
+        });
+    } else if (timelinePath && Array.isArray(timelinePath.points)) {
+        timelinePath.points.forEach((pt) => {
+            const parsed = parseCoordString(pt.point || pt.latLng);
+            if (parsed) coords.push(parsed);
+            else {
+                const fallback = toLatLngFromE7(pt);
+                if (fallback) coords.push(fallback);
+            }
+        });
+    }
+
+    return normalizeLine(coords);
+};
 
 export const parseGPX = (text, fileName) => {
     const parser = new DOMParser();
@@ -68,30 +104,43 @@ export const parseGoogleJSON = (text, fileName) => {
     const activities = [];
 
     segments.forEach(segment => {
-        if (segment.timelinePath && Array.isArray(segment.timelinePath)) {
-            const coords = [];
-            segment.timelinePath.forEach(pt => {
-                const parsed = parseCoordString(pt.point);
-                if (parsed) coords.push(parsed);
-            });
-
-            if (coords.length > 1) {
+        const coords = extractTimelinePathCoords(segment);
+        if (coords.length > 0) {
+            const start = new Date(segment.startTime);
+            const end = new Date(segment.endTime);
+            rawPaths.push(buildRoute({
+                date: start.toISOString().split('T')[0],
+                coordinates: coords,
+                startTime: start,
+                endTime: end,
+                activityType: null,
+                locationName: null,
+                fileName,
+                type: 'JSON_PATH',
+                distanceMeters: segment.distanceMeters,
+                raw: segment
+            }));
+        } else if (segment.visit?.topCandidate?.placeLocation?.latLng) {
+            const visitCoord = parseCoordString(segment.visit.topCandidate.placeLocation.latLng);
+            if (visitCoord) {
                 const start = new Date(segment.startTime);
                 const end = new Date(segment.endTime);
                 rawPaths.push(buildRoute({
                     date: start.toISOString().split('T')[0],
-                    coordinates: coords,
+                    coordinates: [visitCoord, visitCoord],
                     startTime: start,
                     endTime: end,
                     activityType: null,
                     locationName: null,
                     fileName,
-                    type: 'JSON_PATH',
-                    distanceMeters: segment.distanceMeters
+                    type: 'JSON_VISIT',
+                    distanceMeters: segment.distanceMeters,
+                    raw: segment
                 }));
             }
         }
-        else if (segment.activity) {
+
+        if (segment.activity) {
             const act = segment.activity;
             const startCoord = parseCoordString(act.start?.latLng);
             const endCoord = parseCoordString(act.end?.latLng);
@@ -108,7 +157,8 @@ export const parseGoogleJSON = (text, fileName) => {
                     locationName: null,
                     fileName,
                     type: 'JSON_ACTIVITY',
-                    distanceMeters: segment.distanceMeters
+                    distanceMeters: segment.distanceMeters,
+                    raw: segment
                 }));
             }
         }
@@ -153,17 +203,18 @@ export const parseGoogleJSON = (text, fileName) => {
             if (startCoord && endCoord) coords.push(startCoord, endCoord);
         }
 
-        if (coords.length > 1) {
+        if (coords.length > 0) {
             rawPaths.push(buildRoute({
                 date,
-                coordinates: coords,
+                coordinates: normalizeLine(coords),
                 startTime: start,
                 endTime: end,
                 activityType,
                 locationName: null,
                 fileName,
                 type: 'JSON_PATH',
-                distanceMeters
+                distanceMeters,
+                raw: obj
             }));
         }
     });
