@@ -13,8 +13,9 @@ export const useRoutes = () => {
         if (routesMeta && routesData) {
             const loadedRoutes = routesMeta.map((meta, idx) => {
                 const data = routesData.find(d => d.id === meta.id);
-                // FIX: Use PolylineUtils to decode compressed paths
-                const coordinates = data?.compressedPath ? PolylineUtils.decode(data.compressedPath) : (data?.coordinates || []);
+                const coordinates = Array.isArray(data?.coordinates) && data.coordinates.length > 0
+                    ? data.coordinates
+                    : (data?.compressedPath ? PolylineUtils.decode(data.compressedPath) : []);
 
                 return {
                     id: meta.id,
@@ -95,10 +96,10 @@ export const saveRoutesToDB = async (parsedRoutes) => {
             locationName: r.locationName
         });
 
-        // Save compressed coordinates
+        // Save full coordinates so the map can render the exact path.
         dataEntries.push({
             id: routeId,
-            compressedPath: PolylineUtils.encode(r.coordinates), // Store compressed string
+            coordinates: r.coordinates,
             type: r.type,
             fileName: r.fileName
         });

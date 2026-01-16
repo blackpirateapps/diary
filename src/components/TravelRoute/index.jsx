@@ -33,8 +33,10 @@ const TravelRoute = ({ navigate }) => {
         }
     };
 
-    const toggleRoute = (id) => {
-        setRoutes(prev => prev.map(r => r.id === id ? { ...r, visible: !r.visible } : r));
+    const selectDateFromRoute = (date) => {
+        setSearchDate(date);
+        setRoutes(prev => prev.map(r => ({ ...r, visible: r.date === date })));
+        setPanelOpen(false);
     };
 
     return (
@@ -108,7 +110,12 @@ const TravelRoute = ({ navigate }) => {
                                             <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2 pl-1">{month}</h4>
                                             <div className="space-y-1">
                                                 {groupedRoutes[year][month].map(route => (
-                                                    <RouteItem key={route.id} route={route} onToggle={toggleRoute} />
+                                                    <RouteItem
+                                                        key={route.id}
+                                                        route={route}
+                                                        isSelected={searchDate === route.date}
+                                                        onToggle={() => selectDateFromRoute(route.date)}
+                                                    />
                                                 ))}
                                             </div>
                                         </div>
