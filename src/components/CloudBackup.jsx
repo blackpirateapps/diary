@@ -7,8 +7,32 @@ import { S3Client, PutObjectCommand, ListObjectsV2Command, GetObjectCommand } fr
 import { motion, AnimatePresence } from 'framer-motion';
 import { exportToZip, importFromZip } from '../db'; 
 
-// --- HELPER: R2 CLIENT ---
-// --- HELPER: R2 CLIENT ---
+// --- HELPERS: R2 CLIENT ---
+const normalizeCreds = (input) => ({
+  accountId: input.accountId.trim(),
+  accessKeyId: input.accessKeyId.trim(),
+  secretAccessKey: input.secretAccessKey.trim(),
+  bucketName: input.bucketName.trim()
+});
+
+const getMissingCreds = (input) => {
+  const missing = [];
+  if (!input.accountId) missing.push('Account ID');
+  if (!input.accessKeyId) missing.push('Access Key ID');
+  if (!input.secretAccessKey) missing.push('Secret Access Key');
+  if (!input.bucketName) missing.push('Bucket Name');
+  return missing;
+};
+
+const readBodyAsBytes = async (body) => {
+  if (!body) throw new Error('Empty response body.');
+  if (typeof body.transformToByteArray === 'function') {
+    return body.transformToByteArray();
+  }
+  const arrayBuffer = await new Response(body).arrayBuffer();
+  return new Uint8Array(arrayBuffer);
+};
+
 const createR2Client = (creds) => {
   return new S3Client({
     region: "auto",
@@ -43,14 +67,28 @@ const CloudBackup = () => {
 
   // --- HANDLERS ---
   const handleSaveCreds = () => {
-    localStorage.setItem('r2_credentials', JSON.stringify(creds));
+    const normalized = normalizeCreds(creds);
+    const missing = getMissingCreds(normalized);
+    if (missing.length > 0) {
+      setStatus('error');
+      setMessage(`Missing: ${missing.join(', ')}`);
+      return;
+    }
+    setCreds(normalized);
+    localStorage.setItem('r2_credentials', JSON.stringify(normalized));
     setStatus('success');
     setMessage('Credentials saved locally.');
     setTimeout(() => setStatus('idle'), 2000);
   };
 
   const handleBackup = async () => {
-    if (!creds.bucketName) return alert("Please save settings first.");
+    const normalized = normalizeCreds(creds);
+    const missing = getMissingCreds(normalized);
+    if (missing.length > 0) {
+      setStatus('error');
+      setMessage(`Missing: ${missing.join(', ')}`);
+      return;
+    }
     setStatus('loading');
     setMessage('Generating backup...');
 
@@ -65,10 +103,10 @@ const CloudBackup = () => {
       const body = new Uint8Array(arrayBuffer);
 
       setMessage('Uploading to Cloudflare R2...');
-      const client = createR2Client(creds);
+      const client = createR2Client(normalized);
       
       const command = new PutObjectCommand({
-        Bucket: creds.bucketName,
+        Bucket: normalized.bucketName,
         Key: fileName,
         Body: body,
         ContentType: 'application/zip',
@@ -92,14 +130,20 @@ const CloudBackup = () => {
   };
 
   const fetchBackups = async () => {
-    if (!creds.bucketName) return;
+    const normalized = normalizeCreds(creds);
+    const missing = getMissingCreds(normalized);
+    if (missing.length > 0) {
+      setStatus('error');
+      setMessage(`Missing: ${missing.join(', ')}`);
+      return;
+    }
     setView('list');
     setStatus('loading');
     setMessage('Fetching file list...');
     
     try {
-      const client = createR2Client(creds);
-      const command = new ListObjectsV2Command({ Bucket: creds.bucketName });
+      const client = createR2Client(normalized);
+      const command = new ListObjectsV2Command({ Bucket: normalized.bucketName });
       const response = await client.send(command);
       
       // Sort by date (newest first)
@@ -119,18 +163,26 @@ const CloudBackup = () => {
 
   const handleRestore = async (key) => {
     if (!window.confirm(`Overwrite current data with ${key}?`)) return;
+
+    const normalized = normalizeCreds(creds);
+    const missing = getMissingCreds(normalized);
+    if (missing.length > 0) {
+      setStatus('error');
+      setMessage(`Missing: ${missing.join(', ')}`);
+      return;
+    }
     
     setStatus('loading');
     setMessage('Downloading backup...');
 
     try {
-      const client = createR2Client(creds);
-      const command = new GetObjectCommand({ Bucket: creds.bucketName, Key: key });
+      const client = createR2Client(normalized);
+      const command = new GetObjectCommand({ Bucket: normalized.bucketName, Key: key });
       const response = await client.send(command);
       
       // Convert stream to Blob
-      const blob = await response.Body.transformToByteArray();
-      const file = new File([blob], key, { type: 'application/zip' });
+      const bytes = await readBodyAsBytes(response.Body);
+      const file = new File([bytes], key, { type: 'application/zip' });
 
       setMessage('Importing data...');
       await importFromZip(file);
