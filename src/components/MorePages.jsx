@@ -7,6 +7,7 @@ import {
   Users, Map as MapIcon // New Icon
 } from 'lucide-react';
 import CloudBackup from './CloudBackup';
+import TursoSync from './TursoSync';
 import GoogleBackup from './GoogleBackup';
 
 // --- SHARED HEADER COMPONENT ---
@@ -171,6 +172,7 @@ export const SettingsPage = ({ navigate, appName, setAppName, onExport, onImport
           <div className="space-y-4">
             <GoogleBackup />
             <CloudBackup />
+            <TursoSync />
           </div>
         </div>
 

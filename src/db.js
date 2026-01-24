@@ -70,6 +70,32 @@ db.version(7).stores({
   routes_data: 'id' 
 });
 
+// --- [NEW] Version 8: Sync Metadata + Tombstones ---
+db.version(8).stores({
+  entries: '++id, date, mood, *tags, *people, updated_at, sync_status',
+  sleep_sessions: 'id, startTime',
+  chat_analytics: 'id, name',
+  meditation_sessions: '++id, startTime, duration, updated_at, sync_status',
+  people: '++id, name, relationship, updated_at, sync_status',
+  routes_meta: 'id, date, year, month',
+  routes_data: 'id',
+  tombstones: '++id, store, key, deleted_at, sync_status'
+}).upgrade(async (tx) => {
+  const now = new Date().toISOString();
+  await tx.table('entries').toCollection().modify((entry) => {
+    if (!entry.updated_at) entry.updated_at = now;
+    if (!entry.sync_status) entry.sync_status = 'synced';
+  });
+  await tx.table('people').toCollection().modify((person) => {
+    if (!person.updated_at) person.updated_at = now;
+    if (!person.sync_status) person.sync_status = 'synced';
+  });
+  await tx.table('meditation_sessions').toCollection().modify((session) => {
+    if (!session.updated_at) session.updated_at = now;
+    if (!session.sync_status) session.sync_status = 'synced';
+  });
+});
+
 // --- [NEW] Strategy D: Persistence Request ---
 // Tries to prevent the browser from wiping data if disk space is low
 export const requestPersistence = async () => {
@@ -85,6 +111,50 @@ export const requestPersistence = async () => {
 };
 // Trigger once on load
 requestPersistence();
+
+// --- [NEW] Sync Hook Helpers ---
+let suppressSyncHooks = false;
+
+export const runWithSyncBypass = async (fn) => {
+  suppressSyncHooks = true;
+  try {
+    return await fn();
+  } finally {
+    suppressSyncHooks = false;
+  }
+};
+
+const setSyncDirty = (mods) => {
+  const now = new Date().toISOString();
+  return { ...mods, updated_at: now, sync_status: 'dirty' };
+};
+
+const registerSyncHooks = (tableName) => {
+  const table = db[tableName];
+  table.hook('creating', (primKey, obj, tx) => {
+    if (suppressSyncHooks) return;
+    obj.updated_at = new Date().toISOString();
+    obj.sync_status = 'dirty';
+  });
+  table.hook('updating', (mods) => {
+    if (suppressSyncHooks) return;
+    return setSyncDirty(mods);
+  });
+  table.hook('deleting', (primKey, obj, tx) => {
+    if (suppressSyncHooks) return;
+    const tombstones = tx.table('tombstones');
+    return tombstones.add({
+      store: tableName,
+      key: primKey,
+      deleted_at: new Date().toISOString(),
+      sync_status: 'dirty'
+    });
+  });
+};
+
+registerSyncHooks('entries');
+registerSyncHooks('people');
+registerSyncHooks('meditation_sessions');
 
 // --- [NEW] Strategy B: Polyline Encoding Utils ---
 // Google's Polyline Algorithm to compress GPS arrays by ~90%
