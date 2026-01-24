@@ -35,18 +35,9 @@ const safeJsonParse = (value, fallback) => {
   }
 };
 
-const serializeImages = async (images = []) => {
-  const payload = await Promise.all(images.map(async (img) => {
-    if (img instanceof Blob) {
-      const data = await blobToBase64(img);
-      return { kind: 'blob', type: img.type || 'application/octet-stream', data };
-    }
-    if (typeof img === 'string') {
-      return { kind: 'ref', value: img };
-    }
-    return null;
-  }));
-  return payload.filter(Boolean);
+const serializeImages = async () => {
+  // Image sync is disabled to avoid oversized payloads.
+  return [];
 };
 
 const deserializeImages = async (raw) => {
@@ -131,7 +122,7 @@ const TursoSync = () => {
     weather: entry.weather || null,
     content: entry.content || null,
     preview: entry.preview || null,
-    images: JSON.stringify(await serializeImages(entry.images || [])),
+    images: JSON.stringify(await serializeImages()),
     sessions: JSON.stringify(entry.sessions || []),
     updated_at: entry.updated_at
   });
@@ -143,8 +134,8 @@ const TursoSync = () => {
     description: person.description || null,
     dates: JSON.stringify(person.dates || []),
     gift_ideas: JSON.stringify(person.giftIdeas || []),
-    image: JSON.stringify(await serializeImages(person.image ? [person.image] : [])),
-    gallery: JSON.stringify(await serializeImages(person.gallery || [])),
+    image: JSON.stringify(await serializeImages()),
+    gallery: JSON.stringify(await serializeImages()),
     updated_at: person.updated_at
   });
 
@@ -155,27 +146,34 @@ const TursoSync = () => {
     updated_at: session.updated_at
   });
 
-  const deserializeEntry = async (row) => ({
-    id: row.id,
-    date: row.date || null,
-    mood: row.mood ?? null,
-    tags: safeJsonParse(row.tags || '[]', []),
-    people: safeJsonParse(row.people || '[]', []),
-    location: row.location || null,
-    locationLat: row.location_lat ?? null,
-    locationLng: row.location_lng ?? null,
-    locationHistory: safeJsonParse(row.location_history || '[]', []),
-    weather: row.weather || null,
-    content: row.content || null,
-    preview: row.preview || null,
-    images: await deserializeImages(row.images || '[]'),
-    sessions: safeJsonParse(row.sessions || '[]', []),
-    updated_at: row.updated_at,
-    sync_status: 'synced'
-  });
+  const deserializeEntry = async (row, existingImages) => {
+    const incomingImages = await deserializeImages(row.images || '[]');
+    const mergedImages = incomingImages.length > 0 ? incomingImages : (existingImages || []);
+    return {
+      id: row.id,
+      date: row.date || null,
+      mood: row.mood ?? null,
+      tags: safeJsonParse(row.tags || '[]', []),
+      people: safeJsonParse(row.people || '[]', []),
+      location: row.location || null,
+      locationLat: row.location_lat ?? null,
+      locationLng: row.location_lng ?? null,
+      locationHistory: safeJsonParse(row.location_history || '[]', []),
+      weather: row.weather || null,
+      content: row.content || null,
+      preview: row.preview || null,
+      images: mergedImages,
+      sessions: safeJsonParse(row.sessions || '[]', []),
+      updated_at: row.updated_at,
+      sync_status: 'synced'
+    };
+  };
 
-  const deserializePerson = async (row) => {
+  const deserializePerson = async (row, existingImage, existingGallery) => {
     const imageList = await deserializeImages(row.image || '[]');
+    const galleryList = await deserializeImages(row.gallery || '[]');
+    const mergedImage = imageList[0] || existingImage || null;
+    const mergedGallery = galleryList.length > 0 ? galleryList : (existingGallery || []);
     return {
       id: row.id,
       name: row.name || '',
@@ -183,8 +181,8 @@ const TursoSync = () => {
       description: row.description || '',
       dates: safeJsonParse(row.dates || '[]', []),
       giftIdeas: safeJsonParse(row.gift_ideas || '[]', []),
-      image: imageList[0] || null,
-      gallery: await deserializeImages(row.gallery || '[]'),
+      image: mergedImage,
+      gallery: mergedGallery,
       updated_at: row.updated_at,
       sync_status: 'synced'
     };
@@ -376,7 +374,8 @@ const TursoSync = () => {
           if (row.deleted_at) {
             await db.entries.delete(row.id);
           } else {
-            await db.entries.put(await deserializeEntry(row));
+            const existing = await db.entries.get(row.id);
+            await db.entries.put(await deserializeEntry(row, existing?.images));
           }
         }
 
@@ -385,7 +384,8 @@ const TursoSync = () => {
           if (row.deleted_at) {
             await db.people.delete(row.id);
           } else {
-            await db.people.put(await deserializePerson(row));
+            const existing = await db.people.get(row.id);
+            await db.people.put(await deserializePerson(row, existing?.image, existing?.gallery));
           }
         }
 
@@ -497,13 +497,15 @@ const TursoSync = () => {
             if (current.remote.deleted_at) {
               await db.entries.delete(current.id);
             } else {
-              await db.entries.put(await deserializeEntry(current.remote));
+              const existing = await db.entries.get(current.id);
+              await db.entries.put(await deserializeEntry(current.remote, existing?.images));
             }
           } else if (current.store === 'people') {
             if (current.remote.deleted_at) {
               await db.people.delete(current.id);
             } else {
-              await db.people.put(await deserializePerson(current.remote));
+              const existing = await db.people.get(current.id);
+              await db.people.put(await deserializePerson(current.remote, existing?.image, existing?.gallery));
             }
           } else if (current.store === 'meditation_sessions') {
             if (current.remote.deleted_at) {
