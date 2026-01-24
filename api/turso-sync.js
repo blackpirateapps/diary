@@ -1,5 +1,4 @@
 import { createClient } from '@libsql/client';
-import crypto from 'crypto';
 
 const getClient = () => {
   const url = process.env.TURSO_DATABASE_URL;
@@ -8,12 +7,6 @@ const getClient = () => {
     return null;
   }
   return createClient({ url, authToken });
-};
-
-const getCryptoKey = () => {
-  const secret = process.env.TURSO_SYNC_SECRET;
-  if (!secret) return null;
-  return crypto.createHash('sha256').update(secret).digest();
 };
 
 const requireSyncKey = (req, res) => {
@@ -95,83 +88,6 @@ const readJsonBody = (req) => {
   return req.body;
 };
 
-const encryptValue = (value, key) => {
-  if (value === null || value === undefined) return null;
-  const plain = String(value);
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-  const encrypted = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `enc:${iv.toString('base64')}:${tag.toString('base64')}:${encrypted.toString('base64')}`;
-};
-
-const decryptValue = (value, key) => {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== 'string') return value;
-  if (!value.startsWith('enc:')) return value;
-  const parts = value.split(':');
-  if (parts.length !== 4) {
-    throw new Error('Invalid encrypted payload.');
-  }
-  const iv = Buffer.from(parts[1], 'base64');
-  const tag = Buffer.from(parts[2], 'base64');
-  const data = Buffer.from(parts[3], 'base64');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-  decipher.setAuthTag(tag);
-  const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
-  return decrypted.toString('utf8');
-};
-
-const decryptNumber = (value, key) => {
-  const raw = decryptValue(value, key);
-  if (raw === null || raw === undefined || raw === '') return null;
-  const parsed = Number(raw);
-  return Number.isNaN(parsed) ? null : parsed;
-};
-
-const decodeEntryRow = (row, key) => {
-  if (!row) return row;
-  return {
-    ...row,
-    date: decryptValue(row.date, key),
-    mood: decryptNumber(row.mood, key),
-    tags: decryptValue(row.tags, key),
-    people: decryptValue(row.people, key),
-    location: decryptValue(row.location, key),
-    location_lat: decryptNumber(row.location_lat, key),
-    location_lng: decryptNumber(row.location_lng, key),
-    location_history: decryptValue(row.location_history, key),
-    weather: decryptValue(row.weather, key),
-    content: decryptValue(row.content, key),
-    preview: decryptValue(row.preview, key),
-    images: decryptValue(row.images, key),
-    sessions: decryptValue(row.sessions, key)
-  };
-};
-
-const decodePersonRow = (row, key) => {
-  if (!row) return row;
-  return {
-    ...row,
-    name: decryptValue(row.name, key),
-    relationship: decryptValue(row.relationship, key),
-    description: decryptValue(row.description, key),
-    dates: decryptValue(row.dates, key),
-    gift_ideas: decryptValue(row.gift_ideas, key),
-    image: decryptValue(row.image, key),
-    gallery: decryptValue(row.gallery, key)
-  };
-};
-
-const decodeMeditationRow = (row, key) => {
-  if (!row) return row;
-  return {
-    ...row,
-    start_time: decryptNumber(row.start_time, key),
-    duration: decryptNumber(row.duration, key)
-  };
-};
-
 const upsertEntry = async (client, row, force, conflicts) => {
   const existing = await client.execute({
     sql: 'SELECT * FROM entries WHERE id = ?',
@@ -182,29 +98,9 @@ const upsertEntry = async (client, row, force, conflicts) => {
   const currentTs = toTs(current?.updated_at);
 
   if (!force && current && currentTs > incomingTs) {
-    conflicts.entries.push({ id: row.id, remote: decodeEntryRow(current, conflicts.key) });
+    conflicts.entries.push({ id: row.id, remote: current });
     return;
   }
-
-  const key = conflicts.key;
-  const encrypted = {
-    id: row.id,
-    date: encryptValue(row.date, key),
-    mood: encryptValue(row.mood, key),
-    tags: encryptValue(row.tags, key),
-    people: encryptValue(row.people, key),
-    location: encryptValue(row.location, key),
-    location_lat: encryptValue(row.location_lat, key),
-    location_lng: encryptValue(row.location_lng, key),
-    location_history: encryptValue(row.location_history, key),
-    weather: encryptValue(row.weather, key),
-    content: encryptValue(row.content, key),
-    preview: encryptValue(row.preview, key),
-    images: encryptValue(row.images, key),
-    sessions: encryptValue(row.sessions, key),
-    updated_at: row.updated_at,
-    deleted_at: row.deleted_at || null
-  };
 
   await client.execute({
     sql: `
@@ -230,22 +126,22 @@ const upsertEntry = async (client, row, force, conflicts) => {
         deleted_at=excluded.deleted_at
     `,
     args: [
-      encrypted.id,
-      encrypted.date,
-      encrypted.mood,
-      encrypted.tags,
-      encrypted.people,
-      encrypted.location,
-      encrypted.location_lat,
-      encrypted.location_lng,
-      encrypted.location_history,
-      encrypted.weather,
-      encrypted.content,
-      encrypted.preview,
-      encrypted.images,
-      encrypted.sessions,
-      encrypted.updated_at,
-      encrypted.deleted_at
+      row.id,
+      row.date || null,
+      row.mood ?? null,
+      row.tags || null,
+      row.people || null,
+      row.location || null,
+      row.location_lat ?? null,
+      row.location_lng ?? null,
+      row.location_history || null,
+      row.weather || null,
+      row.content || null,
+      row.preview || null,
+      row.images || null,
+      row.sessions || null,
+      row.updated_at,
+      row.deleted_at || null
     ]
   });
 };
@@ -260,23 +156,9 @@ const upsertPerson = async (client, row, force, conflicts) => {
   const currentTs = toTs(current?.updated_at);
 
   if (!force && current && currentTs > incomingTs) {
-    conflicts.people.push({ id: row.id, remote: decodePersonRow(current, conflicts.key) });
+    conflicts.people.push({ id: row.id, remote: current });
     return;
   }
-
-  const key = conflicts.key;
-  const encrypted = {
-    id: row.id,
-    name: encryptValue(row.name, key),
-    relationship: encryptValue(row.relationship, key),
-    description: encryptValue(row.description, key),
-    dates: encryptValue(row.dates, key),
-    gift_ideas: encryptValue(row.gift_ideas, key),
-    image: encryptValue(row.image, key),
-    gallery: encryptValue(row.gallery, key),
-    updated_at: row.updated_at,
-    deleted_at: row.deleted_at || null
-  };
 
   await client.execute({
     sql: `
@@ -295,16 +177,16 @@ const upsertPerson = async (client, row, force, conflicts) => {
         deleted_at=excluded.deleted_at
     `,
     args: [
-      encrypted.id,
-      encrypted.name,
-      encrypted.relationship,
-      encrypted.description,
-      encrypted.dates,
-      encrypted.gift_ideas,
-      encrypted.image,
-      encrypted.gallery,
-      encrypted.updated_at,
-      encrypted.deleted_at
+      row.id,
+      row.name || null,
+      row.relationship || null,
+      row.description || null,
+      row.dates || null,
+      row.gift_ideas || null,
+      row.image || null,
+      row.gallery || null,
+      row.updated_at,
+      row.deleted_at || null
     ]
   });
 };
@@ -319,18 +201,9 @@ const upsertMeditation = async (client, row, force, conflicts) => {
   const currentTs = toTs(current?.updated_at);
 
   if (!force && current && currentTs > incomingTs) {
-    conflicts.meditation_sessions.push({ id: row.id, remote: decodeMeditationRow(current, conflicts.key) });
+    conflicts.meditation_sessions.push({ id: row.id, remote: current });
     return;
   }
-
-  const key = conflicts.key;
-  const encrypted = {
-    id: row.id,
-    start_time: encryptValue(row.start_time, key),
-    duration: encryptValue(row.duration, key),
-    updated_at: row.updated_at,
-    deleted_at: row.deleted_at || null
-  };
 
   await client.execute({
     sql: `
@@ -344,11 +217,11 @@ const upsertMeditation = async (client, row, force, conflicts) => {
         deleted_at=excluded.deleted_at
     `,
     args: [
-      encrypted.id,
-      encrypted.start_time,
-      encrypted.duration,
-      encrypted.updated_at,
-      encrypted.deleted_at
+      row.id,
+      row.start_time ?? null,
+      row.duration ?? null,
+      row.updated_at,
+      row.deleted_at || null
     ]
   });
 };
@@ -362,7 +235,7 @@ const applyDelete = async (client, store, key, deletedAt, conflicts, force) => {
     });
     const current = existing.rows[0];
     if (!force && current && toTs(current.updated_at) > toTs(deletedAt)) {
-      conflicts.entries.push({ id: key, remote: decodeEntryRow(current, conflicts.key) });
+      conflicts.entries.push({ id: key, remote: current });
       return;
     }
     await client.execute({
@@ -379,7 +252,7 @@ const applyDelete = async (client, store, key, deletedAt, conflicts, force) => {
     });
     const current = existing.rows[0];
     if (!force && current && toTs(current.updated_at) > toTs(deletedAt)) {
-      conflicts.people.push({ id: key, remote: decodePersonRow(current, conflicts.key) });
+      conflicts.people.push({ id: key, remote: current });
       return;
     }
     await client.execute({
@@ -396,7 +269,7 @@ const applyDelete = async (client, store, key, deletedAt, conflicts, force) => {
     });
     const current = existing.rows[0];
     if (!force && current && toTs(current.updated_at) > toTs(deletedAt)) {
-      conflicts.meditation_sessions.push({ id: key, remote: decodeMeditationRow(current, conflicts.key) });
+      conflicts.meditation_sessions.push({ id: key, remote: current });
       return;
     }
     await client.execute({
@@ -410,12 +283,6 @@ export default async function handler(req, res) {
   const client = getClient();
   if (!client) {
     res.status(503).json({ error: 'Turso is not configured.' });
-    return;
-  }
-
-  const cryptoKey = getCryptoKey();
-  if (!cryptoKey) {
-    res.status(503).json({ error: 'Turso encryption secret is not configured.' });
     return;
   }
 
@@ -450,46 +317,45 @@ export default async function handler(req, res) {
       people: [],
       meditation_sessions: []
     };
-    const conflictsWithKey = { ...conflicts, key: cryptoKey };
 
     const entryUpdates = updates.entries || [];
     for (const row of entryUpdates) {
-      await upsertEntry(client, row, false, conflictsWithKey);
+      await upsertEntry(client, row, false, conflicts);
     }
 
     const peopleUpdates = updates.people || [];
     for (const row of peopleUpdates) {
-      await upsertPerson(client, row, false, conflictsWithKey);
+      await upsertPerson(client, row, false, conflicts);
     }
 
     const medUpdates = updates.meditation_sessions || [];
     for (const row of medUpdates) {
-      await upsertMeditation(client, row, false, conflictsWithKey);
+      await upsertMeditation(client, row, false, conflicts);
     }
 
     const deletes = updates.deletes || [];
     for (const tombstone of deletes) {
-      await applyDelete(client, tombstone.store, tombstone.key, tombstone.deleted_at, conflictsWithKey, false);
+      await applyDelete(client, tombstone.store, tombstone.key, tombstone.deleted_at, conflicts, false);
     }
 
     const forcedEntries = force.entries || [];
     for (const row of forcedEntries) {
-      await upsertEntry(client, row, true, conflictsWithKey);
+      await upsertEntry(client, row, true, conflicts);
     }
 
     const forcedPeople = force.people || [];
     for (const row of forcedPeople) {
-      await upsertPerson(client, row, true, conflictsWithKey);
+      await upsertPerson(client, row, true, conflicts);
     }
 
     const forcedMeditations = force.meditation_sessions || [];
     for (const row of forcedMeditations) {
-      await upsertMeditation(client, row, true, conflictsWithKey);
+      await upsertMeditation(client, row, true, conflicts);
     }
 
     const forcedDeletes = force.deletes || [];
     for (const tombstone of forcedDeletes) {
-      await applyDelete(client, tombstone.store, tombstone.key, tombstone.deleted_at, conflictsWithKey, true);
+      await applyDelete(client, tombstone.store, tombstone.key, tombstone.deleted_at, conflicts, true);
     }
 
     const updatedAfter = lastSync || '1970-01-01T00:00:00.000Z';
@@ -506,16 +372,12 @@ export default async function handler(req, res) {
       args: [updatedAfter]
     });
 
-    const decodedEntries = entriesRes.rows.map((row) => decodeEntryRow(row, cryptoKey));
-    const decodedPeople = peopleRes.rows.map((row) => decodePersonRow(row, cryptoKey));
-    const decodedMeditations = medRes.rows.map((row) => decodeMeditationRow(row, cryptoKey));
-
     res.status(200).json({
       serverTime: new Date().toISOString(),
       updates: {
-        entries: decodedEntries,
-        people: decodedPeople,
-        meditation_sessions: decodedMeditations
+        entries: entriesRes.rows,
+        people: peopleRes.rows,
+        meditation_sessions: medRes.rows
       },
       conflicts
     });

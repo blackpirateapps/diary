@@ -1,22 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Cloud, Loader2, RefreshCw, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { diffLines } from 'diff';
 import { db, runWithSyncBypass } from '../db';
-
-const blobToBase64 = (blob) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => {
-    const result = reader.result;
-    if (typeof result === 'string') {
-      resolve(result.split(',')[1] || '');
-    } else {
-      reject(new Error('Failed to encode blob.'));
-    }
-  };
-  reader.onerror = () => reject(reader.error || new Error('Failed to encode blob.'));
-  reader.readAsDataURL(blob);
-});
 
 const base64ToBlob = (data, type) => {
   const binary = atob(data || '');
@@ -33,6 +19,85 @@ const safeJsonParse = (value, fallback) => {
   } catch {
     return fallback;
   }
+};
+
+const encodeBase64 = (bytes) => {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
+  }
+  return btoa(binary);
+};
+
+const decodeBase64 = (value) => {
+  const binary = atob(value || '');
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+};
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+const deriveKey = async (passphrase, salt) => {
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    textEncoder.encode(passphrase),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt,
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+};
+
+const encryptValue = async (value, passphrase) => {
+  if (value === null || value === undefined) return null;
+  if (!passphrase) throw new Error('Passphrase required.');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(passphrase, salt);
+  const encoded = textEncoder.encode(String(value));
+  const cipherBuffer = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+  const cipherBytes = new Uint8Array(cipherBuffer);
+  return `enc:v1:${encodeBase64(salt)}:${encodeBase64(iv)}:${encodeBase64(cipherBytes)}`;
+};
+
+const decryptValue = async (value, passphrase) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') return value;
+  if (!value.startsWith('enc:v1:')) return value;
+  if (!passphrase) throw new Error('Passphrase required.');
+  const parts = value.split(':');
+  if (parts.length !== 5) {
+    throw new Error('Invalid encrypted payload.');
+  }
+  const salt = decodeBase64(parts[2]);
+  const iv = decodeBase64(parts[3]);
+  const data = decodeBase64(parts[4]);
+  const key = await deriveKey(passphrase, salt);
+  const plainBuffer = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+  return textDecoder.decode(plainBuffer);
+};
+
+const decryptNumber = async (value, passphrase) => {
+  const raw = await decryptValue(value, passphrase);
+  if (raw === null || raw === undefined || raw === '') return null;
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) ? null : parsed;
 };
 
 const serializeImages = async () => {
@@ -67,12 +132,16 @@ const summarizeImages = (images = []) => images.map((img) => {
 const TursoSync = () => {
   const [syncKey, setSyncKey] = useState('');
   const [apiBase, setApiBase] = useState('');
+  const [passphrase, setPassphrase] = useState('');
+  const [showPassphrase, setShowPassphrase] = useState(false);
+  const [autoSync, setAutoSync] = useState(false);
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [lastSync, setLastSync] = useState(localStorage.getItem('turso_last_sync'));
   const [conflicts, setConflicts] = useState([]);
   const [conflictIndex, setConflictIndex] = useState(0);
   const BATCH_SIZE = 5;
+  const syncingRef = useRef(false);
 
   const apiUrl = useMemo(() => {
     if (!apiBase) return '/api/turso-sync';
@@ -93,8 +162,12 @@ const TursoSync = () => {
   useEffect(() => {
     const savedKey = localStorage.getItem('turso_sync_key');
     const savedBase = localStorage.getItem('turso_api_base');
+    const savedPassphrase = localStorage.getItem('turso_passphrase');
+    const savedAutoSync = localStorage.getItem('turso_auto_sync') === 'true';
     if (savedKey) setSyncKey(savedKey);
     if (savedBase) setApiBase(savedBase);
+    if (savedPassphrase) setPassphrase(savedPassphrase);
+    if (savedAutoSync) setAutoSync(true);
   }, []);
 
   useEffect(() => {
@@ -104,6 +177,8 @@ const TursoSync = () => {
   const handleSave = () => {
     localStorage.setItem('turso_sync_key', syncKey);
     localStorage.setItem('turso_api_base', apiBase);
+    localStorage.setItem('turso_passphrase', passphrase);
+    localStorage.setItem('turso_auto_sync', autoSync ? 'true' : 'false');
     setStatus('success');
     setMessage('Settings saved locally.');
     setTimeout(() => setStatus('idle'), 2000);
@@ -112,76 +187,79 @@ const TursoSync = () => {
 
   const serializeEntry = async (entry) => ({
     id: entry.id,
-    date: entry.date || null,
-    mood: entry.mood ?? null,
-    tags: JSON.stringify(entry.tags || []),
-    people: JSON.stringify(entry.people || []),
-    location: entry.location || null,
-    location_lat: entry.locationLat ?? null,
-    location_lng: entry.locationLng ?? null,
-    location_history: JSON.stringify(entry.locationHistory || []),
-    weather: entry.weather || null,
-    content: entry.content || null,
-    preview: entry.preview || null,
-    images: JSON.stringify(await serializeImages()),
-    sessions: JSON.stringify(entry.sessions || []),
+    date: await encryptValue(entry.date || null, passphrase),
+    mood: await encryptValue(entry.mood ?? null, passphrase),
+    tags: await encryptValue(JSON.stringify(entry.tags || []), passphrase),
+    people: await encryptValue(JSON.stringify(entry.people || []), passphrase),
+    location: await encryptValue(entry.location || null, passphrase),
+    location_lat: await encryptValue(entry.locationLat ?? null, passphrase),
+    location_lng: await encryptValue(entry.locationLng ?? null, passphrase),
+    location_history: await encryptValue(JSON.stringify(entry.locationHistory || []), passphrase),
+    weather: await encryptValue(entry.weather || null, passphrase),
+    content: await encryptValue(entry.content || null, passphrase),
+    preview: await encryptValue(entry.preview || null, passphrase),
+    images: await encryptValue(JSON.stringify(await serializeImages()), passphrase),
+    sessions: await encryptValue(JSON.stringify(entry.sessions || []), passphrase),
     updated_at: entry.updated_at
   });
 
   const serializePerson = async (person) => ({
     id: person.id,
-    name: person.name || null,
-    relationship: person.relationship || null,
-    description: person.description || null,
-    dates: JSON.stringify(person.dates || []),
-    gift_ideas: JSON.stringify(person.giftIdeas || []),
-    image: JSON.stringify(await serializeImages()),
-    gallery: JSON.stringify(await serializeImages()),
+    name: await encryptValue(person.name || null, passphrase),
+    relationship: await encryptValue(person.relationship || null, passphrase),
+    description: await encryptValue(person.description || null, passphrase),
+    dates: await encryptValue(JSON.stringify(person.dates || []), passphrase),
+    gift_ideas: await encryptValue(JSON.stringify(person.giftIdeas || []), passphrase),
+    image: await encryptValue(JSON.stringify(await serializeImages()), passphrase),
+    gallery: await encryptValue(JSON.stringify(await serializeImages()), passphrase),
     updated_at: person.updated_at
   });
 
   const serializeMeditation = async (session) => ({
     id: session.id,
-    start_time: session.startTime ?? null,
-    duration: session.duration ?? null,
+    start_time: await encryptValue(session.startTime ?? null, passphrase),
+    duration: await encryptValue(session.duration ?? null, passphrase),
     updated_at: session.updated_at
   });
 
   const deserializeEntry = async (row, existingImages) => {
-    const incomingImages = await deserializeImages(row.images || '[]');
+    const rawImages = await decryptValue(row.images || '[]', passphrase);
+    const incomingImages = await deserializeImages(rawImages || '[]');
     const mergedImages = incomingImages.length > 0 ? incomingImages : (existingImages || []);
     return {
       id: row.id,
-      date: row.date || null,
-      mood: row.mood ?? null,
-      tags: safeJsonParse(row.tags || '[]', []),
-      people: safeJsonParse(row.people || '[]', []),
-      location: row.location || null,
-      locationLat: row.location_lat ?? null,
-      locationLng: row.location_lng ?? null,
-      locationHistory: safeJsonParse(row.location_history || '[]', []),
-      weather: row.weather || null,
-      content: row.content || null,
-      preview: row.preview || null,
+      date: await decryptValue(row.date || null, passphrase),
+      mood: await decryptNumber(row.mood ?? null, passphrase),
+      tags: safeJsonParse(await decryptValue(row.tags || '[]', passphrase) || '[]', []),
+      people: safeJsonParse(await decryptValue(row.people || '[]', passphrase) || '[]', []),
+      location: await decryptValue(row.location || null, passphrase),
+      locationLat: await decryptNumber(row.location_lat ?? null, passphrase),
+      locationLng: await decryptNumber(row.location_lng ?? null, passphrase),
+      locationHistory: safeJsonParse(await decryptValue(row.location_history || '[]', passphrase) || '[]', []),
+      weather: await decryptValue(row.weather || null, passphrase),
+      content: await decryptValue(row.content || null, passphrase),
+      preview: await decryptValue(row.preview || null, passphrase),
       images: mergedImages,
-      sessions: safeJsonParse(row.sessions || '[]', []),
+      sessions: safeJsonParse(await decryptValue(row.sessions || '[]', passphrase) || '[]', []),
       updated_at: row.updated_at,
       sync_status: 'synced'
     };
   };
 
   const deserializePerson = async (row, existingImage, existingGallery) => {
-    const imageList = await deserializeImages(row.image || '[]');
-    const galleryList = await deserializeImages(row.gallery || '[]');
+    const rawImage = await decryptValue(row.image || '[]', passphrase);
+    const rawGallery = await decryptValue(row.gallery || '[]', passphrase);
+    const imageList = await deserializeImages(rawImage || '[]');
+    const galleryList = await deserializeImages(rawGallery || '[]');
     const mergedImage = imageList[0] || existingImage || null;
     const mergedGallery = galleryList.length > 0 ? galleryList : (existingGallery || []);
     return {
       id: row.id,
-      name: row.name || '',
-      relationship: row.relationship || 'Friend',
-      description: row.description || '',
-      dates: safeJsonParse(row.dates || '[]', []),
-      giftIdeas: safeJsonParse(row.gift_ideas || '[]', []),
+      name: await decryptValue(row.name || '', passphrase),
+      relationship: await decryptValue(row.relationship || 'Friend', passphrase),
+      description: await decryptValue(row.description || '', passphrase),
+      dates: safeJsonParse(await decryptValue(row.dates || '[]', passphrase) || '[]', []),
+      giftIdeas: safeJsonParse(await decryptValue(row.gift_ideas || '[]', passphrase) || '[]', []),
       image: mergedImage,
       gallery: mergedGallery,
       updated_at: row.updated_at,
@@ -191,8 +269,8 @@ const TursoSync = () => {
 
   const deserializeMeditation = async (row) => ({
     id: row.id,
-    startTime: row.start_time ?? null,
-    duration: row.duration ?? null,
+    startTime: await decryptNumber(row.start_time ?? null, passphrase),
+    duration: await decryptNumber(row.duration ?? null, passphrase),
     updated_at: row.updated_at,
     sync_status: 'synced'
   });
@@ -237,16 +315,16 @@ const TursoSync = () => {
     id: row.id,
     date: row.date,
     mood: row.mood,
-    tags: safeJsonParse(row.tags || '[]', []),
-    people: safeJsonParse(row.people || '[]', []),
+    tags: row.tags || [],
+    people: row.people || [],
     location: row.location,
-    locationLat: row.location_lat,
-    locationLng: row.location_lng,
-    locationHistory: safeJsonParse(row.location_history || '[]', []),
+    locationLat: row.locationLat,
+    locationLng: row.locationLng,
+    locationHistory: row.locationHistory || [],
     weather: row.weather,
     preview: row.preview,
-    images: summarizeImages(safeJsonParse(row.images || '[]', [])),
-    sessions: safeJsonParse(row.sessions || '[]', []),
+    images: summarizeImages(row.images || []),
+    sessions: row.sessions || [],
     updated_at: row.updated_at,
     deleted_at: row.deleted_at || null
   });
@@ -256,17 +334,17 @@ const TursoSync = () => {
     name: row.name,
     relationship: row.relationship,
     description: row.description,
-    dates: safeJsonParse(row.dates || '[]', []),
-    giftIdeas: safeJsonParse(row.gift_ideas || '[]', []),
-    image: summarizeImages(safeJsonParse(row.image || '[]', []))[0] || null,
-    gallery: summarizeImages(safeJsonParse(row.gallery || '[]', [])),
+    dates: row.dates || [],
+    giftIdeas: row.giftIdeas || [],
+    image: summarizeImages(row.image ? [row.image] : [])[0] || null,
+    gallery: summarizeImages(row.gallery || []),
     updated_at: row.updated_at,
     deleted_at: row.deleted_at || null
   });
 
   const summarizeRemoteMeditation = (row) => ({
     id: row.id,
-    startTime: row.start_time,
+    startTime: row.startTime,
     duration: row.duration,
     updated_at: row.updated_at,
     deleted_at: row.deleted_at || null
@@ -278,27 +356,71 @@ const TursoSync = () => {
     return diffLines(leftText, rightText);
   };
 
-  const buildConflicts = (serverConflicts, locals, deletes) => {
+  const buildConflicts = async (serverConflicts, locals, deletes) => {
     const output = [];
     const deleteKey = (store, key) => `${store}:${key}`;
     const deleteMap = new Map(deletes.map((d) => [deleteKey(d.store, d.key), d]));
 
-    const addConflicts = (store, list) => {
+    const addConflicts = async (store, list) => {
       for (const item of list) {
         const local = locals[store].get(item.id) || null;
         const tombstone = deleteMap.get(deleteKey(store, item.id));
+        let remote = item.remote;
+        if (!tombstone) {
+          if (store === 'entries') {
+            remote = {
+              id: item.remote.id,
+              date: await decryptValue(item.remote.date || null, passphrase),
+              mood: await decryptNumber(item.remote.mood ?? null, passphrase),
+              tags: safeJsonParse(await decryptValue(item.remote.tags || '[]', passphrase) || '[]', []),
+              people: safeJsonParse(await decryptValue(item.remote.people || '[]', passphrase) || '[]', []),
+              location: await decryptValue(item.remote.location || null, passphrase),
+              locationLat: await decryptNumber(item.remote.location_lat ?? null, passphrase),
+              locationLng: await decryptNumber(item.remote.location_lng ?? null, passphrase),
+              locationHistory: safeJsonParse(await decryptValue(item.remote.location_history || '[]', passphrase) || '[]', []),
+              weather: await decryptValue(item.remote.weather || null, passphrase),
+              content: await decryptValue(item.remote.content || null, passphrase),
+              preview: await decryptValue(item.remote.preview || null, passphrase),
+              images: safeJsonParse(await decryptValue(item.remote.images || '[]', passphrase) || '[]', []),
+              sessions: safeJsonParse(await decryptValue(item.remote.sessions || '[]', passphrase) || '[]', []),
+              updated_at: item.remote.updated_at,
+              deleted_at: item.remote.deleted_at || null
+            };
+          } else if (store === 'people') {
+            remote = {
+              id: item.remote.id,
+              name: await decryptValue(item.remote.name || '', passphrase),
+              relationship: await decryptValue(item.remote.relationship || '', passphrase),
+              description: await decryptValue(item.remote.description || '', passphrase),
+              dates: safeJsonParse(await decryptValue(item.remote.dates || '[]', passphrase) || '[]', []),
+              giftIdeas: safeJsonParse(await decryptValue(item.remote.gift_ideas || '[]', passphrase) || '[]', []),
+              image: (safeJsonParse(await decryptValue(item.remote.image || '[]', passphrase) || '[]', []) || [])[0] || null,
+              gallery: safeJsonParse(await decryptValue(item.remote.gallery || '[]', passphrase) || '[]', []),
+              updated_at: item.remote.updated_at,
+              deleted_at: item.remote.deleted_at || null
+            };
+          } else if (store === 'meditation_sessions') {
+            remote = {
+              id: item.remote.id,
+              startTime: await decryptNumber(item.remote.start_time ?? null, passphrase),
+              duration: await decryptNumber(item.remote.duration ?? null, passphrase),
+              updated_at: item.remote.updated_at,
+              deleted_at: item.remote.deleted_at || null
+            };
+          }
+        }
         output.push({
           store,
           id: item.id,
           local: tombstone ? { deleted_at: tombstone.deleted_at, _deleted: true } : local,
-          remote: item.remote
+          remote
         });
       }
     };
 
-    addConflicts('entries', serverConflicts.entries || []);
-    addConflicts('people', serverConflicts.people || []);
-    addConflicts('meditation_sessions', serverConflicts.meditation_sessions || []);
+    await addConflicts('entries', serverConflicts.entries || []);
+    await addConflicts('people', serverConflicts.people || []);
+    await addConflicts('meditation_sessions', serverConflicts.meditation_sessions || []);
     return output;
   };
 
@@ -310,11 +432,23 @@ const TursoSync = () => {
     return chunks;
   };
 
-  const handleSync = async () => {
+  const handleSync = useCallback(async () => {
+    if (syncingRef.current) return;
     setStatus('loading');
     setMessage('Collecting changes...');
 
     try {
+      if (!passphrase) {
+        setStatus('error');
+        setMessage('Passphrase required.');
+        return;
+      }
+      if (!crypto?.subtle) {
+        setStatus('error');
+        setMessage('Web Crypto is not supported in this browser.');
+        return;
+      }
+      syncingRef.current = true;
       await initSchema();
       const [dirtyEntries, dirtyPeople, dirtyMeditations, dirtyDeletes] = await Promise.all([
         db.entries.where('sync_status').equals('dirty').toArray(),
@@ -392,7 +526,7 @@ const TursoSync = () => {
       localStorage.setItem('turso_last_sync', newLastSync);
       setLastSync(newLastSync);
 
-      const conflictList = buildConflicts(aggregatedConflicts, localMaps, dirtyDeletes);
+      const conflictList = await buildConflicts(aggregatedConflicts, localMaps, dirtyDeletes);
       setConflicts(conflictList);
       setConflictIndex(0);
 
@@ -460,8 +594,19 @@ const TursoSync = () => {
       console.error(error);
       setStatus('error');
       setMessage(error.message || 'Sync failed.');
+    } finally {
+      syncingRef.current = false;
     }
-  };
+  }, [apiUrl, authHeaders, buildConflicts, initSchema, lastSync, passphrase]);
+
+  useEffect(() => {
+    if (!autoSync) return;
+    const interval = setInterval(() => {
+      if (!passphrase || conflicts.length > 0) return;
+      handleSync();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [autoSync, conflicts.length, handleSync, passphrase]);
 
   const resolveConflict = async (action) => {
     const current = conflicts[conflictIndex];
@@ -622,6 +767,23 @@ const TursoSync = () => {
           />
         </div>
 
+        <div className="relative">
+          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 block">Passphrase</label>
+          <input
+            type={showPassphrase ? 'text' : 'password'}
+            value={passphrase}
+            onChange={(e) => setPassphrase(e.target.value)}
+            placeholder="Required for encryption"
+            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[var(--accent-500)] dark:text-white pr-10"
+          />
+          <button
+            onClick={() => setShowPassphrase(!showPassphrase)}
+            className="absolute right-3 top-7 text-gray-400 hover:text-gray-600"
+          >
+            {showPassphrase ? 'Hide' : 'Show'}
+          </button>
+        </div>
+
         <div className="flex gap-3 pt-1">
           <button
             onClick={handleSave}
@@ -638,6 +800,18 @@ const TursoSync = () => {
             Sync Now
           </button>
         </div>
+
+        <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <input
+            type="checkbox"
+            checked={autoSync}
+            onChange={(e) => {
+              setAutoSync(e.target.checked);
+              localStorage.setItem('turso_auto_sync', e.target.checked ? 'true' : 'false');
+            }}
+          />
+          Auto sync every 5 seconds
+        </label>
 
         <div className="text-xs text-gray-500 dark:text-gray-400">
           Last sync: {lastSync ? new Date(lastSync).toLocaleString() : 'Never'}
