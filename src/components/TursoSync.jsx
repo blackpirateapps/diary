@@ -142,6 +142,7 @@ const TursoSync = () => {
   const [conflictIndex, setConflictIndex] = useState(0);
   const BATCH_SIZE = 5;
   const syncingRef = useRef(false);
+  const [syncStats, setSyncStats] = useState(null);
 
   const apiUrl = useMemo(() => {
     if (!apiBase) return '/api/turso-sync';
@@ -436,6 +437,7 @@ const TursoSync = () => {
     if (syncingRef.current) return;
     setStatus('loading');
     setMessage('Collecting changes...');
+    setSyncStats(null);
 
     try {
       if (!passphrase) {
@@ -463,10 +465,9 @@ const TursoSync = () => {
         meditation_sessions: new Map(dirtyMeditations.map((session) => [session.id, session]))
       };
 
-      const entriesPayload = await Promise.all(dirtyEntries.map(serializeEntry));
       const peoplePayload = await Promise.all(dirtyPeople.map(serializePerson));
       const meditationPayload = await Promise.all(dirtyMeditations.map(serializeMeditation));
-      const entryChunks = chunkArray(entriesPayload, BATCH_SIZE);
+      const entryChunks = chunkArray(dirtyEntries, BATCH_SIZE);
       const requestCount = Math.max(entryChunks.length, 1);
       let currentLastSync = lastSync;
       const aggregatedConflicts = {
@@ -479,9 +480,33 @@ const TursoSync = () => {
         people: [],
         meditation_sessions: []
       };
+      const stats = {
+        totalEntries: dirtyEntries.length,
+        totalPeople: dirtyPeople.length,
+        totalMeditations: dirtyMeditations.length,
+        totalDeletes: dirtyDeletes.length,
+        batches: requestCount,
+        completedBatches: 0,
+        pushedEntries: 0,
+        pushedPeople: 0,
+        pushedMeditations: 0,
+        pushedDeletes: 0,
+        pulledEntries: 0,
+        pulledPeople: 0,
+        pulledMeditations: 0,
+        conflicts: 0
+      };
 
       for (let i = 0; i < requestCount; i += 1) {
         setMessage(`Syncing with Turso... (${i + 1}/${requestCount})`);
+        setSyncStats({ ...stats, completedBatches: i });
+        const entryPayload = await Promise.all((entryChunks[i] || []).map(serializeEntry));
+        stats.pushedEntries += entryPayload.length;
+        if (i === 0) {
+          stats.pushedPeople = peoplePayload.length;
+          stats.pushedMeditations = meditationPayload.length;
+          stats.pushedDeletes = dirtyDeletes.length;
+        }
         const res = await fetch(apiUrl, {
           method: 'POST',
           headers: {
@@ -491,7 +516,7 @@ const TursoSync = () => {
           body: JSON.stringify({
             lastSync: currentLastSync,
             updates: {
-              entries: entryChunks[i] || [],
+              entries: entryPayload,
               people: i === 0 ? peoplePayload : [],
               meditation_sessions: i === 0 ? meditationPayload : [],
               deletes: i === 0
@@ -520,6 +545,8 @@ const TursoSync = () => {
         aggregatedUpdates.meditation_sessions.push(...(data.updates?.meditation_sessions || []));
 
         currentLastSync = data.serverTime || currentLastSync || new Date().toISOString();
+        stats.completedBatches = i + 1;
+        setSyncStats({ ...stats });
       }
 
       const newLastSync = currentLastSync || new Date().toISOString();
@@ -529,6 +556,7 @@ const TursoSync = () => {
       const conflictList = await buildConflicts(aggregatedConflicts, localMaps, dirtyDeletes);
       setConflicts(conflictList);
       setConflictIndex(0);
+      stats.conflicts = conflictList.length;
 
       const conflictIds = {
         entries: new Set(aggregatedConflicts.entries.map((c) => c.id)),
@@ -568,6 +596,10 @@ const TursoSync = () => {
           }
         }
       });
+      stats.pulledEntries = aggregatedUpdates.entries.length;
+      stats.pulledPeople = aggregatedUpdates.people.length;
+      stats.pulledMeditations = aggregatedUpdates.meditation_sessions.length;
+      setSyncStats({ ...stats });
 
       const markSynced = async (store, ids) => {
         if (ids.length === 0) return;
@@ -816,6 +848,15 @@ const TursoSync = () => {
         <div className="text-xs text-gray-500 dark:text-gray-400">
           Last sync: {lastSync ? new Date(lastSync).toLocaleString() : 'Never'}
         </div>
+
+        {syncStats && (
+          <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+            <div>Batch: {syncStats.completedBatches}/{syncStats.batches}</div>
+            <div>Pushed: entries {syncStats.pushedEntries}, people {syncStats.pushedPeople}, meditation {syncStats.pushedMeditations}, deletes {syncStats.pushedDeletes}</div>
+            <div>Pulled: entries {syncStats.pulledEntries}, people {syncStats.pulledPeople}, meditation {syncStats.pulledMeditations}</div>
+            <div>Conflicts: {syncStats.conflicts}</div>
+          </div>
+        )}
 
         <AnimatePresence>
           {message && (
