@@ -433,6 +433,36 @@ const TursoSync = () => {
     return chunks;
   };
 
+  const probePassphrase = useCallback(async () => {
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
+      body: JSON.stringify({ probe: true })
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || 'Probe failed.');
+    }
+
+    const data = await res.json();
+    const probe = data.probe || {};
+    if (probe.entry) {
+      await decryptValue(probe.entry.content || probe.entry.preview || probe.entry.date || '', passphrase);
+      return;
+    }
+    if (probe.person) {
+      await decryptValue(probe.person.name || '', passphrase);
+      return;
+    }
+    if (probe.meditation) {
+      await decryptValue(probe.meditation.start_time || '', passphrase);
+    }
+  }, [apiUrl, authHeaders, passphrase]);
+
   const handleSync = useCallback(async () => {
     if (syncingRef.current) return;
     setStatus('loading');
@@ -450,6 +480,7 @@ const TursoSync = () => {
         setMessage('Web Crypto is not supported in this browser.');
         return;
       }
+      await probePassphrase();
       syncingRef.current = true;
       await initSchema();
       const [dirtyEntries, dirtyPeople, dirtyMeditations, dirtyDeletes] = await Promise.all([
@@ -629,7 +660,7 @@ const TursoSync = () => {
     } finally {
       syncingRef.current = false;
     }
-  }, [apiUrl, authHeaders, buildConflicts, initSchema, lastSync, passphrase]);
+  }, [apiUrl, authHeaders, buildConflicts, initSchema, lastSync, passphrase, probePassphrase]);
 
   useEffect(() => {
     if (!autoSync) return;

@@ -308,6 +308,28 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (body.probe) {
+      const entryRes = await client.execute(
+        'SELECT * FROM entries WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1'
+      );
+      const peopleRes = entryRes.rows.length === 0
+        ? await client.execute('SELECT * FROM people WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1')
+        : { rows: [] };
+      const medRes = entryRes.rows.length === 0 && peopleRes.rows.length === 0
+        ? await client.execute('SELECT * FROM meditation_sessions WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1')
+        : { rows: [] };
+
+      res.status(200).json({
+        serverTime: new Date().toISOString(),
+        probe: {
+          entry: entryRes.rows[0] || null,
+          person: peopleRes.rows[0] || null,
+          meditation: medRes.rows[0] || null
+        }
+      });
+      return;
+    }
+
     const lastSync = body.lastSync || null;
     const updates = body.updates || {};
     const force = body.force || {};
