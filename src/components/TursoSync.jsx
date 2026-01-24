@@ -31,6 +31,20 @@ const encodeBase64 = (bytes) => {
   return btoa(binary);
 };
 
+const toBase64Url = (value) => value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+
+const formatErrorDetails = (error) => {
+  if (!error) return 'Unknown error';
+  if (typeof error === 'string') return error;
+  const details = {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+    cause: error.cause
+  };
+  return JSON.stringify(details, Object.keys(details).filter((key) => details[key]));
+};
+
 const decodeBase64 = (value) => {
   const binary = atob(value || '');
   const bytes = new Uint8Array(binary.length);
@@ -478,7 +492,7 @@ const summarizePerson = (person) => ({
   const hashBlob = async (blob) => {
     const buffer = await blob.arrayBuffer();
     const digest = await crypto.subtle.digest('SHA-256', buffer);
-    return encodeBase64(new Uint8Array(digest));
+    return toBase64Url(encodeBase64(new Uint8Array(digest)));
   };
 
   const ensureImageQueue = async () => {
@@ -559,12 +573,28 @@ const summarizePerson = (person) => ({
   };
 
   const uploadEncryptedImage = async (blob, hash) => {
+    const filename = `images/${hash}.enc`;
+    console.debug('[ImageSync] Encrypting image', {
+      hash,
+      mime: blob.type || 'application/octet-stream',
+      size: blob.size,
+      filename
+    });
     const payload = await encryptBlob(blob, passphrase);
     const payloadBlob = new Blob([payload], { type: 'text/plain' });
-    const filename = `images/${hash}.enc`;
+    console.debug('[ImageSync] Uploading encrypted image', {
+      hash,
+      payloadBytes: payloadBlob.size,
+      filename
+    });
     const result = await upload(filename, payloadBlob, {
       access: 'public',
       handleUploadUrl: '/api/blob-upload'
+    });
+    console.debug('[ImageSync] Upload success', {
+      hash,
+      url: result?.url,
+      pathname: result?.pathname
     });
     return result.url;
   };
@@ -573,6 +603,7 @@ const summarizePerson = (person) => ({
     if (imageSyncRef.current) return;
     imageSyncRef.current = true;
     try {
+      console.debug('[ImageSync] Starting upload batch');
       await ensureImageQueue();
       const pending = await db.image_sync.where('status').equals('pending').limit(3).toArray();
       const stats = {
@@ -580,8 +611,12 @@ const summarizePerson = (person) => ({
         uploaded: await db.image_sync.where('status').equals('uploaded').count(),
         failed: await db.image_sync.where('status').equals('failed').count()
       };
+      console.debug('[ImageSync] Queue stats', stats);
+      console.debug('[ImageSync] Pending batch', pending);
 
       for (const item of pending) {
+        console.groupCollapsed(`[ImageSync] Upload ${item.owner_type}#${item.owner_id} ${item.slot}`);
+        console.debug('[ImageSync] Queue item', item);
         let source = null;
         if (item.owner_type === 'entry') {
           const entry = await db.entries.get(item.owner_id);
@@ -598,7 +633,14 @@ const summarizePerson = (person) => ({
         }
 
         if (!(source instanceof Blob)) {
+          console.warn('[ImageSync] Source is not a blob', {
+            owner_type: item.owner_type,
+            owner_id: item.owner_id,
+            slot: item.slot,
+            sourceType: typeof source
+          });
           await db.image_sync.update(item.id, { status: 'failed', updated_at: new Date().toISOString() });
+          console.groupEnd();
           continue;
         }
 
@@ -607,6 +649,7 @@ const summarizePerson = (person) => ({
           await db.image_sync.update(item.id, {
             status: 'uploaded',
             url,
+            last_error: null,
             updated_at: new Date().toISOString()
           });
 
@@ -629,12 +672,15 @@ const summarizePerson = (person) => ({
             await db.people.update(item.owner_id, { image_refs: refs });
           }
         } catch (error) {
-          console.error(error);
+          const errorDetails = formatErrorDetails(error);
+          console.error('[ImageSync] Upload failed', { error: errorDetails, item });
           await db.image_sync.update(item.id, {
             status: 'failed',
-            last_error: error.message || 'Upload failed',
+            last_error: errorDetails,
             updated_at: new Date().toISOString()
           });
+        } finally {
+          console.groupEnd();
         }
       }
 
@@ -643,6 +689,7 @@ const summarizePerson = (person) => ({
         uploaded: await db.image_sync.where('status').equals('uploaded').count(),
         failed: await db.image_sync.where('status').equals('failed').count()
       };
+      console.debug('[ImageSync] Finished upload batch', refreshed);
       setImageStats(refreshed);
     } finally {
       imageSyncRef.current = false;
