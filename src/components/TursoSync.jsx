@@ -89,6 +89,10 @@ const TursoSync = () => {
     if (savedBase) setApiBase(savedBase);
   }, []);
 
+  useEffect(() => {
+    if (syncKey || apiBase) initSchema();
+  }, [syncKey, apiBase, apiUrl]);
+
   const apiUrl = useMemo(() => {
     if (!apiBase) return '/api/turso-sync';
     const trimmed = apiBase.replace(/\/+$/, '');
@@ -97,12 +101,21 @@ const TursoSync = () => {
 
   const authHeaders = syncKey ? { 'x-sync-key': syncKey } : {};
 
+  const initSchema = async () => {
+    try {
+      await fetch(apiUrl, { headers: authHeaders });
+    } catch {
+      // Silent: schema init is best-effort.
+    }
+  };
+
   const handleSave = () => {
     localStorage.setItem('turso_sync_key', syncKey);
     localStorage.setItem('turso_api_base', apiBase);
     setStatus('success');
     setMessage('Settings saved locally.');
     setTimeout(() => setStatus('idle'), 2000);
+    initSchema();
   };
 
   const serializeEntry = async (entry) => ({
@@ -295,6 +308,7 @@ const TursoSync = () => {
     setMessage('Collecting changes...');
 
     try {
+      await initSchema();
       const [dirtyEntries, dirtyPeople, dirtyMeditations, dirtyDeletes] = await Promise.all([
         db.entries.where('sync_status').equals('dirty').toArray(),
         db.people.where('sync_status').equals('dirty').toArray(),

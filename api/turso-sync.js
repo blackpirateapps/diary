@@ -291,8 +291,13 @@ export default async function handler(req, res) {
   try {
     await ensureSchema(client);
 
+    if (req.method === 'GET') {
+      res.status(200).json({ ok: true, serverTime: new Date().toISOString() });
+      return;
+    }
+
     if (req.method !== 'POST') {
-      res.setHeader('Allow', 'POST');
+      res.setHeader('Allow', 'GET, POST');
       res.status(405).json({ error: 'Method not allowed.' });
       return;
     }
