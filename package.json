@@ -39,7 +39,8 @@
     "@ozdemirburak/morse-code-translator": "latest",
     "file-saver": "latest",
     "react-virtuoso": "latest",
-    "@libsql/client": "latest"
+    "@libsql/client": "latest",
+    "@vercel/blob": "latest"
   },
   "devDependencies": {
     "@types/react": "^18.2.15",

@@ -96,6 +96,19 @@ db.version(8).stores({
   });
 });
 
+// --- [NEW] Version 9: Image Sync Queue ---
+db.version(9).stores({
+  entries: '++id, date, mood, *tags, *people, updated_at, sync_status',
+  sleep_sessions: 'id, startTime',
+  chat_analytics: 'id, name',
+  meditation_sessions: '++id, startTime, duration, updated_at, sync_status',
+  people: '++id, name, relationship, updated_at, sync_status',
+  routes_meta: 'id, date, year, month',
+  routes_data: 'id',
+  tombstones: '++id, store, key, deleted_at, sync_status',
+  image_sync: '++id, [owner_type+owner_id+slot], hash, status, updated_at'
+});
+
 // --- [NEW] Strategy D: Persistence Request ---
 // Tries to prevent the browser from wiping data if disk space is low
 export const requestPersistence = async () => {

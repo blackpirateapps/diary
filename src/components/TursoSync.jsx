@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, Cloud, Loader2, RefreshCw, X } from 'lucide-
 import { motion, AnimatePresence } from 'framer-motion';
 import { diffLines } from 'diff';
 import { db, runWithSyncBypass } from '../db';
+import { upload } from '@vercel/blob/client';
 
 const base64ToBlob = (data, type) => {
   const binary = atob(data || '');
@@ -93,6 +94,35 @@ const decryptValue = async (value, passphrase) => {
   return textDecoder.decode(plainBuffer);
 };
 
+const encryptBlob = async (blob, passphrase) => {
+  if (!passphrase) throw new Error('Passphrase required.');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(passphrase, salt);
+  const buffer = await blob.arrayBuffer();
+  const cipherBuffer = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, buffer);
+  const payload = {
+    v: 1,
+    mime: blob.type || 'application/octet-stream',
+    salt: encodeBase64(salt),
+    iv: encodeBase64(iv),
+    data: encodeBase64(new Uint8Array(cipherBuffer))
+  };
+  return JSON.stringify(payload);
+};
+
+const decryptBlob = async (payload, passphrase) => {
+  if (!passphrase) throw new Error('Passphrase required.');
+  const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+  if (!data || data.v !== 1) throw new Error('Invalid image payload.');
+  const salt = decodeBase64(data.salt);
+  const iv = decodeBase64(data.iv);
+  const cipherBytes = decodeBase64(data.data);
+  const key = await deriveKey(passphrase, salt);
+  const plainBuffer = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherBytes);
+  return new Blob([plainBuffer], { type: data.mime || 'application/octet-stream' });
+};
+
 const decryptNumber = async (value, passphrase) => {
   const raw = await decryptValue(value, passphrase);
   if (raw === null || raw === undefined || raw === '') return null;
@@ -143,6 +173,8 @@ const TursoSync = () => {
   const BATCH_SIZE = 5;
   const syncingRef = useRef(false);
   const [syncStats, setSyncStats] = useState(null);
+  const [imageStats, setImageStats] = useState(null);
+  const imageSyncRef = useRef(false);
 
   const apiUrl = useMemo(() => {
     if (!apiBase) return '/api/turso-sync';
@@ -200,6 +232,7 @@ const TursoSync = () => {
     content: await encryptValue(entry.content || null, passphrase),
     preview: await encryptValue(entry.preview || null, passphrase),
     images: await encryptValue(JSON.stringify(await serializeImages()), passphrase),
+    image_refs: await encryptValue(JSON.stringify(entry.image_refs || []), passphrase),
     sessions: await encryptValue(JSON.stringify(entry.sessions || []), passphrase),
     updated_at: entry.updated_at
   });
@@ -213,6 +246,7 @@ const TursoSync = () => {
     gift_ideas: await encryptValue(JSON.stringify(person.giftIdeas || []), passphrase),
     image: await encryptValue(JSON.stringify(await serializeImages()), passphrase),
     gallery: await encryptValue(JSON.stringify(await serializeImages()), passphrase),
+    image_refs: await encryptValue(JSON.stringify(person.image_refs || {}), passphrase),
     updated_at: person.updated_at
   });
 
@@ -227,6 +261,7 @@ const TursoSync = () => {
     const rawImages = await decryptValue(row.images || '[]', passphrase);
     const incomingImages = await deserializeImages(rawImages || '[]');
     const mergedImages = incomingImages.length > 0 ? incomingImages : (existingImages || []);
+    const imageRefs = safeJsonParse(await decryptValue(row.image_refs || '[]', passphrase) || '[]', []);
     return {
       id: row.id,
       date: await decryptValue(row.date || null, passphrase),
@@ -241,6 +276,7 @@ const TursoSync = () => {
       content: await decryptValue(row.content || null, passphrase),
       preview: await decryptValue(row.preview || null, passphrase),
       images: mergedImages,
+      image_refs: imageRefs,
       sessions: safeJsonParse(await decryptValue(row.sessions || '[]', passphrase) || '[]', []),
       updated_at: row.updated_at,
       sync_status: 'synced'
@@ -254,6 +290,7 @@ const TursoSync = () => {
     const galleryList = await deserializeImages(rawGallery || '[]');
     const mergedImage = imageList[0] || existingImage || null;
     const mergedGallery = galleryList.length > 0 ? galleryList : (existingGallery || []);
+    const imageRefs = safeJsonParse(await decryptValue(row.image_refs || '{}', passphrase) || '{}', {});
     return {
       id: row.id,
       name: await decryptValue(row.name || '', passphrase),
@@ -263,6 +300,7 @@ const TursoSync = () => {
       giftIdeas: safeJsonParse(await decryptValue(row.gift_ideas || '[]', passphrase) || '[]', []),
       image: mergedImage,
       gallery: mergedGallery,
+      image_refs: imageRefs,
       updated_at: row.updated_at,
       sync_status: 'synced'
     };
@@ -276,34 +314,36 @@ const TursoSync = () => {
     sync_status: 'synced'
   });
 
-  const summarizeEntry = (entry) => ({
-    id: entry.id,
-    date: entry.date,
-    mood: entry.mood,
-    tags: entry.tags || [],
-    people: entry.people || [],
-    location: entry.location,
-    locationLat: entry.locationLat,
-    locationLng: entry.locationLng,
-    locationHistory: entry.locationHistory || [],
-    weather: entry.weather,
-    preview: entry.preview,
-    images: summarizeImages(entry.images || []),
-    sessions: entry.sessions || [],
-    updated_at: entry.updated_at
-  });
+const summarizeEntry = (entry) => ({
+  id: entry.id,
+  date: entry.date,
+  mood: entry.mood,
+  tags: entry.tags || [],
+  people: entry.people || [],
+  location: entry.location,
+  locationLat: entry.locationLat,
+  locationLng: entry.locationLng,
+  locationHistory: entry.locationHistory || [],
+  weather: entry.weather,
+  preview: entry.preview,
+  images: summarizeImages(entry.images || []),
+  image_refs: entry.image_refs || [],
+  sessions: entry.sessions || [],
+  updated_at: entry.updated_at
+});
 
-  const summarizePerson = (person) => ({
-    id: person.id,
-    name: person.name,
-    relationship: person.relationship,
-    description: person.description,
-    dates: person.dates || [],
-    giftIdeas: person.giftIdeas || [],
-    image: summarizeImages(person.image ? [person.image] : [])[0] || null,
-    gallery: summarizeImages(person.gallery || []),
-    updated_at: person.updated_at
-  });
+const summarizePerson = (person) => ({
+  id: person.id,
+  name: person.name,
+  relationship: person.relationship,
+  description: person.description,
+  dates: person.dates || [],
+  giftIdeas: person.giftIdeas || [],
+  image: summarizeImages(person.image ? [person.image] : [])[0] || null,
+  gallery: summarizeImages(person.gallery || []),
+  image_refs: person.image_refs || {},
+  updated_at: person.updated_at
+});
 
   const summarizeMeditation = (session) => ({
     id: session.id,
@@ -383,6 +423,7 @@ const TursoSync = () => {
               content: await decryptValue(item.remote.content || null, passphrase),
               preview: await decryptValue(item.remote.preview || null, passphrase),
               images: safeJsonParse(await decryptValue(item.remote.images || '[]', passphrase) || '[]', []),
+              image_refs: safeJsonParse(await decryptValue(item.remote.image_refs || '[]', passphrase) || '[]', []),
               sessions: safeJsonParse(await decryptValue(item.remote.sessions || '[]', passphrase) || '[]', []),
               updated_at: item.remote.updated_at,
               deleted_at: item.remote.deleted_at || null
@@ -397,6 +438,7 @@ const TursoSync = () => {
               giftIdeas: safeJsonParse(await decryptValue(item.remote.gift_ideas || '[]', passphrase) || '[]', []),
               image: (safeJsonParse(await decryptValue(item.remote.image || '[]', passphrase) || '[]', []) || [])[0] || null,
               gallery: safeJsonParse(await decryptValue(item.remote.gallery || '[]', passphrase) || '[]', []),
+              image_refs: safeJsonParse(await decryptValue(item.remote.image_refs || '{}', passphrase) || '{}', {}),
               updated_at: item.remote.updated_at,
               deleted_at: item.remote.deleted_at || null
             };
@@ -432,6 +474,180 @@ const TursoSync = () => {
     }
     return chunks;
   };
+
+  const hashBlob = async (blob) => {
+    const buffer = await blob.arrayBuffer();
+    const digest = await crypto.subtle.digest('SHA-256', buffer);
+    return encodeBase64(new Uint8Array(digest));
+  };
+
+  const ensureImageQueue = async () => {
+    const [entries, people] = await Promise.all([
+      db.entries.toArray(),
+      db.people.toArray()
+    ]);
+
+    const queue = [];
+    for (const entry of entries) {
+      const images = Array.isArray(entry.images) ? entry.images : [];
+      for (let i = 0; i < images.length; i += 1) {
+        const img = images[i];
+        if (!(img instanceof Blob)) continue;
+        const hash = await hashBlob(img);
+        queue.push({
+          owner_type: 'entry',
+          owner_id: entry.id,
+          slot: `images:${i}`,
+          hash,
+          mime: img.type || 'application/octet-stream'
+        });
+      }
+    }
+
+    for (const person of people) {
+      if (person.image instanceof Blob) {
+        const hash = await hashBlob(person.image);
+        queue.push({
+          owner_type: 'person',
+          owner_id: person.id,
+          slot: 'avatar',
+          hash,
+          mime: person.image.type || 'application/octet-stream'
+        });
+      }
+      const gallery = Array.isArray(person.gallery) ? person.gallery : [];
+      for (let i = 0; i < gallery.length; i += 1) {
+        const img = gallery[i];
+        if (!(img instanceof Blob)) continue;
+        const hash = await hashBlob(img);
+        queue.push({
+          owner_type: 'person',
+          owner_id: person.id,
+          slot: `gallery:${i}`,
+          hash,
+          mime: img.type || 'application/octet-stream'
+        });
+      }
+    }
+
+    for (const item of queue) {
+      const existing = await db.image_sync
+        .where('[owner_type+owner_id+slot]')
+        .equals([item.owner_type, item.owner_id, item.slot])
+        .first();
+      if (!existing || existing.hash !== item.hash) {
+        if (existing) {
+          await db.image_sync.update(existing.id, {
+            hash: item.hash,
+            mime: item.mime,
+            status: 'pending',
+            updated_at: new Date().toISOString()
+          });
+        } else {
+          await db.image_sync.add({
+            owner_type: item.owner_type,
+            owner_id: item.owner_id,
+            slot: item.slot,
+            hash: item.hash,
+            mime: item.mime,
+            status: 'pending',
+            updated_at: new Date().toISOString()
+          });
+        }
+      }
+    }
+  };
+
+  const uploadEncryptedImage = async (blob, hash) => {
+    const payload = await encryptBlob(blob, passphrase);
+    const payloadBlob = new Blob([payload], { type: 'text/plain' });
+    const filename = `images/${hash}.enc`;
+    const result = await upload(filename, payloadBlob, {
+      access: 'public',
+      handleUploadUrl: '/api/blob-upload'
+    });
+    return result.url;
+  };
+
+  const processImageUploads = useCallback(async () => {
+    if (imageSyncRef.current) return;
+    imageSyncRef.current = true;
+    try {
+      await ensureImageQueue();
+      const pending = await db.image_sync.where('status').equals('pending').limit(3).toArray();
+      const stats = {
+        pending: await db.image_sync.where('status').equals('pending').count(),
+        uploaded: await db.image_sync.where('status').equals('uploaded').count(),
+        failed: await db.image_sync.where('status').equals('failed').count()
+      };
+
+      for (const item of pending) {
+        let source = null;
+        if (item.owner_type === 'entry') {
+          const entry = await db.entries.get(item.owner_id);
+          const index = Number(item.slot.split(':')[1]);
+          source = entry?.images?.[index] || null;
+        } else if (item.owner_type === 'person') {
+          const person = await db.people.get(item.owner_id);
+          if (item.slot === 'avatar') {
+            source = person?.image || null;
+          } else {
+            const index = Number(item.slot.split(':')[1]);
+            source = person?.gallery?.[index] || null;
+          }
+        }
+
+        if (!(source instanceof Blob)) {
+          await db.image_sync.update(item.id, { status: 'failed', updated_at: new Date().toISOString() });
+          continue;
+        }
+
+        try {
+          const url = await uploadEncryptedImage(source, item.hash);
+          await db.image_sync.update(item.id, {
+            status: 'uploaded',
+            url,
+            updated_at: new Date().toISOString()
+          });
+
+          if (item.owner_type === 'entry') {
+            const entry = await db.entries.get(item.owner_id);
+            const refs = Array.isArray(entry?.image_refs) ? [...entry.image_refs] : [];
+            const index = Number(item.slot.split(':')[1]);
+            refs[index] = url;
+            await db.entries.update(item.owner_id, { image_refs: refs });
+          } else if (item.owner_type === 'person') {
+            const person = await db.people.get(item.owner_id);
+            const refs = person?.image_refs || {};
+            if (item.slot === 'avatar') {
+              refs.avatar = url;
+            } else {
+              const index = Number(item.slot.split(':')[1]);
+              refs.gallery = Array.isArray(refs.gallery) ? [...refs.gallery] : [];
+              refs.gallery[index] = url;
+            }
+            await db.people.update(item.owner_id, { image_refs: refs });
+          }
+        } catch (error) {
+          console.error(error);
+          await db.image_sync.update(item.id, {
+            status: 'failed',
+            last_error: error.message || 'Upload failed',
+            updated_at: new Date().toISOString()
+          });
+        }
+      }
+
+      const refreshed = {
+        pending: await db.image_sync.where('status').equals('pending').count(),
+        uploaded: await db.image_sync.where('status').equals('uploaded').count(),
+        failed: await db.image_sync.where('status').equals('failed').count()
+      };
+      setImageStats(refreshed);
+    } finally {
+      imageSyncRef.current = false;
+    }
+  }, [passphrase]);
 
   const probePassphrase = useCallback(async () => {
     const res = await fetch(apiUrl, {
@@ -481,6 +697,7 @@ const TursoSync = () => {
         return;
       }
       await probePassphrase();
+      await processImageUploads();
       syncingRef.current = true;
       await initSchema();
       const [dirtyEntries, dirtyPeople, dirtyMeditations, dirtyDeletes] = await Promise.all([
@@ -660,7 +877,7 @@ const TursoSync = () => {
     } finally {
       syncingRef.current = false;
     }
-  }, [apiUrl, authHeaders, buildConflicts, initSchema, lastSync, passphrase, probePassphrase]);
+  }, [apiUrl, authHeaders, buildConflicts, initSchema, lastSync, passphrase, probePassphrase, processImageUploads]);
 
   useEffect(() => {
     if (!autoSync) return;
@@ -670,6 +887,15 @@ const TursoSync = () => {
     }, 5000);
     return () => clearInterval(interval);
   }, [autoSync, conflicts.length, handleSync, passphrase]);
+
+  useEffect(() => {
+    if (!autoSync) return;
+    const interval = setInterval(() => {
+      if (!passphrase || conflicts.length > 0) return;
+      processImageUploads();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [autoSync, conflicts.length, passphrase, processImageUploads]);
 
   const resolveConflict = async (action) => {
     const current = conflicts[conflictIndex];
@@ -886,6 +1112,12 @@ const TursoSync = () => {
             <div>Pushed: entries {syncStats.pushedEntries}, people {syncStats.pushedPeople}, meditation {syncStats.pushedMeditations}, deletes {syncStats.pushedDeletes}</div>
             <div>Pulled: entries {syncStats.pulledEntries}, people {syncStats.pulledPeople}, meditation {syncStats.pulledMeditations}</div>
             <div>Conflicts: {syncStats.conflicts}</div>
+          </div>
+        )}
+
+        {imageStats && (
+          <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+            <div>Image sync: pending {imageStats.pending}, uploaded {imageStats.uploaded}, failed {imageStats.failed}</div>
           </div>
         )}
 

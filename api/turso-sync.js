@@ -41,6 +41,7 @@ const ensureSchema = async (client) => {
       content TEXT,
       preview TEXT,
       images TEXT,
+      image_refs TEXT,
       sessions TEXT,
       updated_at TEXT NOT NULL,
       deleted_at TEXT
@@ -58,6 +59,7 @@ const ensureSchema = async (client) => {
       gift_ideas TEXT,
       image TEXT,
       gallery TEXT,
+      image_refs TEXT,
       updated_at TEXT NOT NULL,
       deleted_at TEXT
     )
@@ -74,6 +76,13 @@ const ensureSchema = async (client) => {
     )
   `);
   await client.execute(`CREATE INDEX IF NOT EXISTS idx_meditation_updated_at ON meditation_sessions(updated_at)`);
+
+  try {
+    await client.execute('ALTER TABLE entries ADD COLUMN image_refs TEXT');
+  } catch {}
+  try {
+    await client.execute('ALTER TABLE people ADD COLUMN image_refs TEXT');
+  } catch {}
 };
 
 const readJsonBody = (req) => {
@@ -106,8 +115,8 @@ const upsertEntry = async (client, row, force, conflicts) => {
     sql: `
       INSERT INTO entries (
         id, date, mood, tags, people, location, location_lat, location_lng,
-        location_history, weather, content, preview, images, sessions, updated_at, deleted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        location_history, weather, content, preview, images, image_refs, sessions, updated_at, deleted_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         date=excluded.date,
         mood=excluded.mood,
@@ -121,6 +130,7 @@ const upsertEntry = async (client, row, force, conflicts) => {
         content=excluded.content,
         preview=excluded.preview,
         images=excluded.images,
+        image_refs=excluded.image_refs,
         sessions=excluded.sessions,
         updated_at=excluded.updated_at,
         deleted_at=excluded.deleted_at
@@ -139,6 +149,7 @@ const upsertEntry = async (client, row, force, conflicts) => {
       row.content || null,
       row.preview || null,
       row.images || null,
+      row.image_refs || null,
       row.sessions || null,
       row.updated_at,
       row.deleted_at || null
@@ -163,8 +174,8 @@ const upsertPerson = async (client, row, force, conflicts) => {
   await client.execute({
     sql: `
       INSERT INTO people (
-        id, name, relationship, description, dates, gift_ideas, image, gallery, updated_at, deleted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, name, relationship, description, dates, gift_ideas, image, gallery, image_refs, updated_at, deleted_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name=excluded.name,
         relationship=excluded.relationship,
@@ -173,6 +184,7 @@ const upsertPerson = async (client, row, force, conflicts) => {
         gift_ideas=excluded.gift_ideas,
         image=excluded.image,
         gallery=excluded.gallery,
+        image_refs=excluded.image_refs,
         updated_at=excluded.updated_at,
         deleted_at=excluded.deleted_at
     `,
@@ -185,6 +197,7 @@ const upsertPerson = async (client, row, force, conflicts) => {
       row.gift_ideas || null,
       row.image || null,
       row.gallery || null,
+      row.image_refs || null,
       row.updated_at,
       row.deleted_at || null
     ]
