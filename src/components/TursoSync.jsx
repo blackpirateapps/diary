@@ -72,6 +72,7 @@ const TursoSync = () => {
   const [lastSync, setLastSync] = useState(localStorage.getItem('turso_last_sync'));
   const [conflicts, setConflicts] = useState([]);
   const [conflictIndex, setConflictIndex] = useState(0);
+  const BATCH_SIZE = 5;
 
   const apiUrl = useMemo(() => {
     if (!apiBase) return '/api/turso-sync';
@@ -301,6 +302,14 @@ const TursoSync = () => {
     return output;
   };
 
+  const chunkArray = (items, size) => {
+    const chunks = [];
+    for (let i = 0; i < items.length; i += size) {
+      chunks.push(items.slice(i, i + size));
+    }
+    return chunks;
+  };
+
   const handleSync = async () => {
     setStatus('loading');
     setMessage('Collecting changes...');
@@ -323,53 +332,80 @@ const TursoSync = () => {
       const entriesPayload = await Promise.all(dirtyEntries.map(serializeEntry));
       const peoplePayload = await Promise.all(dirtyPeople.map(serializePerson));
       const meditationPayload = await Promise.all(dirtyMeditations.map(serializeMeditation));
+      const entryChunks = chunkArray(entriesPayload, BATCH_SIZE);
+      const requestCount = Math.max(entryChunks.length, 1);
+      let currentLastSync = lastSync;
+      const aggregatedConflicts = {
+        entries: [],
+        people: [],
+        meditation_sessions: []
+      };
+      const aggregatedUpdates = {
+        entries: [],
+        people: [],
+        meditation_sessions: []
+      };
 
-      setMessage('Syncing with Turso...');
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders
-        },
-        body: JSON.stringify({
-          lastSync,
-          updates: {
-            entries: entriesPayload,
-            people: peoplePayload,
-            meditation_sessions: meditationPayload,
-            deletes: dirtyDeletes.map((d) => ({
-              store: d.store,
-              key: d.key,
-              deleted_at: d.deleted_at
-            }))
-          }
-        })
-      });
+      for (let i = 0; i < requestCount; i += 1) {
+        setMessage(`Syncing with Turso... (${i + 1}/${requestCount})`);
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders
+          },
+          body: JSON.stringify({
+            lastSync: currentLastSync,
+            updates: {
+              entries: entryChunks[i] || [],
+              people: i === 0 ? peoplePayload : [],
+              meditation_sessions: i === 0 ? meditationPayload : [],
+              deletes: i === 0
+                ? dirtyDeletes.map((d) => ({
+                    store: d.store,
+                    key: d.key,
+                    deleted_at: d.deleted_at
+                  }))
+                : []
+            }
+          })
+        });
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || 'Sync failed.');
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Sync failed.');
+        }
+
+        const data = await res.json();
+        aggregatedConflicts.entries.push(...(data.conflicts?.entries || []));
+        aggregatedConflicts.people.push(...(data.conflicts?.people || []));
+        aggregatedConflicts.meditation_sessions.push(...(data.conflicts?.meditation_sessions || []));
+
+        aggregatedUpdates.entries.push(...(data.updates?.entries || []));
+        aggregatedUpdates.people.push(...(data.updates?.people || []));
+        aggregatedUpdates.meditation_sessions.push(...(data.updates?.meditation_sessions || []));
+
+        currentLastSync = data.serverTime || currentLastSync || new Date().toISOString();
       }
 
-      const data = await res.json();
-      const newLastSync = data.serverTime || new Date().toISOString();
+      const newLastSync = currentLastSync || new Date().toISOString();
       localStorage.setItem('turso_last_sync', newLastSync);
       setLastSync(newLastSync);
 
-      const conflictList = buildConflicts(data.conflicts || {}, localMaps, dirtyDeletes);
+      const conflictList = buildConflicts(aggregatedConflicts, localMaps, dirtyDeletes);
       setConflicts(conflictList);
       setConflictIndex(0);
 
       const conflictIds = {
-        entries: new Set((data.conflicts?.entries || []).map((c) => c.id)),
-        people: new Set((data.conflicts?.people || []).map((c) => c.id)),
-        meditation_sessions: new Set((data.conflicts?.meditation_sessions || []).map((c) => c.id))
+        entries: new Set(aggregatedConflicts.entries.map((c) => c.id)),
+        people: new Set(aggregatedConflicts.people.map((c) => c.id)),
+        meditation_sessions: new Set(aggregatedConflicts.meditation_sessions.map((c) => c.id))
       };
 
       const deleteConflicts = new Set(conflictList.filter((c) => c.local?._deleted).map((c) => `${c.store}:${c.id}`));
 
       await runWithSyncBypass(async () => {
-        for (const row of data.updates?.entries || []) {
+        for (const row of aggregatedUpdates.entries) {
           if (conflictIds.entries.has(row.id)) continue;
           if (row.deleted_at) {
             await db.entries.delete(row.id);
@@ -379,7 +415,7 @@ const TursoSync = () => {
           }
         }
 
-        for (const row of data.updates?.people || []) {
+        for (const row of aggregatedUpdates.people) {
           if (conflictIds.people.has(row.id)) continue;
           if (row.deleted_at) {
             await db.people.delete(row.id);
@@ -389,7 +425,7 @@ const TursoSync = () => {
           }
         }
 
-        for (const row of data.updates?.meditation_sessions || []) {
+        for (const row of aggregatedUpdates.meditation_sessions) {
           if (conflictIds.meditation_sessions.has(row.id)) continue;
           if (row.deleted_at) {
             await db.meditation_sessions.delete(row.id);
