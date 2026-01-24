@@ -82,17 +82,6 @@ const TursoSync = () => {
   const [conflicts, setConflicts] = useState([]);
   const [conflictIndex, setConflictIndex] = useState(0);
 
-  useEffect(() => {
-    const savedKey = localStorage.getItem('turso_sync_key');
-    const savedBase = localStorage.getItem('turso_api_base');
-    if (savedKey) setSyncKey(savedKey);
-    if (savedBase) setApiBase(savedBase);
-  }, []);
-
-  useEffect(() => {
-    if (syncKey || apiBase) initSchema();
-  }, [syncKey, apiBase, apiUrl]);
-
   const apiUrl = useMemo(() => {
     if (!apiBase) return '/api/turso-sync';
     const trimmed = apiBase.replace(/\/+$/, '');
@@ -108,6 +97,17 @@ const TursoSync = () => {
       // Silent: schema init is best-effort.
     }
   };
+
+  useEffect(() => {
+    const savedKey = localStorage.getItem('turso_sync_key');
+    const savedBase = localStorage.getItem('turso_api_base');
+    if (savedKey) setSyncKey(savedKey);
+    if (savedBase) setApiBase(savedBase);
+  }, []);
+
+  useEffect(() => {
+    if (syncKey || apiBase) initSchema();
+  }, [syncKey, apiBase, apiUrl]);
 
   const handleSave = () => {
     localStorage.setItem('turso_sync_key', syncKey);
