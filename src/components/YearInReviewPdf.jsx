@@ -434,6 +434,23 @@ const EntryItem = ({ entry, moodLabel, accentColor }) => {
   );
 };
 
+const Footer = ({ author, year }) => (
+  <View style={styles.pageFooter} fixed>
+    <Text
+      style={styles.footerText}
+      render={({ pageNumber }) => (
+        pageNumber === 1 ? '' : `${author ? `${author} • ` : ''}${year} Year in Review`
+      )}
+    />
+    <Text
+      style={styles.footerText}
+      render={({ pageNumber, totalPages }) => (
+        pageNumber === 1 ? '' : `Page ${pageNumber} of ${totalPages}`
+      )}
+    />
+  </View>
+);
+
 // --- MAIN PDF DOCUMENT ---
 const YearInReviewPdf = ({ entries, year, author, tagline, accentColor }) => {
   const entriesByMonth = entries.reduce((acc, entry) => {
@@ -487,20 +504,7 @@ const YearInReviewPdf = ({ entries, year, author, tagline, accentColor }) => {
           </View>
         </View>
 
-        {/* FOOTER: Fixed on every page (but cover doesn't technically "fix" elements well, so we add separate logic if needed, but react-pdf 'fixed' prop works on subsequent pages) */}
-        <Text 
-            style={styles.pageFooter} 
-            fixed 
-            render={({ pageNumber, totalPages }) => (
-                // Don't show footer on cover page (page 1)
-                pageNumber === 1 ? null : (
-                   <View style={styles.pageFooter}>
-                        <Text style={styles.footerText}>{author ? `${author} • ` : ''}{year} Year in Review</Text>
-                        <Text style={styles.footerText}>Page {pageNumber} of {totalPages}</Text>
-                   </View>
-                )
-            )} 
-        />
+        <Footer author={author} year={year} />
       </Page>
 
       {/* MONTHLY SECTIONS */}
@@ -514,17 +518,7 @@ const YearInReviewPdf = ({ entries, year, author, tagline, accentColor }) => {
                 <Text style={styles.monthSubtitle}>{entriesByMonth[monthIndex].length} Entries recorded</Text>
              </View>
              
-             {/* Footer Reuse */}
-             <Text 
-                style={styles.pageFooter} 
-                fixed 
-                render={({ pageNumber, totalPages }) => (
-                   <View style={styles.pageFooter}>
-                        <Text style={styles.footerText}>{author ? `${author} • ` : ''}{year} Year in Review</Text>
-                        <Text style={styles.footerText}>Page {pageNumber} of {totalPages}</Text>
-                   </View>
-                )} 
-            />
+             <Footer author={author} year={year} />
           </Page>
 
           {/* Entries */}
@@ -538,17 +532,7 @@ const YearInReviewPdf = ({ entries, year, author, tagline, accentColor }) => {
                 />
              ))}
              
-             {/* Footer Reuse */}
-             <Text 
-                style={styles.pageFooter} 
-                fixed 
-                render={({ pageNumber, totalPages }) => (
-                   <View style={styles.pageFooter}>
-                        <Text style={styles.footerText}>{author ? `${author} • ` : ''}{year} Year in Review</Text>
-                        <Text style={styles.footerText}>Page {pageNumber} of {totalPages}</Text>
-                   </View>
-                )} 
-            />
+             <Footer author={author} year={year} />
           </Page>
         </React.Fragment>
       ))}
