@@ -1,15 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, 
-  BarChart, Bar, ReferenceLine, 
+  XAxis, YAxis, CartesianGrid, 
+  BarChart, Bar, 
   ComposedChart, Line, Legend 
 } from 'recharts';
 import CalendarHeatmap from 'react-calendar-heatmap';
 import 'react-calendar-heatmap/dist/styles.css';
 import { 
   Trophy, TrendingUp, Calendar as CalendarIcon, 
-  Clock, Activity, Moon, ChevronDown, Leaf, AlignLeft,
+  Activity, ChevronDown, Leaf, AlignLeft,
   Smile, PlusCircle, Hash, CalendarDays // <--- NEW ICONS
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -39,33 +39,12 @@ const calculateStreak = (entries) => {
   return streak;
 };
 
-const formatDecimalHour = (decimal) => {
-  const hours = Math.floor(decimal);
-  const minutes = Math.round((decimal - hours) * 60);
-  return `${hours}h ${minutes}m`;
-};
-
-const normalizeTime = (dateMs) => {
-  const date = new Date(dateMs);
-  let hours = date.getHours() + date.getMinutes() / 60;
-  if (hours < 12) hours += 24; 
-  return hours;
-};
-
-const formatAxisTime = (val) => {
-  let normalized = val;
-  if (normalized >= 24) normalized -= 24;
-  const suffix = normalized >= 12 ? 'PM' : 'AM';
-  const displayHour = normalized > 12 ? normalized - 12 : (normalized === 0 || normalized === 24 ? 12 : normalized);
-  return `${Math.floor(displayHour)} ${suffix}`;
-};
-
 const StatsPage = ({ entries, isDarkMode, navigate }) => {
   const [selectedPeriod, setSelectedPeriod] = useState('month'); 
   const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear());
 
-  const sleepSessions = useLiveQuery(() => db.sleep_sessions.toArray(), []) || [];
   const meditationSessions = useLiveQuery(() => db.meditation_sessions.toArray(), []) || [];
+  const peopleList = useLiveQuery(() => db.people.toArray(), []) || [];
 
   // --- THEME STYLES ---
   const themeStyles = useMemo(() => {
@@ -90,12 +69,6 @@ const StatsPage = ({ entries, isDarkMode, navigate }) => {
   const filteredEntries = useMemo(() => {
     return entries.filter(e => new Date(e.date) >= dateRange).sort((a, b) => new Date(a.date) - new Date(b.date));
   }, [entries, dateRange]);
-
-  const filteredSleep = useMemo(() => {
-    return sleepSessions
-      .filter(s => new Date(s.startTime) >= dateRange)
-      .sort((a, b) => a.startTime - b.startTime);
-  }, [sleepSessions, dateRange]);
 
   const filteredMeditation = useMemo(() => {
     return meditationSessions
@@ -170,36 +143,6 @@ const StatsPage = ({ entries, isDarkMode, navigate }) => {
       .slice(0, 8); // Top 8
   }, [filteredEntries]);
 
-  // ... (Sleep & Meditation Stats logic remains the same) ...
-  const sleepStats = useMemo(() => {
-    if (filteredSleep.length === 0) return null;
-    const dailyGroups = {};
-    let maxSessionsPerDay = 1;
-    filteredSleep.forEach(session => {
-        const dateKey = new Date(session.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        const fullDate = new Date(session.startTime).toLocaleDateString(); 
-        if (!dailyGroups[dateKey]) dailyGroups[dateKey] = { date: dateKey, fullDate: fullDate, totalDuration: 0, sessions: [] };
-        dailyGroups[dateKey].totalDuration += session.duration;
-        const start = normalizeTime(session.startTime);
-        const end = start + session.duration;
-        dailyGroups[dateKey].sessions.push([start, end]);
-        if (dailyGroups[dateKey].sessions.length > maxSessionsPerDay) maxSessionsPerDay = dailyGroups[dateKey].sessions.length;
-    });
-    const groupedData = Object.values(dailyGroups);
-    let totalDur = 0;
-    let minDay = groupedData[0];
-    let maxDay = groupedData[0];
-    const chartData = groupedData.map(day => {
-        totalDur += day.totalDuration;
-        if (day.totalDuration < minDay.totalDuration) minDay = day;
-        if (day.totalDuration > maxDay.totalDuration) maxDay = day;
-        const entry = { date: day.date, fullDate: day.fullDate, totalDuration: day.totalDuration };
-        day.sessions.forEach((range, index) => { entry[`range${index}`] = range; });
-        return entry;
-    });
-    return { avg: totalDur / groupedData.length, min: minDay, max: maxDay, chartData, maxSessions: maxSessionsPerDay };
-  }, [filteredSleep]);
-
   const meditationStats = useMemo(() => {
     if (filteredMeditation.length === 0) return null;
     const dailyGroups = {};
@@ -215,6 +158,41 @@ const StatsPage = ({ entries, isDarkMode, navigate }) => {
     const totalMinutes = Math.floor(totalSeconds / 60);
     return { totalMinutes, chartData };
   }, [filteredMeditation]);
+
+  const peopleIndex = useMemo(() => {
+    const map = new Map();
+    peopleList.forEach((person) => map.set(String(person.id), person.name || `Person ${person.id}`));
+    return map;
+  }, [peopleList]);
+
+  const peopleMentionsData = useMemo(() => {
+    const counts = {};
+    filteredEntries.forEach((entry) => {
+      const list = Array.isArray(entry.people) ? entry.people : [];
+      list.forEach((personId) => {
+        const key = String(personId);
+        counts[key] = (counts[key] || 0) + 1;
+      });
+    });
+    return Object.entries(counts)
+      .map(([id, value]) => ({ name: peopleIndex.get(id) || `Person ${id}`, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  }, [filteredEntries, peopleIndex]);
+
+  const topLocationsData = useMemo(() => {
+    const counts = {};
+    filteredEntries.forEach((entry) => {
+      const raw = entry.location || '';
+      const location = typeof raw === 'string' ? raw.trim() : '';
+      if (!location) return;
+      counts[location] = (counts[location] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  }, [filteredEntries]);
 
   const availableYears = useMemo(() => {
     const years = new Set(entries.map(e => new Date(e.date).getFullYear()));
@@ -432,117 +410,60 @@ const StatsPage = ({ entries, isDarkMode, navigate }) => {
           </div>
         </div>
 
-        {/* SLEEP ANALYTICS */}
-        {sleepStats ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 col-span-full">
-              <div className="flex items-center gap-2 mb-4">
-                <Moon size={18} className="text-indigo-500" />
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Sleep Trends</h2>
-              </div>
-              <div className="grid grid-cols-3 text-center mb-6 bg-gray-50 dark:bg-gray-800 p-3 rounded-xl gap-4">
-                <div>
-                  <span className="block text-xs text-gray-400 font-bold uppercase">Avg / Day</span>
-                  <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{formatDecimalHour(sleepStats.avg)}</span>
-                </div>
-                <div className="border-l border-r border-gray-200 dark:border-gray-700 px-2">
-                  <span className="block text-xs text-gray-400 font-bold uppercase">Shortest</span>
-                  <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{formatDecimalHour(sleepStats.min.totalDuration)}</span>
-                </div>
-                <div>
-                  <span className="block text-xs text-gray-400 font-bold uppercase">Longest</span>
-                  <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{formatDecimalHour(sleepStats.max.totalDuration)}</span>
-                </div>
-              </div>
-              <div className="h-48 w-full -ml-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={sleepStats.chartData}>
-                    <defs>
-                      <linearGradient id="colorSleep" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--accent-500)" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="var(--accent-500)" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={themeStyles.grid} />
-                    <XAxis dataKey="date" tick={{fontSize: 10, fill: themeStyles.text}} tickLine={false} axisLine={false} />
-                    <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
-                    <Tooltip 
-                      contentStyle={{borderRadius: '12px', border: `1px solid ${themeStyles.tooltipBorder}`, backgroundColor: themeStyles.tooltipBg}}
-                      labelStyle={{color: themeStyles.text, fontSize:'12px', marginBottom:'4px'}}
-                      itemStyle={{ color: themeStyles.tooltipColor }}
-                      formatter={(val) => [formatDecimalHour(val), 'Total Duration']}
-                    />
-                    <Area type="monotone" dataKey="totalDuration" stroke="var(--accent-500)" fillOpacity={1} fill="url(#colorSleep)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+        {/* PEOPLE & LOCATION */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+            <div className="flex items-center gap-2 mb-4">
+              <Smile size={18} className="text-amber-500" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">People Mentions</h2>
             </div>
-
-            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 col-span-full">
-               <div className="flex items-center gap-2 mb-4">
-                <Clock size={18} className="text-purple-500" />
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Sleep Schedule</h2>
-              </div>
-              <div className="h-56 w-full -ml-2">
+            <div className="h-48 w-full -ml-2">
+              {peopleMentionsData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={sleepStats.chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={themeStyles.grid} />
-                    <XAxis dataKey="date" tick={{fontSize: 10, fill: themeStyles.text}} tickLine={false} axisLine={false} />
-                    <YAxis 
-                      domain={[18, 34]} 
-                      tickFormatter={formatAxisTime} 
-                      width={45} 
-                      tick={{fontSize: 10, fill: themeStyles.text}} 
-                      tickLine={false} 
-                      axisLine={false}
-                      allowDataOverflow={false} 
-                    />
+                  <BarChart data={peopleMentionsData} layout="vertical" margin={{ left: 10, right: 30 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke={themeStyles.grid} />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" width={90} tick={{fontSize: 10, fill: themeStyles.text}} tickLine={false} axisLine={false} />
                     <Tooltip 
-                      cursor={{fill: isDarkMode ? '#374151' : '#f3f4f6'}}
-                      contentStyle={{backgroundColor: themeStyles.tooltipBg, border: `1px solid ${themeStyles.tooltipBorder}`, color: themeStyles.tooltipColor}}
-                      content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          return (
-                            <div className="p-3 rounded-xl shadow-lg border" style={{ backgroundColor: themeStyles.tooltipBg, borderColor: themeStyles.tooltipBorder }}>
-                              <p className="text-xs mb-2 font-bold" style={{ color: themeStyles.text }}>{label}</p>
-                              {payload.map((entry, idx) => {
-                                const [start, end] = entry.value;
-                                return (
-                                  <div key={idx} className="mb-1 last:mb-0">
-                                    <p className="text-xs font-medium" style={{ color: themeStyles.tooltipColor }}>
-                                      <span className="text-purple-500 mr-1">●</span>
-                                      {formatAxisTime(start)} - {formatAxisTime(end)}
-                                    </p>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
+                      cursor={{fill: 'transparent'}} 
+                      contentStyle={{borderRadius: '12px', border: `1px solid ${themeStyles.tooltipBorder}`, backgroundColor: themeStyles.tooltipBg}}
+                      itemStyle={{ color: themeStyles.tooltipColor }}
                     />
-                    {[...Array(sleepStats.maxSessions)].map((_, i) => (
-                        <Bar key={i} dataKey={`range${i}`} fill="var(--accent-500)" radius={[4, 4, 4, 4]} barSize={12} isAnimationActive={false} />
-                    ))}
-                    <ReferenceLine y={24} stroke={themeStyles.grid} strokeDasharray="3 3" label={{ value: 'Midnight', fontSize: 9, fill: themeStyles.text, position: 'insideTopLeft' }} />
+                    <Bar dataKey="value" name="Mentions" fill="#F59E0B" radius={[0, 4, 4, 0]} barSize={12} />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
+              ) : (
+                <div className="flex items-center justify-center h-full text-sm text-gray-400">No people tagged yet.</div>
+              )}
             </div>
           </div>
-        ) : (
-          <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 text-center flex flex-col items-center">
-            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-full mb-3 text-indigo-500"><Moon size={24} /></div>
-            <h3 className="font-bold text-gray-900 dark:text-white mb-1">No sleep data yet</h3>
-            <p className="text-sm text-gray-400 dark:text-gray-500 mb-4 max-w-xs">Connect sleep tracking to analyze your rest patterns.</p>
-            {navigate && (
-              <button onClick={() => navigate('sleep')} className="flex items-center gap-2 px-4 py-2 bg-[var(--accent-50)] dark:bg-gray-800 text-[var(--accent-600)] dark:text-[var(--accent-400)] rounded-lg text-sm font-bold hover:brightness-95 transition-all">
-                <PlusCircle size={16} /> Import Sleep Data
-              </button>
-            )}
+
+          <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+            <div className="flex items-center gap-2 mb-4">
+              <Activity size={18} className="text-emerald-500" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Top Locations</h2>
+            </div>
+            <div className="h-48 w-full -ml-2">
+              {topLocationsData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topLocationsData} layout="vertical" margin={{ left: 10, right: 30 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke={themeStyles.grid} />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" width={110} tick={{fontSize: 10, fill: themeStyles.text}} tickLine={false} axisLine={false} />
+                    <Tooltip 
+                      cursor={{fill: 'transparent'}} 
+                      contentStyle={{borderRadius: '12px', border: `1px solid ${themeStyles.tooltipBorder}`, backgroundColor: themeStyles.tooltipBg}}
+                      itemStyle={{ color: themeStyles.tooltipColor }}
+                    />
+                    <Bar dataKey="value" name="Entries" fill="#10B981" radius={[0, 4, 4, 0]} barSize={12} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-sm text-gray-400">No locations saved yet.</div>
+              )}
+            </div>
           </div>
-        )}
+        </div>
         
         {/* MEDITATION ANALYTICS */}
         {meditationStats ? (
