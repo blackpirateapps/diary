@@ -7,6 +7,7 @@ import {
   $getSelection,
   $isRangeSelection,
   $createParagraphNode,
+  $createTextNode,
   $getNodeByKey,
   UNDO_COMMAND,
   REDO_COMMAND,
@@ -292,7 +293,9 @@ export default function ToolbarPlugin({ onInsertImage }) {
                const selection = $getSelection();
                if($isRangeSelection(selection)) {
                  const p = $createParagraphNode();
-                 p.append($createParagraphNode().append(document.createTextNode('---'))); 
+                 const line = $createParagraphNode();
+                 line.append($createTextNode('---'));
+                 p.append(line);
                  selection.insertNodes([p]);
                }
              })

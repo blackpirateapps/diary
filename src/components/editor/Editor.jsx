@@ -140,14 +140,14 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
     return [];
   });
 
-  const [previewSessionIndex, setPreviewSessionIndex] = useState(sessions.length - 1);
+  const [previewSessionIndex, setPreviewSessionIndex] = useState(Math.max(0, sessions.length - 1));
 
   // New Export State
   const [showExportModal, setShowExportModal] = useState(false);
 
   useEffect(() => {
       if (mode === 'edit') {
-          setPreviewSessionIndex(sessions.length - 1);
+          setPreviewSessionIndex(Math.max(0, sessions.length - 1));
       }
   }, [sessions.length, mode]);
   
@@ -576,11 +576,20 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
                             >
                                 <BlobImage key={imgIndex} src={images[imgIndex]} className="w-full h-full object-cover opacity-90 transition-opacity hover:opacity-100" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-white/80 dark:from-gray-950/80 to-transparent pointer-events-none" />
+                                {images.length > 1 && (
+                                  <div className="absolute left-4 bottom-4 text-xs font-semibold bg-white/80 dark:bg-gray-900/80 text-gray-700 dark:text-gray-200 px-2 py-1 rounded-full">
+                                    {imgIndex + 1} / {images.length}
+                                  </div>
+                                )}
                                 <button 
                                   onClick={() => { 
                                     if(window.confirm('Delete image?')) { 
-                                      setImages(i => i.filter((_,x) => x !== imgIndex)); 
-                                      setImgIndex(0); 
+                                      setImages((prev) => {
+                                        const next = prev.filter((_, x) => x !== imgIndex);
+                                        const nextIndex = Math.max(0, Math.min(imgIndex, next.length - 1));
+                                        setImgIndex(nextIndex);
+                                        return next;
+                                      });
                                     } 
                                   }} 
                                   className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:bg-red-600"
@@ -672,24 +681,32 @@ const Editor = ({ entry, initialDate, onClose, onSave, onDelete, isSidebarOpen }
                                       </div>
                                       
                                       <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
-                                        <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
-                                          <span>Start</span>
-                                          <span>Session {previewSessionIndex + 1} / {sessions.length}</span>
-                                          <span>Now</span>
-                                        </div>
-                                        <input 
-                                          type="range" 
-                                          min={0} 
-                                          max={sessions.length - 1} 
-                                          value={previewSessionIndex}
-                                          onChange={(e) => setPreviewSessionIndex(Number(e.target.value))}
-                                          className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
-                                        />
-                                        <div className="text-center mt-2 text-xs text-gray-400">
-                                          {sessions[previewSessionIndex]?.endTime 
-                                            ? new Date(sessions[previewSessionIndex].endTime).toLocaleTimeString() 
-                                            : 'Unknown Time'}
-                                        </div>
+                                        {sessions.length > 0 ? (
+                                          <>
+                                            <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
+                                              <span>Start</span>
+                                              <span>Session {previewSessionIndex + 1} / {sessions.length}</span>
+                                              <span>Now</span>
+                                            </div>
+                                            <input 
+                                              type="range" 
+                                              min={0} 
+                                              max={sessions.length - 1} 
+                                              value={previewSessionIndex}
+                                              onChange={(e) => setPreviewSessionIndex(Number(e.target.value))}
+                                              className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[var(--accent-500)]"
+                                            />
+                                            <div className="text-center mt-2 text-xs text-gray-400">
+                                              {sessions[previewSessionIndex]?.endTime 
+                                                ? new Date(sessions[previewSessionIndex].endTime).toLocaleTimeString() 
+                                                : 'Unknown Time'}
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <div className="text-xs text-gray-500 text-center py-2">
+                                            No writing sessions recorded yet.
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                 )}
