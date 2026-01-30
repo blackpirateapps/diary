@@ -11,6 +11,8 @@ import {
   $getNodeByKey,
   UNDO_COMMAND,
   REDO_COMMAND,
+  CAN_UNDO_COMMAND,
+  CAN_REDO_COMMAND,
 } from 'lexical';
 import { $wrapNodes } from '@lexical/selection';
 import {
@@ -71,6 +73,8 @@ export default function ToolbarPlugin({ onInsertImage }) {
   const [isCode, setIsCode] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const [isBlockOpen, setIsBlockOpen] = useState(false);
+  const blockMenuRef = useRef(null);
 
   const updateToolbar = useCallback(() => {
     const selection = $getSelection();
@@ -130,16 +134,27 @@ export default function ToolbarPlugin({ onInsertImage }) {
         updateToolbar();
         return false;
       }, 1),
-      editor.registerCommand(UNDO_COMMAND, (payload) => {
-        setCanUndo(true); 
+      editor.registerCommand(CAN_UNDO_COMMAND, (payload) => {
+        setCanUndo(payload);
         return false;
       }, 1),
-      editor.registerCommand(REDO_COMMAND, (payload) => {
-        setCanRedo(true);
+      editor.registerCommand(CAN_REDO_COMMAND, (payload) => {
+        setCanRedo(payload);
         return false;
       }, 1)
     );
   }, [editor, updateToolbar]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!blockMenuRef.current) return;
+      if (!blockMenuRef.current.contains(event.target)) {
+        setIsBlockOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const insertLink = useCallback(() => {
     if (!isLink) {
@@ -222,16 +237,22 @@ export default function ToolbarPlugin({ onInsertImage }) {
       <Divider />
 
       {/* BLOCK FORMATTING - Added flex-shrink-0 */}
-      <div className="relative group flex-shrink-0">
-        <button className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-sm font-medium w-32 justify-between">
+      <div ref={blockMenuRef} className="relative flex-shrink-0">
+        <button
+          onClick={() => setIsBlockOpen((open) => !open)}
+          className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-sm font-medium w-32 justify-between"
+        >
           <span className="truncate">{BLOCK_TYPES[activeBlock]?.label || 'Normal'}</span>
           <ChevronDown size={14} className="opacity-50" />
         </button>
-        <div className="absolute top-full left-0 mt-1 w-40 bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 hidden group-hover:block z-50 max-h-60 overflow-y-auto">
+        <div className={`${isBlockOpen ? 'block' : 'hidden'} absolute top-full left-0 mt-1 w-40 bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-60 overflow-y-auto`}>
           {Object.entries(BLOCK_TYPES).map(([key, { label, icon: Icon }]) => (
             <button
               key={key}
-              onClick={() => formatBlock(key)}
+              onClick={() => {
+                formatBlock(key);
+                setIsBlockOpen(false);
+              }}
               className={`flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-50 dark:hover:bg-gray-800 ${activeBlock === key ? 'text-[var(--accent-600)] bg-[var(--accent-50)]' : ''}`}
             >
               <Icon size={16} />
