@@ -196,7 +196,8 @@ const openNewEditor = (date = new Date()) => {
     }
   };
 
-  const isMoreRoute = ['more', 'settings', 'about', 'themes', 'people'].includes(currentRoute);
+  const isMoreRoute = ['more', 'settings', 'about', 'themes', 'privacy'].includes(currentRoute);
+  const isMoreMenuRoute = ['more', 'about', 'themes', 'privacy'].includes(currentRoute);
 
   const SidebarItem = ({ route, icon: Icon, label, activeCheck, onClick }) => (
     <button
@@ -223,9 +224,8 @@ const openNewEditor = (date = new Date()) => {
       
       {/* SIDEBAR */}
       <aside 
-        className={`fixed h-full bg-[#f8f9fa] dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 p-4 z-50 
-                   transition-all duration-300 ease-in-out
-                   ${isSidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full'} 
+        className={`fixed h-full bg-[#f8f9fa] dark:bg-gray-900 z-50 transition-all duration-300 ease-in-out overflow-hidden
+                   ${isSidebarOpen ? 'w-64 translate-x-0 p-4 border-r border-gray-200 dark:border-gray-800' : 'w-0 -translate-x-full p-0 border-transparent pointer-events-none'} 
                    hidden md:flex flex-col`}
       >
         <div className="mb-6 px-2 flex items-center justify-between">
@@ -261,6 +261,7 @@ const openNewEditor = (date = new Date()) => {
           <SidebarItem route="year-review" icon={Calendar} label="Year in Review" activeCheck={currentRoute === 'year-review'} />
         </nav>
         <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+           <SidebarItem route="more" icon={Menu} label="More" activeCheck={isMoreMenuRoute} />
            <SidebarItem route="settings" icon={Settings} label="Settings" activeCheck={currentRoute === 'settings'} />
         </div>
       </aside>
