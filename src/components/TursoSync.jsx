@@ -196,6 +196,12 @@ const TursoSync = () => {
     return `${trimmed}/api/turso-sync`;
   }, [apiBase]);
 
+  const blobUploadUrl = useMemo(() => {
+    if (!apiBase) return '/api/blob-upload';
+    const trimmed = apiBase.replace(/\/+$/, '');
+    return `${trimmed}/api/blob-upload`;
+  }, [apiBase]);
+
   const authHeaders = syncKey ? { 'x-sync-key': syncKey } : {};
 
   const initSchema = async () => {
@@ -589,7 +595,7 @@ const summarizePerson = (person) => ({
     });
     const result = await upload(filename, payloadBlob, {
       access: 'public',
-      handleUploadUrl: '/api/blob-upload'
+      handleUploadUrl: blobUploadUrl
     });
     console.debug('[ImageSync] Upload success', {
       hash,
@@ -694,7 +700,7 @@ const summarizePerson = (person) => ({
     } finally {
       imageSyncRef.current = false;
     }
-  }, [passphrase]);
+  }, [blobUploadUrl, passphrase]);
 
   const probePassphrase = useCallback(async () => {
     const res = await fetch(apiUrl, {
@@ -747,12 +753,43 @@ const summarizePerson = (person) => ({
       await processImageUploads();
       syncingRef.current = true;
       await initSchema();
-      const [dirtyEntries, dirtyPeople, dirtyMeditations, dirtyDeletes] = await Promise.all([
+      const [dirtyEntriesRaw, dirtyPeopleRaw, dirtyMeditationsRaw, dirtyDeletesRaw] = await Promise.all([
         db.entries.where('sync_status').equals('dirty').toArray(),
         db.people.where('sync_status').equals('dirty').toArray(),
         db.meditation_sessions.where('sync_status').equals('dirty').toArray(),
         db.tombstones.where('sync_status').equals('dirty').toArray()
       ]);
+
+      const parseTs = (value) => {
+        const ts = Date.parse(value || '');
+        return Number.isNaN(ts) ? null : ts;
+      };
+
+      const lastSyncTs = parseTs(lastSync);
+      const isNewerThanLastSync = (value) => {
+        if (!lastSyncTs) return true;
+        const ts = parseTs(value);
+        if (!ts) return true;
+        return ts > lastSyncTs;
+      };
+
+      const dirtyEntries = dirtyEntriesRaw.filter((entry) => isNewerThanLastSync(entry.updated_at));
+      const dirtyPeople = dirtyPeopleRaw.filter((person) => isNewerThanLastSync(person.updated_at));
+      const dirtyMeditations = dirtyMeditationsRaw.filter((session) => isNewerThanLastSync(session.updated_at));
+      const dirtyDeletes = dirtyDeletesRaw.filter((tombstone) => isNewerThanLastSync(tombstone.deleted_at));
+
+      const staleEntries = lastSyncTs
+        ? dirtyEntriesRaw.filter((entry) => !isNewerThanLastSync(entry.updated_at))
+        : [];
+      const stalePeople = lastSyncTs
+        ? dirtyPeopleRaw.filter((person) => !isNewerThanLastSync(person.updated_at))
+        : [];
+      const staleMeditations = lastSyncTs
+        ? dirtyMeditationsRaw.filter((session) => !isNewerThanLastSync(session.updated_at))
+        : [];
+      const staleDeletes = lastSyncTs
+        ? dirtyDeletesRaw.filter((tombstone) => !isNewerThanLastSync(tombstone.deleted_at))
+        : [];
 
       const localMaps = {
         entries: new Map(dirtyEntries.map((entry) => [entry.id, entry])),
@@ -907,11 +944,21 @@ const summarizePerson = (person) => ({
       await markSynced('people', dirtyPeople.map((p) => p.id).filter((id) => !conflictIds.people.has(id)));
       await markSynced('meditation_sessions', dirtyMeditations.map((m) => m.id).filter((id) => !conflictIds.meditation_sessions.has(id)));
 
+      if (lastSyncTs) {
+        await markSynced('entries', staleEntries.map((e) => e.id));
+        await markSynced('people', stalePeople.map((p) => p.id));
+        await markSynced('meditation_sessions', staleMeditations.map((m) => m.id));
+      }
+
       const deletionsToClear = dirtyDeletes
         .filter((d) => !deleteConflicts.has(`${d.store}:${d.key}`))
         .map((d) => d.id);
       if (deletionsToClear.length > 0) {
         await db.tombstones.bulkDelete(deletionsToClear);
+      }
+
+      if (lastSyncTs && staleDeletes.length > 0) {
+        await db.tombstones.bulkDelete(staleDeletes.map((d) => d.id));
       }
 
       setStatus(conflictList.length ? 'error' : 'success');
